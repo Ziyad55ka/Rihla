@@ -1,0 +1,42 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.routes.accounts import router as accounts_router
+from app.api.routes.health import router as health_router
+from app.api.routes.login import router as login_router
+from app.api.routes.trips import router as trips_router
+from app.core.config import Settings
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Build an app that can run locally without any external credentials."""
+    settings = settings if settings is not None else Settings()
+    application = FastAPI(
+        title="Rihla API",
+        description="Foundation for the SWE 444 group travel planning project.",
+        version="0.1.0",
+    )
+    application.state.settings = settings
+
+    @application.middleware("http")
+    async def prevent_private_response_caching(request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+    application.include_router(health_router)
+    application.include_router(accounts_router)
+    application.include_router(login_router)
+    application.include_router(trips_router)
+    return application
+
+
+app = create_app()

@@ -1,0 +1,35 @@
+# Local configuration and credentials (examples stay in Git).
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Frontend dependencies and build output.
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python environments, caches and package output.
+.venv/
+.tools/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.local/
+.coverage
+htmlcov/
+build/
+
+# Local Supabase state; migrations and tests stay in Git.
+supabase/.temp/
+supabase/.branches/
+
+# Local logs, verification output and editor state.
+*.log
+.artifacts/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

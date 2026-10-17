@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rihla-api"
+version = "0.1.0"
+description = "FastAPI foundation for the Rihla group travel planner"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.143.0",
+    "httpx2==2.13.1",
+    "pydantic-settings==2.15.0",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    # VS Code's package viewer invokes python -m pip.
+    "pip==26.2.1",
+    "pytest==9.1.1",
+    "ruff==0.17.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+extend-exclude = [".tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.uv]
+required-version = ">=0.13.1"

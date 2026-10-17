@@ -1,0 +1,24 @@
+.planning-panel { border-top:1px solid #e7e6e3; margin-top:36px; padding-top:36px; }
+.planning-heading { display:flex; justify-content:space-between; align-items:center; gap:20px; }
+.planning-heading .trip-eyebrow { margin-bottom:12px; }
+.trip-workspace .planning-heading h2 { font-size:clamp(27px,3vw,36px); letter-spacing:-1.3px; margin:0 0 14px; }
+.planning-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px; margin-top:24px; }
+.planning-card { border:1px solid #e7e3da; background:#faf9f6; border-radius:9px; padding:26px; }
+.planning-card .trip-eyebrow { font-size:8px; line-height:1.6; }
+.planning-card h3,.planning-admin h3 { font:700 21px Arial,sans-serif; letter-spacing:-.6px; margin:0 0 18px; }
+.planning-card p,.planning-card li { font-size:13px; line-height:1.8; color:#62625d; }
+.planning-card ul { padding-left:20px; }
+.planning-badge { display:inline-block; border:1px solid #dfddd4; border-radius:20px; font-size:11px; padding:7px 11px; color:#68624f; background:#f1eee5; white-space:nowrap; }
+.planning-badge--ready { background:#eef6ef; color:#286144; border-color:#d4e7d9; }
+.planning-badge--conflict { background:#fff2ee; color:#923b2d; border-color:#eed9d3; }
+.planning-card .planning-date-range { font-size:20px; font-weight:700; line-height:1.6; color:#171717; }
+.planning-date-range span { font-size:12px; font-weight:400; }
+.planning-admin { max-width:740px; margin-top:28px; }
+.planning-admin ul { list-style:none; padding:0; margin:0; }
+.planning-admin li { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:14px 0; border-bottom:1px solid #ededE8; font-size:13px; }
+.planning-admin li > span:first-child { overflow-wrap:anywhere; min-width:0; }
+@media(max-width:650px) {
+  .planning-cards { grid-template-columns:minmax(0,1fr); }
+  .planning-heading { align-items:flex-start; flex-direction:column; gap:0; }
+  .planning-card { padding:22px; }
+}
