@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 
 from app.core.auth import CurrentIdentity
-from app.schemas.planning import PlanningStatus
+from app.schemas.planning import DateCheckInput, DateCheckResult, PlanningStatus
 from app.schemas.preferences import MemberPreferences, SavedPreferences
 from app.schemas.trips import (
     CreateTrip,
@@ -14,10 +15,31 @@ from app.schemas.trips import (
     TripDetail,
     TripSummary,
 )
+from app.services.login_limits import LoginLimits
 from app.services.supabase import SupabaseHTTP
 from app.services.trips import trip_rpc
 
 router = APIRouter(prefix="/api/trips", tags=["trips"])
+
+
+@router.post("/{trip_id}/date-check", response_model=DateCheckResult)
+async def check_trip_dates(
+    trip_id: UUID,
+    body: DateCheckInput,
+    identity: CurrentIdentity,
+    client: SupabaseHTTP,
+):
+    return await trip_rpc(
+        client,
+        identity,
+        "rihla_check_trip_dates",
+        {
+            "p_trip_id": str(trip_id),
+            "p_start": body.available_start.isoformat(),
+            "p_end": body.available_end.isoformat(),
+        },
+        DateCheckResult,
+    )
 
 
 @router.get("/{trip_id}/planning", response_model=PlanningStatus)
@@ -81,14 +103,47 @@ async def create_trip(
 
 
 @router.post("/join", response_model=JoinResult)
-async def join_trip(body: JoinTrip, identity: CurrentIdentity, client: SupabaseHTTP):
-    return await trip_rpc(
-        client,
-        identity,
-        "rihla_join_trip",
-        {"p_token": body.token},
-        JoinResult,
+async def join_trip(
+    body: JoinTrip,
+    request: Request,
+    identity: CurrentIdentity,
+    client: SupabaseHTTP,
+):
+    if len(body.token) != 6:
+        return await trip_rpc(
+            client,
+            identity,
+            "rihla_join_trip",
+            {"p_token": body.token},
+            JoinResult,
+        )
+
+    limits = LoginLimits(
+        request.app.state.settings.login_limit_db,
+        kind="join_code",
     )
+    lease = await run_in_threadpool(limits.reserve, f"join-code:{identity.account.id}")
+    outcome = "other"
+    caught: HTTPException | None = None
+    try:
+        result = await trip_rpc(
+            client,
+            identity,
+            "rihla_join_trip",
+            {"p_token": body.token},
+            JoinResult,
+        )
+        outcome = "success"
+    except HTTPException as error:
+        outcome = "invalid" if error.status_code == 404 else "other"
+        caught = error
+    finally:
+        blocked = await run_in_threadpool(limits.complete, lease, outcome)
+    if blocked:
+        raise limits.rate_limited(blocked)
+    if caught is not None:
+        raise caught
+    return result
 
 
 @router.get("/{trip_id}", response_model=TripDetail)

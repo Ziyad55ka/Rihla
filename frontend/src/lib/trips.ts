@@ -11,7 +11,7 @@ export const revokeInvitation = (id: string) => authenticatedRequest<InvitationS
 
 export function invitationToken(input: string): string | null {
   const value = input.trim()
-  if (/^[0-9a-f]{64}$/.test(value)) return value
+  if (/^(?:[0-9a-f]{64}|[0-9]{6})$/.test(value)) return value
   try {
     const url = new URL(value)
     if (!['http:', 'https:'].includes(url.protocol)) return null

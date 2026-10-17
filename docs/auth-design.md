@@ -1,5 +1,7 @@
 # First account-screen design review
 
+Historical review: the user replaced this visual direction on 17 October 2026. See [the current cream/forest design](frontend-redesign.md). The original image and its provenance below are preserved.
+
 Reference: [Karate template by Dhileep Kumar GM](https://21st.dev/@dhileepkumargm/templates/karate), viewed through its [live Framer preview](https://karateacadamy.framer.website/).
 
 This implementation translates the reference's oversized black typography, white space, coral accent and rounded action buttons into Rihla's travel identity. The layout, copy, compass mark and travel image are adapted for Rihla; no Framer package or template source was imported.

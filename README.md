@@ -2,7 +2,7 @@
 
 Group travel planning project for SWE 444, King Saud University.
 
-The agreed Sprint 1 flows are implemented: accounts, trips, invitations, private preferences, Essential/Flexible options, automatic readiness, shared dates and administrator readiness monitoring. The **My trips** workspace follows the new login screen's visual style. Rihla's backend login endpoint enforces the agreed Free-plan failed-attempt limit. Developer checks at `/setup` and `/health` still work without credentials. See [activation, verification and remaining team acceptance](docs/sprint-1-verification.md); local checks do not establish hosted completion.
+The agreed Sprint 1 flows are implemented: accounts, trips, invitations, private preferences, Essential/Flexible options, automatic readiness, shared dates and administrator readiness monitoring. A cream/forest landing page introduces Rihla; signed-in users get trip cards, member cards and a separate preferences page. See the [new design and required planning migration](docs/frontend-redesign.md). Rihla's backend login endpoint enforces the agreed Free-plan failed-attempt limit. Developer checks at `/setup` and `/health` still work without credentials. See [activation, verification and remaining team acceptance](docs/sprint-1-verification.md); local checks do not establish hosted completion.
 
 ## What works now
 
@@ -13,7 +13,7 @@ The agreed Sprint 1 flows are implemented: accounts, trips, invitations, private
 - Email/password registration, confirmation feedback, login/logout, and session restoration through Supabase Auth.
 - Protected `/api/me` and `/api/profile` endpoints. FastAPI verifies tokens with Supabase Auth and forwards each user's token to the Data API so RLS applies.
 - A private profile migration with explicit grants/RLS; the user reported successful live profile saving.
-- Protected trip creation, trip lists/details, membership and administrator-only invitation controls, with a matching responsive frontend.
+- Protected trip creation, trip lists/details, membership and administrator-only seven-day invitation links/codes, with a matching responsive frontend.
 - Private per-trip preferences: departure city, SAR budget, available dates and optional Essential/Flexible inputs, including saved drafts. Apply the separate [preferences migration](docs/member-preferences.md) to enable storage in your development project.
 - Automatic Ready/Incomplete with own missing-field explanations, shared-date intersection/duration, and administrator-only status monitoring. Apply the new readiness migration after preferences; see the [Sprint 1 guide](docs/sprint-1-verification.md).
 - Backend-mediated password sign-in with five invalid attempts in 15 minutes triggering a 15-minute endpoint cooldown. Supabase still verifies passwords and manages sessions. This accepted Free-plan protection does not cover direct Supabase Auth requests.
@@ -139,7 +139,7 @@ Set-Location 'C:\Users\Ibrah\OneDrive\Desktop\Rihla\Rihla-dev\Rihla\frontend'
 npm.cmd run dev
 ```
 
-Open **http://localhost:5173** for the login screen or signed-in trips workspace. Developer connection checks are at **http://localhost:5173/setup**. Missing Supabase configuration produces a setup explanation; trip storage requires its migration before use. Press `Ctrl+C` in each terminal to stop its server.
+Open **http://localhost:5173** for the public landing page or signed-in trips workspace. Login and Sign up are in the navbar; Create/Join continues after authentication. Developer connection checks are at **http://localhost:5173/setup**. Missing Supabase configuration produces a setup explanation on account screens; trip storage requires its migrations before use. Apply the new planning overview migration for group stages and candidate-date checks. Press `Ctrl+C` in each terminal to stop its server.
 
 Backend API documentation is available at **http://localhost:8001/docs** while the backend is running. Port 8001 is used because Windows blocked port 8000 on this computer. Set `VITE_API_BASE_URL=http://localhost:8001` in the frontend environment file.
 

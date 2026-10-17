@@ -2,7 +2,7 @@
 
 Supabase supplies Auth and PostgreSQL storage. The `/setup` page and health endpoint work without credentials. Accounts/private profiles are implemented and the user reported successful hosted profile saving. Trip creation, membership and seven-day invitations are implemented in a second migration, which is not yet applied remotely. Follow [the trip guide](../docs/trips-and-invitations.md) for that migration and its access model.
 
-`npm ci --ignore-scripts` and `npm test` in this folder run 19 in-memory PostgreSQL test cases without Docker or cloud credentials. The actual migrations are applied, with a small fixture emulating Supabase Auth claims/roles. The existing pgTAP file is separate and still requires a full local Supabase environment; it is not what the npm suite executes.
+`npm ci --ignore-scripts` and `npm test` in this folder run in-memory PostgreSQL test cases without Docker or cloud credentials. The actual migrations are applied, with a small fixture emulating Supabase Auth claims/roles. The existing pgTAP file is separate and still requires a full local Supabase environment; it is not what the npm suite executes.
 
 ## Terms for a first-time user
 
@@ -66,7 +66,9 @@ Do not assume that running a backend or hiding buttons secures the Data API. Tes
 
 ## Migration conventions
 
-`migrations/20261014000100_account_profiles.sql` creates account profiles; `20261016000100_trips_and_invitations.sql` adds trips/memberships/invitations; `20261016000200_member_preferences.sql` adds owner-only member inputs and invoker RPCs; `20261016000300_readiness_and_shared_dates.sql` adds derived readiness and a protected group-date/status aggregation function. The latest migrations have not been applied remotely by this implementation; see [Sprint 1 activation](../docs/sprint-1-verification.md). `tests/database.test.mjs` rebuilds all migrations in memory and checks access, atomicity, expiry, private input persistence, readiness, shared dates and integrity. `tests/profiles.test.sql` is the separate full-Supabase pgTAP suite.
+`migrations/20261014000100_account_profiles.sql` creates account profiles; `20261016000100_trips_and_invitations.sql` adds trips/memberships/invitations; `20261016000200_member_preferences.sql` adds owner-only member inputs and invoker RPCs; `20261016000300_readiness_and_shared_dates.sql` adds derived readiness and a protected group-date/status aggregation function. `20261017000100_planning_overview.sql` extends that status with a group readiness boolean, the caller's saved-preferences indicator and a read-only candidate-date check. `20261017000200_invitation_codes.sql` adds hashed six-digit invitation codes alongside the existing full links. Apply only migrations that have not already run, in filename order. This implementation has not applied migrations remotely; see [Sprint 1 activation](../docs/sprint-1-verification.md). `tests/database.test.mjs` rebuilds all migrations in memory and checks access, atomicity, expiry, replacement, code/link joins, private input persistence, readiness, shared dates and integrity. `tests/profiles.test.sql` is the separate full-Supabase pgTAP suite.
+
+The date-check RPC compares an unsaved range with the complete saved ranges of all other members and returns only `available`, `conflict`, or `pending`. A known conflict is reported even when another member has not entered dates. It does not return another person's dates or save the candidate. Planning status still gives administrators only each member's readiness; ordinary members receive no readiness roster.
 
 For subsequent changes:
 

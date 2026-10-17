@@ -4,7 +4,7 @@ The agreed Sprint 1 application flows are implemented: accounts, trips, invitati
 
 ## Readiness and dates
 
-Open a trip to see **Find your common ground.** Readiness is derived from current saved inputs, with no manual Ready button or writable readiness column. A member is Ready when departure city, a positive SAR budget and both valid availability dates are present. Blank optional preferences never prevent readiness. Clearing required information changes the member back to Incomplete after saving.
+Open a trip to see the planning stage, shared dates and member cards. **Enter/Edit preferences** opens a separate private page. See [the 17 October redesign](frontend-redesign.md) for page routes, trip card statuses and candidate-date warnings. Readiness is derived from current saved inputs, with no manual Ready button or writable readiness column. A member is Ready when departure city, a positive SAR budget and both valid availability dates are present. Blank optional preferences never prevent readiness. Clearing required information changes the member back to Incomplete after saving.
 
 The shared period includes every member, including the administrator. It is the latest start date through the earliest end date. Both endpoints count, so 10–15 November is six days and touching endpoints give one day. There is no separate duration preference.
 
@@ -37,7 +37,9 @@ Apply only migrations that have **not already run**, in order, in your developme
 1. `20261014000100_account_profiles.sql`
 2. `20261016000100_trips_and_invitations.sql`
 3. `20261016000200_member_preferences.sql`
-4. **`20261016000300_readiness_and_shared_dates.sql`** — new for this milestone.
+4. `20261016000300_readiness_and_shared_dates.sql`
+5. **`20261017000100_planning_overview.sql`** — group readiness, own saved flag and read-only candidate-date checks for the redesign.
+6. **`20261017000200_invitation_codes.sql`** — hashed six-digit invitation codes alongside the existing full invitation links.
 
 Do not rerun earlier migrations that already succeeded. The readiness migration needs preferences and trips to exist first. It adds functions/grants only; existing preferences are evaluated automatically. No manual Ready flags or data backfill is needed.
 
@@ -61,9 +63,9 @@ npm.cmd run dev
 
 Automated checks cover real PostgreSQL functions/policies in disposable PGlite with emulated Auth claims, backend HTTP behavior with mocked upstream responses, and frontend helpers. They do not establish hosted Supabase Auth/PostgREST behavior. The backend login tests use isolated temporary SQLite files and verify rolling-window boundaries, cooldown expiry, persistence, account independence, concurrent reservation exclusion, abandoned attempts, outages and storage failure. Planning checks include pending/conflict/available states, leap days, single-day intersection, changed inputs, new/duplicate joins, privacy and rollback.
 
-The 16 October 2026 local run passed **122 backend tests, 70 frontend tests and 39 database tests (231 total)**, Ruff lint/format checks, ESLint, TypeScript/build checks and a production build with Supabase configuration blank. The hosted service and separate full-Supabase pgTAP suite were not run.
+The 17 October 2026 local run passed **140 backend tests, 78 frontend tests and 46 database tests (264 total)**, Ruff lint/format checks, ESLint, TypeScript/build checks and a production build. The hosted service and separate full-Supabase pgTAP suite were not run.
 
-Browser checks use real React and FastAPI with the existing fictional local Auth/RPC facade. They verified backend-mediated sign-in, creation, invitation handoff through sign-in, joining, automatic Ready, conflict, resolving an overlap to four days, reverting to Incomplete, administrator statuses, ordinary-member privacy and the fifth failed login message. Screenshots are in ignored `.artifacts/sprint1-review/`. Layout checks at 375px and 1440px showed no horizontal overflow in the tested in-app Chromium browser. Real email confirmation and the hosted project were not exercised in these checks.
+Browser checks use real React and FastAPI with the existing fictional local Auth/RPC facade. They verified backend-mediated sign-in, creation, invitation link/code generation, joining with the six-digit code, invitation handoff through sign-in, automatic Ready, conflict, resolving an overlap to four days, reverting to Incomplete, administrator statuses, ordinary-member privacy and the fifth failed login message. Screenshots are in ignored `.artifacts/sprint1-review/` and `.artifacts/redesign-review/`. Layout checks at 375px and 1440px showed no horizontal overflow in the tested in-app Chromium browser. Real email confirmation and the hosted project were not exercised in these checks.
 
 Use the frontend/backend/database check commands from the README or `docs/trips-and-invitations.md`. Existing GitHub Actions jobs run the new tests without real credentials.
 
@@ -72,8 +74,8 @@ Use the frontend/backend/database check commands from the README or `docs/trips-
 | Story | Implementation | Remaining team verification |
 | --- | --- | --- |
 | US-01 accounts | Registration, confirmation feedback, sign-in/out, session restoration, agreed endpoint login limit | Actual email delivery, two real confirmed accounts, restart/cooldown test |
-| US-02 create/invite | Atomic trip+administrator membership, seven-day links, replace/revoke | Apply migrations and exercise hosted permissions |
-| US-03 join | Signed-in join, invitation handoff, duplicate-safe membership | Friend joins with their own account |
+| US-02 create/invite | Atomic trip+administrator membership, seven-day links and six-digit codes, replace/revoke | Apply migrations and exercise hosted permissions |
+| US-03 join | Signed-in join by code or link, invitation handoff, duplicate-safe membership | Friend joins with their own account using both methods |
 | US-04 preferences | Private draft/save/edit form, SAR budget and one date range | Save/reopen with both hosted accounts |
 | US-05 importance | Optional Essential/Flexible flags | Confirm saved values persist; enforcement in proposals is Sprint 2 |
 | US-06 shared dates | Pending, conflict and inclusive overlap/duration | Check agreed example ranges with the group |

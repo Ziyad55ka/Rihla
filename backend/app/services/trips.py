@@ -27,6 +27,8 @@ async def trip_rpc[T](
             raise HTTPException(403, "You do not have permission for this trip action.")
         preferences = name in {"rihla_get_preferences", "rihla_save_preferences"}
         if code in {"23514", "23502", "22001", "22003", "22007", "22008", "22P02"}:
+            if name == "rihla_check_trip_dates":
+                raise HTTPException(422, "Check the date values and date order.")
             if preferences:
                 raise HTTPException(422, "Check the preference values and date order.")
             raise HTTPException(422, "Check the trip title and description.")
@@ -36,11 +38,12 @@ async def trip_rpc[T](
                 "Preference storage is unavailable. "
                 "Check that the preferences migration is applied.",
             )
-        if name == "rihla_get_planning_status":
+        if name in {"rihla_get_planning_status", "rihla_check_trip_dates"}:
             raise HTTPException(
                 503,
                 "Planning status is unavailable. "
-                "Check that the readiness migration is applied.",
+                "Check that the readiness and planning overview migrations "
+                "are applied.",
             )
         raise HTTPException(
             503,

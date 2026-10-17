@@ -1,7 +1,7 @@
-"""Persistent, atomic per-account limits for Rihla's login endpoint only.
+"""Persistent, atomic per-account limits for sensitive Rihla endpoints.
 
-Supabase still verifies/stores passwords. This file stores email hashes and times,
-never passwords or sessions. SQLite supports local workers sharing one file.
+Supabase still verifies/stores passwords. This file stores identifier hashes and
+times, never passwords or sessions. SQLite supports local workers sharing one file.
 """
 
 import hashlib
@@ -20,10 +20,14 @@ WINDOW = 15 * 60
 LEASE_SECONDS = 60
 
 
-def limited(seconds: int, code: str = "login_locked") -> HTTPException:
+def limited(
+    seconds: int,
+    code: str = "login_locked",
+    message: str = "Please wait before trying to sign in again.",
+) -> HTTPException:
     return HTTPException(
         429,
-        {"code": code, "message": "Please wait before trying to sign in again."},
+        {"code": code, "message": message},
         headers={"Retry-After": str(max(1, seconds))},
     )
 
@@ -35,9 +39,37 @@ class LoginLease:
 
 
 class LoginLimits:
-    def __init__(self, path: Path, clock=time.time):
+    def __init__(self, path: Path, clock=time.time, kind: str = "login"):
         self.path = path
         self.clock = clock
+        self.kind = kind
+
+    def rate_limited(self, seconds: int, in_progress: bool = False) -> HTTPException:
+        if self.kind == "join_code":
+            return limited(
+                seconds,
+                (
+                    "invitation_join_in_progress"
+                    if in_progress
+                    else "invitation_join_locked"
+                ),
+                "Please wait before trying another invitation code.",
+            )
+        return limited(seconds, "login_in_progress" if in_progress else "login_locked")
+
+    def unavailable(self) -> HTTPException:
+        if self.kind == "join_code":
+            return HTTPException(
+                503, "Invitation-code protection is unavailable. Try again."
+            )
+        return HTTPException(503, "Sign-in protection is unavailable. Try again.")
+
+    def expired(self) -> HTTPException:
+        if self.kind == "join_code":
+            return HTTPException(
+                503, "The invitation-code attempt expired. Please try again."
+            )
+        return HTTPException(503, "The sign-in attempt expired. Please try again.")
 
     @contextmanager
     def transaction(self):
@@ -54,13 +86,9 @@ class LoginLimits:
             yield connection
             connection.commit()
         except sqlite3.Error as error:
-            raise HTTPException(
-                503, "Sign-in protection is unavailable. Try again."
-            ) from error
+            raise self.unavailable() from error
         except OSError as error:
-            raise HTTPException(
-                503, "Sign-in protection is unavailable. Try again."
-            ) from error
+            raise self.unavailable() from error
         finally:
             if connection is not None:
                 connection.close()
@@ -79,9 +107,9 @@ class LoginLimits:
                 "select * from login_limits where account_key = ?", (key,)
             ).fetchone()
             if row and row["blocked_until"] > now:
-                raise limited(math.ceil(row["blocked_until"] - now))
+                raise self.rate_limited(math.ceil(row["blocked_until"] - now))
             if row and row["lease_until"] > now:
-                raise limited(1, "login_in_progress")
+                raise self.rate_limited(1, in_progress=True)
             failures = (
                 [stamp for stamp in json.loads(row["failures"]) if stamp > now - WINDOW]
                 if row
@@ -107,9 +135,7 @@ class LoginLimits:
                 or row["lease_token"] != lease.token
                 or row["lease_until"] <= now
             ):
-                raise HTTPException(
-                    503, "The sign-in attempt expired. Please try again."
-                )
+                raise self.expired()
             failures = [
                 stamp for stamp in json.loads(row["failures"]) if stamp > now - WINDOW
             ]

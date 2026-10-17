@@ -14,6 +14,7 @@ const rpcArguments = {
   rihla_get_preferences: ['p_trip_id'],
   rihla_save_preferences: ['p_trip_id', 'p_preferences'],
   rihla_get_planning_status: ['p_trip_id'],
+  rihla_check_trip_dates: ['p_trip_id', 'p_start', 'p_end'],
 }
 let queue = Promise.resolve()
 function account(user) {

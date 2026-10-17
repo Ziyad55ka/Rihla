@@ -5,6 +5,7 @@ const { request } = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./http', () => ({ authenticatedRequest: request }))
 afterEach(() => { vi.resetAllMocks(); vi.unstubAllGlobals() })
 const token = 'ab'.repeat(32)
+const code = '984143'
 
 describe('trip requests', () => {
   it('sends trip fields without a client-controlled owner or role', async () => {
@@ -15,6 +16,10 @@ describe('trip requests', () => {
   it('keeps invitation tokens in a POST body rather than a URL', async () => {
     await joinTrip(token)
     expect(request).toHaveBeenCalledWith('/api/trips/join', { method: 'POST', body: { token } })
+  })
+  it('keeps a six-digit invitation code in the POST body', async () => {
+    await joinTrip(code)
+    expect(request).toHaveBeenCalledWith('/api/trips/join', { method: 'POST', body: { token: code } })
   })
   it('uses separate administrator endpoints for creation and revocation', async () => {
     await issueInvitation('trip'); await revokeInvitation('trip')
@@ -69,6 +74,10 @@ describe('invitation input', () => {
     expect(invitationToken(` ${token} `)).toBe(token)
     expect(invitationToken(`http://localhost:5173/#invite=${token}`)).toBe(token)
     expect(invitationToken(`https://rihla.example/#invite=${token}`)).toBe(token)
+  })
+  it('accepts a six-digit invitation code, including leading zeroes', () => {
+    expect(invitationToken(` ${code} `)).toBe(code)
+    expect(invitationToken('001234')).toBe('001234')
   })
   it.each(['', 'wrong', 'a'.repeat(63), `javascript:alert(1)#invite=${token}`, `https://rihla.example/?invite=${token}`])('rejects invalid or unsafe invitation input: %s', (input) => {
     expect(invitationToken(input)).toBeNull()

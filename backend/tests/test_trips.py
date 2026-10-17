@@ -11,6 +11,7 @@ from app.services.supabase import get_supabase_http
 USER = "11111111-1111-4111-8111-111111111111"
 TRIP_ID = "44444444-4444-4444-8444-444444444444"
 TOKEN = "ab" * 32
+CODE = "984143"
 TRIP = {
     "id": TRIP_ID,
     "title": "Our next trip",
@@ -30,9 +31,15 @@ TRIP = {
 
 
 @pytest.fixture
-def trip_client():
+def trip_client(tmp_path):
     def build(handler):
-        app = create_app(Settings(_env_file=None, app_env="test"))
+        app = create_app(
+            Settings(
+                _env_file=None,
+                app_env="test",
+                login_limit_db=tmp_path / "trip-limits.sqlite3",
+            )
+        )
 
         async def fake_http():
             def upstream(request):
@@ -119,7 +126,7 @@ def test_all_trip_routes_require_authentication(client, method, path):
             None,
             "rihla_issue_invitation",
             {"p_trip_id": TRIP_ID},
-            {"token": TOKEN, "expires_at": "2026-10-23T12:00:00Z"},
+            {"token": TOKEN, "code": CODE, "expires_at": "2026-10-23T12:00:00Z"},
             201,
         ),
         (
@@ -241,6 +248,45 @@ def test_join_reports_invalid_expired_or_revoked_invitation(trip_client):
     )
 
 
+def test_six_digit_code_joins_through_the_same_guarded_rpc(trip_client):
+    def handler(request):
+        assert request.url.path == "/rest/v1/rpc/rihla_join_trip"
+        assert json.loads(request.content) == {"p_token": CODE}
+        return httpx.Response(200, json={"trip": TRIP, "already_member": False})
+
+    response = trip_client(handler).post(
+        "/api/trips/join",
+        json={"token": CODE},
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 200
+    assert response.json()["already_member"] is False
+
+
+def test_fifth_invalid_short_code_blocks_more_guesses_for_that_user(trip_client):
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(400, json={"code": "P0001"})
+
+    client = trip_client(handler)
+    headers = {"Authorization": "Bearer current-user"}
+    for _ in range(4):
+        assert (
+            client.post(
+                "/api/trips/join", json={"token": CODE}, headers=headers
+            ).status_code
+            == 404
+        )
+    fifth = client.post("/api/trips/join", json={"token": CODE}, headers=headers)
+    assert fifth.status_code == 429
+    assert fifth.json()["detail"]["code"] == "invitation_join_locked"
+    sixth = client.post("/api/trips/join", json={"token": "123456"}, headers=headers)
+    assert sixth.status_code == 429
+    assert len(calls) == 5
+
+
 def test_trip_output_filters_unexpected_private_fields(trip_client):
     response = trip_client(
         lambda _: httpx.Response(
@@ -270,7 +316,12 @@ PREFERENCES = {
 
 
 PLANNING = {
-    "own_readiness": {"status": "Ready", "missing_fields": []},
+    "all_members_ready": True,
+    "own_readiness": {
+        "status": "Ready",
+        "missing_fields": [],
+        "has_saved_preferences": True,
+    },
     "member_readiness": [{"user_id": USER, "status": "Ready"}],
     "shared_dates": {
         "status": "available",
@@ -354,6 +405,93 @@ def test_planning_denial_and_missing_migration_are_actionable(
         headers={"Authorization": "Bearer current-user"},
     )
     assert response.status_code == expected
+
+
+def test_date_check_requires_authentication(client):
+    assert client.post(f"/api/trips/{TRIP_ID}/date-check").status_code == 401
+
+
+@pytest.mark.parametrize("status", ["available", "conflict", "pending"])
+def test_date_check_preserves_identity_and_returns_only_aggregate(trip_client, status):
+    def handler(request):
+        assert request.url.path == "/rest/v1/rpc/rihla_check_trip_dates"
+        assert json.loads(request.content) == {
+            "p_trip_id": TRIP_ID,
+            "p_start": "2026-11-10",
+            "p_end": "2026-11-10",
+        }
+        return httpx.Response(200, json={"status": status})
+
+    response = trip_client(handler).post(
+        f"/api/trips/{TRIP_ID}/date-check",
+        json={"available_start": "2026-11-10", "available_end": "2026-11-10"},
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": status}
+    assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"user_id": USER},
+        {"available_start": None},
+        {"available_start": "2026-11-16"},
+        {"available_start": "2026-02-30"},
+        {"available_start": "2026-11-10T00:00:00Z"},
+        {"available_start": "0000-01-01"},
+        {"available_end": "10000-01-01"},
+        {"available_start": 1794268800},
+    ],
+)
+def test_date_check_rejects_invalid_or_targeted_input(trip_client, patch):
+    response = trip_client(
+        lambda _: pytest.fail("Invalid input reached database")
+    ).post(
+        f"/api/trips/{TRIP_ID}/date-check",
+        json={
+            "available_start": "2026-11-10",
+            "available_end": "2026-11-15",
+            **patch,
+        },
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 422
+
+
+def test_date_check_cannot_expose_private_intervals(trip_client):
+    response = trip_client(
+        lambda _: httpx.Response(
+            200, json={"status": "conflict", "start": "2026-11-10"}
+        )
+    ).post(
+        f"/api/trips/{TRIP_ID}/date-check",
+        json={"available_start": "2026-11-10", "available_end": "2026-11-15"},
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 503
+    assert "2026-11-10" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("status", "code", "expected"),
+    [(403, "42501", 403), (404, "PGRST202", 503), (400, "23514", 422)],
+)
+def test_date_check_denial_and_missing_migration_are_actionable(
+    trip_client, status, code, expected
+):
+    response = trip_client(
+        lambda _: httpx.Response(status, json={"code": code, "message": "private"})
+    ).post(
+        f"/api/trips/{TRIP_ID}/date-check",
+        json={"available_start": "2026-11-10", "available_end": "2026-11-15"},
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == expected
+    assert "private" not in response.text
+    if expected == 503:
+        assert "planning overview" in response.json()["detail"]
 
 
 @pytest.mark.parametrize("method", ["GET", "PUT"])

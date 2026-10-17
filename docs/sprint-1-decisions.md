@@ -33,7 +33,7 @@ Recorded 16 October 2026 from the user's decisions in the project conversation. 
 
 ## Invitations
 
-- One reusable invitation link per trip, valid for seven days.
+- One reusable invitation per trip, available as a full link and six-digit code, valid for seven days.
 - Only the trip administrator can revoke or replace it. Replacement invalidates the previous link.
 - Joining requires a signed-in user and an active invitation.
 - Joining twice never creates duplicate membership.

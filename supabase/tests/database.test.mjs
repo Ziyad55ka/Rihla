@@ -52,11 +52,13 @@ async function savePreferences(id, data = inputs) {
 }
 
 const planning = (id) => rpc('rihla_get_planning_status', [id])
+const checkDates = (id, start, end) => rpc('rihla_check_trip_dates', [id, start, end])
 
 test('readiness starts Incomplete with only the caller’s missing fields and pending group dates', async () => {
   const created = await trip()
   const result = await planning(created.id)
-  assert.deepEqual(result.own_readiness, { status: 'Incomplete', missing_fields: ['departure_city', 'max_budget_sar', 'available_start', 'available_end'] })
+  assert.deepEqual(result.own_readiness, { status: 'Incomplete', missing_fields: ['departure_city', 'max_budget_sar', 'available_start', 'available_end'], has_saved_preferences: false })
+  assert.equal(result.all_members_ready, false)
   assert.deepEqual(result.member_readiness, [{ user_id: ALICE, status: 'Incomplete' }])
   assert.deepEqual(result.shared_dates, { status: 'pending', start: null, end: null, duration_days: null })
 })
@@ -65,7 +67,8 @@ test('required inputs automatically make a member Ready; optional Essential blan
   const created = await trip()
   await savePreferences(created.id, { ...inputs, destinations: { value: '', importance: 'Essential' } })
   const result = await planning(created.id)
-  assert.deepEqual(result.own_readiness, { status: 'Ready', missing_fields: [] })
+  assert.deepEqual(result.own_readiness, { status: 'Ready', missing_fields: [], has_saved_preferences: true })
+  assert.equal(result.all_members_ready, true)
   assert.deepEqual(result.shared_dates, { status: 'available', start: '2026-11-10', end: '2026-11-15', duration_days: 6 })
 })
 
@@ -133,7 +136,8 @@ test('clearing required information reverses readiness while valid dates remain 
   assert.equal((await planning(created.id)).own_readiness.status, 'Ready')
   await savePreferences(created.id, { ...inputs, departure_city: '   ', max_budget_sar: null })
   const result = await planning(created.id)
-  assert.deepEqual(result.own_readiness, { status: 'Incomplete', missing_fields: ['departure_city', 'max_budget_sar'] })
+  assert.deepEqual(result.own_readiness, { status: 'Incomplete', missing_fields: ['departure_city', 'max_budget_sar'], has_saved_preferences: true })
+  assert.equal(result.all_members_ready, false)
   assert.equal(result.shared_dates.status, 'available')
   await savePreferences(created.id, { ...inputs, available_end: null })
   assert.equal((await planning(created.id)).shared_dates.status, 'pending')
@@ -170,6 +174,76 @@ test('invalid preference updates leave readiness and shared dates unchanged', as
   const original = await planning(created.id)
   await denied(() => savePreferences(created.id, { ...inputs, available_end: '2026-11-01' }), '23514')
   assert.deepEqual(await planning(created.id), original)
+})
+
+test('members receive only a group readiness flag and their own saved-draft indicator', async () => {
+  const { created, invitation } = await invitedTrip()
+  await role(BOB); await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, {})
+  let result = await planning(created.id)
+  assert.equal(result.own_readiness.has_saved_preferences, true)
+  assert.equal(result.all_members_ready, false)
+  assert.equal(result.member_readiness, null)
+  await savePreferences(created.id)
+  await role(ALICE); await savePreferences(created.id)
+  await role(BOB)
+  result = await planning(created.id)
+  assert.equal(result.all_members_ready, true)
+  assert.equal(result.member_readiness, null)
+  assert.deepEqual(Object.keys(result).sort(), ['all_members_ready', 'member_readiness', 'own_readiness', 'shared_dates'])
+  await role(CAROL); await rpc('rihla_join_trip', [invitation.token])
+  await role(BOB)
+  assert.equal((await planning(created.id)).all_members_ready, false)
+})
+
+test('candidate dates exclude the caller’s stored range and do not save or alter inputs', async () => {
+  const { created, invitation } = await invitedTrip()
+  await savePreferences(created.id)
+  await role(BOB); await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, { ...inputs, available_start: '2026-12-01', available_end: '2026-12-05' })
+  const original = await rpc('rihla_get_preferences', [created.id])
+  assert.deepEqual(await checkDates(created.id, '2026-11-15', '2026-11-20'), { status: 'available' })
+  assert.deepEqual(await checkDates(created.id, '2026-11-16', '2026-11-20'), { status: 'conflict' })
+  assert.deepEqual(await rpc('rihla_get_preferences', [created.id]), original)
+  assert.equal((await planning(created.id)).shared_dates.status, 'conflict')
+})
+
+test('date checks handle an empty group, incomplete other ranges and a known conflict', async () => {
+  const { created, invitation } = await invitedTrip()
+  assert.deepEqual(await checkDates(created.id, '0001-01-01', '9999-12-31'), { status: 'available' })
+  assert.equal((await planning(created.id)).own_readiness.has_saved_preferences, false)
+  await role(BOB); await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, { available_start: '2026-12-01' })
+  await role(ALICE)
+  assert.deepEqual(await checkDates(created.id, '2026-11-10', '2026-11-15'), { status: 'pending' })
+  await savePreferences(created.id)
+  await role(CAROL); await rpc('rihla_join_trip', [invitation.token])
+  assert.deepEqual(await checkDates(created.id, '2026-12-01', '2026-12-05'), { status: 'conflict' })
+  assert.deepEqual(await checkDates(created.id, '2026-11-12', '2026-11-15'), { status: 'pending' })
+})
+
+test('date checks intersect all other members rather than testing only pairwise overlap', async () => {
+  const { created, invitation } = await invitedTrip()
+  await savePreferences(created.id)
+  await role(BOB); await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, { ...inputs, available_start: '2026-11-16', available_end: '2026-11-20' })
+  await role(CAROL); await rpc('rihla_join_trip', [invitation.token])
+  assert.deepEqual(await checkDates(created.id, '2026-11-10', '2026-11-20'), { status: 'conflict' })
+})
+
+test('date-check RPC rejects invalid ranges and dates beyond the application calendar bounds', async () => {
+  const created = await trip()
+  for (const [start, end] of [[null, '2026-11-15'], ['2026-11-10', null], ['2026-11-15', '2026-11-10'], ['0001-01-01 BC', '2026-11-15'], ['2026-11-10', '10000-01-01'], ['infinity', 'infinity']]) {
+    await denied(() => checkDates(created.id, start, end), '23514')
+  }
+  assert.equal((await planning(created.id)).own_readiness.has_saved_preferences, false)
+})
+
+test('date-check aggregation rejects nonmembers, signed-out users and anonymous Auth users', async () => {
+  const created = await trip()
+  await role(BOB); await denied(() => checkDates(created.id, '2026-11-10', '2026-11-15'))
+  await db.exec('set local role anon'); await denied(() => checkDates(created.id, '2026-11-10', '2026-11-15'))
+  await role(ALICE, { is_anonymous: true }); await denied(() => checkDates(created.id, '2026-11-10', '2026-11-15'))
 })
 
 test('preferences return a private empty draft before the first save', async () => {
@@ -356,16 +430,29 @@ test('anonymous Supabase Auth accounts cannot use guarded RPCs', async () => {
 test('invitation is strong, stored as a hash and valid for exactly seven days', async () => {
   const { created, invitation } = await invitedTrip()
   assert.match(invitation.token, /^[0-9a-f]{64}$/)
+  assert.match(invitation.code, /^[0-9]{6}$/)
   await denied(() => db.exec('select * from public.trip_invitations'))
   const status = await rpc('rihla_get_invitation', [created.id])
   assert.equal(status.exists, true)
   assert.equal(status.revoked, false)
   assert.equal('token' in status, false)
+  assert.equal('code' in status, false)
   await root()
-  const row = (await db.query('select token_hash, extract(epoch from expires_at - created_at)::int as seconds from public.trip_invitations')).rows[0]
+  const row = (await db.query('select token_hash, code_hash, extract(epoch from expires_at - created_at)::int as seconds from public.trip_invitations')).rows[0]
   assert.equal(row.token_hash, createHash('sha256').update(invitation.token).digest('hex'))
+  assert.equal(row.code_hash, createHash('sha256').update(invitation.code).digest('hex'))
   assert.notEqual(row.token_hash, invitation.token)
+  assert.notEqual(row.code_hash, invitation.code)
   assert.equal(row.seconds, 7 * 24 * 60 * 60)
+})
+
+test('six-digit invitation code joins the same trip', async () => {
+  const { invitation } = await invitedTrip()
+  await role(BOB)
+  const result = await rpc('rihla_join_trip', [invitation.code])
+  assert.equal(result.already_member, false)
+  assert.equal(result.trip.role, 'member')
+  assert.equal(result.trip.member_count, 2)
 })
 
 test('invitation join creates one ordinary membership and is idempotent', async () => {
@@ -397,13 +484,15 @@ test('ordinary members cannot inspect, replace or revoke invitations', async () 
   await denied(() => db.exec('select * from public.trip_invitations'))
 })
 
-test('replacing an invitation immediately invalidates the previous token', async () => {
+test('replacing an invitation immediately invalidates the previous token and code', async () => {
   const { created, invitation } = await invitedTrip()
   const replacement = await rpc('rihla_issue_invitation', [created.id])
   assert.notEqual(replacement.token, invitation.token)
+  assert.notEqual(replacement.code, invitation.code)
   await role(BOB)
   await denied(() => rpc('rihla_join_trip', [invitation.token]), 'P0001')
-  assert.equal((await rpc('rihla_join_trip', [replacement.token])).trip.member_count, 2)
+  await denied(() => rpc('rihla_join_trip', [invitation.code]), 'P0001')
+  assert.equal((await rpc('rihla_join_trip', [replacement.code])).trip.member_count, 2)
   await root()
   assert.equal((await db.query('select count(*)::int as count from public.trip_invitations')).rows[0].count, 1)
 })
@@ -416,6 +505,7 @@ test('revocation blocks joins and does not remove existing members', async () =>
   assert.equal((await rpc('rihla_revoke_invitation', [created.id])).revoked, true)
   await role(CAROL)
   await denied(() => rpc('rihla_join_trip', [invitation.token]), 'P0001')
+  await denied(() => rpc('rihla_join_trip', [invitation.code]), 'P0001')
   await role(BOB)
   assert.equal((await rpc('rihla_get_trip', [created.id])).member_count, 2)
 })
@@ -426,12 +516,15 @@ test('expired invitations cannot add a member', async () => {
   await db.query("update public.trip_invitations set created_at = now() - interval '8 days', expires_at = now() - interval '1 day' where trip_id = $1", [created.id])
   await role(BOB)
   await denied(() => rpc('rihla_join_trip', [invitation.token]), 'P0001')
+  await denied(() => rpc('rihla_join_trip', [invitation.code]), 'P0001')
   assert.deepEqual(await rpc('rihla_list_trips'), [])
 })
 
 test('invalid invitation input cannot reveal a trip or add membership', async () => {
+  const { invitation } = await invitedTrip()
   await role(BOB)
-  for (const token of ['bad', '', 'a'.repeat(64)]) await denied(() => rpc('rihla_join_trip', [token]), 'P0001')
+  const unusedCode = invitation.code === '000000' ? '000001' : '000000'
+  for (const token of ['bad', '', 'a'.repeat(64), unusedCode]) await denied(() => rpc('rihla_join_trip', [token]), 'P0001')
   assert.deepEqual(await rpc('rihla_list_trips'), [])
 })
 

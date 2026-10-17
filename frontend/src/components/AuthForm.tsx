@@ -27,8 +27,8 @@ function PasswordField({ id, label, value, onChange, newPassword, disabled }: {
   </div>
 }
 
-export function AuthForm({ sessionError = '' }: { sessionError?: string }) {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+export function AuthForm({ sessionError = '', initialMode = 'signin' }: { sessionError?: string; initialMode?: 'signin' | 'signup' }) {
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
@@ -61,8 +61,8 @@ export function AuthForm({ sessionError = '' }: { sessionError?: string }) {
 
   return <div className="auth-form-view">
     <div className="auth-mode-switch" role="group" aria-label="Account access">
-      <button type="button" aria-pressed={!signingUp} disabled={busy} onClick={() => changeMode('signin')}>Sign in</button>
-      <button type="button" aria-pressed={signingUp} disabled={busy} onClick={() => changeMode('signup')}>Create an account</button>
+      <button type="button" aria-pressed={!signingUp} disabled={busy} onClick={() => changeMode('signin')}>Login</button>
+      <button type="button" aria-pressed={signingUp} disabled={busy} onClick={() => changeMode('signup')}>Sign up</button>
     </div>
 
     <div className="auth-form-heading">

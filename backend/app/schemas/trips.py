@@ -15,7 +15,7 @@ class CreateTrip(BaseModel):
 
 class JoinTrip(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    token: str = Field(pattern=r"^[0-9a-f]{64}$")
+    token: str = Field(pattern=r"^(?:[0-9a-f]{64}|[0-9]{6})$")
 
 
 class TripSummary(BaseModel):
@@ -51,4 +51,5 @@ class InvitationStatus(BaseModel):
 
 class InvitationCreated(BaseModel):
     token: str = Field(pattern=r"^[0-9a-f]{64}$")
+    code: str = Field(pattern=r"^[0-9]{6}$")
     expires_at: datetime

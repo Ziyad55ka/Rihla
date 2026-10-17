@@ -72,6 +72,8 @@ No privileged secret or legacy `service_role` key is needed for the normal user 
 
 Preferences use invoker RPCs and owner-only RLS. Planning uses a narrowly scoped definer function after membership checks because shared-date aggregation must inspect private rows without exposing them. Ordinary members receive their own missing fields and the group date result. Administrators additionally receive status-only member readiness. Results are derived on read, so edits and new joins need no trigger/materialized flag and cannot leave stale readiness stored in a table.
 
+The planning overview migration adds a group-wide readiness boolean and the caller's saved-preferences indicator for trip cards. A separate read-only candidate-date RPC returns only overlap status for the form, never other members' ranges. The new frontend routes and activation requirements are in [the design guide](frontend-redesign.md).
+
 ## Configuration boundaries
 
 | Component | Variable | Purpose |
@@ -90,11 +92,11 @@ CORS allows specified browser origins to read backend responses. It is not authe
 
 ## Decisions before trip migrations
 
-The user has agreed the core Sprint 1 rules in [sprint-1-decisions.md](sprint-1-decisions.md). Departure city is required; budgets are SAR only; one inclusive date range per member determines shared dates and duration through intersection; optional preferences use Essential/Flexible without extra levels; invitations are reusable for seven days; and editing is allowed throughout planning.
+The user has agreed the core Sprint 1 rules in [sprint-1-decisions.md](sprint-1-decisions.md). Departure city is required; budgets are SAR only; one inclusive date range per member determines shared dates and duration through intersection; optional preferences use Essential/Flexible without extra levels; invitations provide a full link and six-digit code reusable for seven days; and editing is allowed throughout planning.
 
 The administrator's readiness view exposes Ready/Incomplete only, without missing-field names or other members' private inputs. Shared group dates are visible to members. These privacy boundaries must also hold when the Data API is accessed directly.
 
-The exact server-enforced five-failures-in-15-minutes login rule remains outstanding. Email confirmation is retained in the account flow.
+The user accepted the implemented backend endpoint limit for five failures in fifteen minutes on the Free plan; direct Supabase Auth requests remain outside that limit. Email confirmation is retained in the account flow.
 
 Do not turn this entity inventory into an approved schema by accident. Once agreed, introduce constraints, grants, RLS, and meaningful permission tests alongside migrations. Creating a trip and its administrator membership must eventually be atomic; readiness should be derived from the agreed saved-input rules.
 

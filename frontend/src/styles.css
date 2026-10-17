@@ -1,7 +1,14 @@
 :root {
-  font-family:'DM Sans',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  color:#173441;
-  background:#f6f8f7;
+  --rihla-ink:#172b22;
+  --rihla-muted:#687267;
+  --rihla-green:#345441;
+  --rihla-cream:#e9e9df;
+  --rihla-bg:#e9e9df;
+  --rihla-paper:#f8f8f2;
+  --rihla-line:#d4d9cd;
+  font-family:Arial,'Helvetica Neue',system-ui,sans-serif;
+  color:var(--rihla-ink);
+  background:var(--rihla-cream);
   font-synthesis:none;
   text-rendering:optimizeLegibility;
   -webkit-font-smoothing:antialiased;

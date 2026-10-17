@@ -2,7 +2,9 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.schemas.preferences import MemberPreferences
 
 Readiness = Literal["Ready", "Incomplete"]
 MissingField = Literal[
@@ -14,6 +16,7 @@ class OwnReadiness(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: Readiness
     missing_fields: list[MissingField]
+    has_saved_preferences: bool = Field(strict=True)
 
     @model_validator(mode="after")
     def status_matches_missing_fields(self):
@@ -54,6 +57,29 @@ class SharedDates(BaseModel):
 
 class PlanningStatus(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    all_members_ready: bool = Field(strict=True)
     own_readiness: OwnReadiness
     member_readiness: list[MemberReadiness] | None
     shared_dates: SharedDates
+
+
+class DateCheckInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    available_start: date
+    available_end: date
+
+    @field_validator("available_start", "available_end", mode="before")
+    @classmethod
+    def calendar_date_only(cls, value):
+        return MemberPreferences.calendar_date_only(value)
+
+    @model_validator(mode="after")
+    def dates_in_order(self):
+        if self.available_start > self.available_end:
+            raise ValueError("End date must be on or after start date.")
+        return self
+
+
+class DateCheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["pending", "conflict", "available"]

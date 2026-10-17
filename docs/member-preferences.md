@@ -27,7 +27,7 @@ No hosted database changes were made during implementation.
 
 1. Confirm the account and trips/invitations migrations have already been applied. If the trip screen works, do not rerun those files.
 2. Open `supabase/migrations/20261016000200_member_preferences.sql`, review it, then run its exact contents **once** in the intended development project's SQL Editor.
-3. Restart the backend if it is not running with `--reload`, refresh the frontend and open a trip. The new preferences form is below the member/invitation panels.
+3. Restart the backend if it is not running with `--reload`, refresh the frontend and open a trip. Select **Enter preferences** above the member cards to open the separate preferences page; after saving, the action becomes **Edit preferences**. See the [latest design and candidate-date checks](frontend-redesign.md) for the additional planning overview migration.
 4. Save a draft, leave and reopen the trip, then check that the values persist. Test a second account in another browser profile. It must see its own blank inputs, not the first user's inputs, and cannot change the first user's row.
 
 If the screen reports **Preference storage is unavailable**, check that the migration ran successfully after the earlier migrations and that the Data API still exposes the public schema. Do not remove RLS or use a service-role key to work around permissions.

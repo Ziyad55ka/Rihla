@@ -29,7 +29,10 @@ export async function authenticatedRequest<T>(
     if (response.status === 401) throw new ApiError('Your session is invalid or expired. Sign out and sign in again.', 401)
     const payload: unknown = await response.json().catch(() => null)
     const detail = typeof payload === 'object' && payload !== null && 'detail' in payload ? payload.detail : null
-    throw new ApiError(typeof detail === 'string' ? detail : `The request failed (HTTP ${response.status}). Check your input and try again.`, response.status)
+    const message = typeof detail === 'string' ? detail
+      : typeof detail === 'object' && detail !== null && 'message' in detail && typeof detail.message === 'string' ? detail.message
+        : `The request failed (HTTP ${response.status}). Check your input and try again.`
+    throw new ApiError(message, response.status)
   }
   return response.json() as Promise<T>
 }
