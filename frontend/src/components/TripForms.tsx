@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { createTrip, invitationToken, joinTrip } from '../lib/trips'
 import type { TripDetail } from '../types/trips'
+import { useLanguage } from '../lib/language'
 
 export function CreateTripForm({ onCreated, onBack }: { onCreated: (trip: TripDetail) => void; onBack: () => void }) {
+  const { t } = useLanguage()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
@@ -16,22 +18,23 @@ export function CreateTripForm({ onCreated, onBack }: { onCreated: (trip: TripDe
     finally { setBusy(false) }
   }
   return <section className="trip-form-page">
-    <button className="trip-back" onClick={onBack} disabled={busy}>← Back to your trips</button>
-    <p className="trip-eyebrow">MAKE THE FIRST MOVE</p><h1>Every trip starts<br />with <span>a plan.</span></h1>
-    <p className="trip-intro-copy">Give your next adventure a name. Bring your people along next.</p>
+    <button className="trip-back" onClick={onBack} disabled={busy}>{t("← Back to your trips")}</button>
+    <p className="trip-eyebrow">{t('MAKE THE FIRST MOVE')}</p><h1>{t('Every trip starts')}<br />{t('with a plan.')}</h1>
+    <p className="trip-intro-copy">{t("Give your next adventure a name. Bring your people along next.")}</p>
     <form className="trip-form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
-      <label htmlFor="trip-title">Trip name <span>Required</span></label>
-      <input id="trip-title" name="title" required minLength={2} maxLength={100} placeholder="A weekend worth getting away for" value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} />
-      <label htmlFor="trip-description">A little about the trip <span>Optional</span></label>
-      <textarea id="trip-description" name="description" maxLength={500} rows={4} placeholder="A celebration, a catch-up, or just a change of scenery…" value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
-      <p className="trip-field-note">You’ll be the trip administrator and a participating member.</p>
-      {error && <p className="trip-feedback trip-feedback--error" role="alert">{error}</p>}
-      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || title.trim().length < 2}>{busy ? 'Creating your trip…' : 'Create trip'} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>Cancel</button></div>
+      <label htmlFor="trip-title">{t('Trip name')} <span>{t('Required')}</span></label>
+      <input id="trip-title" name="title" required minLength={2} maxLength={100} placeholder={t("A weekend worth getting away for")} value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} />
+      <label htmlFor="trip-description">{t('A little about the trip')} <span>{t('Optional')}</span></label>
+      <textarea id="trip-description" name="description" maxLength={500} rows={4} placeholder={t("A celebration, a catch-up, or just a change of scenery…")} value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
+      <p className="trip-field-note">{t("You’ll be the trip administrator and a participating member.")}</p>
+      {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
+      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || title.trim().length < 2}>{t(busy ? 'Creating your trip…' : 'Create trip')} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
     </form>
   </section>
 }
 
 export function JoinTripForm({ initialInvitation, onJoined, onBack }: { initialInvitation: string | null; onJoined: (trip: TripDetail, alreadyMember: boolean) => void; onBack: () => void }) {
+  const { t } = useLanguage()
   const [input, setInput] = useState(initialInvitation ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -46,15 +49,15 @@ export function JoinTripForm({ initialInvitation, onJoined, onBack }: { initialI
     finally { setBusy(false) }
   }
   return <section className="trip-form-page">
-    <button className="trip-back" onClick={onBack} disabled={busy}>← Back to your trips</button>
-    <p className="trip-eyebrow">THERE’S A PLACE FOR YOU</p><h1>Good company.<br /><span>You’re invited.</span></h1>
-    <p className="trip-intro-copy">Enter the 6-digit code or paste the link your trip administrator shared with you.</p>
+    <button className="trip-back" onClick={onBack} disabled={busy}>{t("← Back to your trips")}</button>
+    <p className="trip-eyebrow">{t('THERE’S A PLACE FOR YOU')}</p><h1>{t('Good company.')}<br /><span>{t('You’re invited.')}</span></h1>
+    <p className="trip-intro-copy">{t("Enter the 6-digit code or paste the link your trip administrator shared with you.")}</p>
     <form className="trip-form" onSubmit={(event) => void submit(event)} aria-busy={busy}>
-      <label htmlFor="trip-invitation">Invitation link or code</label>
-      <textarea id="trip-invitation" name="invitation" required rows={3} maxLength={2048} autoComplete="off" spellCheck={false} placeholder="6-digit code or invitation link" value={input} disabled={busy} onChange={(event) => setInput(event.target.value)} />
-      <p className="trip-field-note">Invitations are valid for 7 days unless the administrator replaces or revokes them. Already a member? Joining again takes you to the same trip.</p>
-      {error && <p className="trip-feedback trip-feedback--error" role="alert">{error}</p>}
-      <div className="trip-form-actions"><button className="trip-primary" disabled={busy}>{busy ? 'Joining your group…' : 'Join trip'} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>Cancel</button></div>
+      <label htmlFor="trip-invitation">{t('Invitation link or code')}</label>
+      <textarea id="trip-invitation" name="invitation" required rows={3} maxLength={2048} autoComplete="off" spellCheck={false} placeholder={t("6-digit code or invitation link")} value={input} disabled={busy} onChange={(event) => setInput(event.target.value)} />
+      <p className="trip-field-note">{t("Invitations are valid for 7 days unless the administrator replaces or revokes them. Already a member? Joining again takes you to the same trip.")}</p>
+      {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
+      <div className="trip-form-actions"><button className="trip-primary" disabled={busy}>{t(busy ? 'Joining your group…' : 'Join trip')} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
     </form>
   </section>
 }

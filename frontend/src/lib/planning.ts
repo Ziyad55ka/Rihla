@@ -10,9 +10,9 @@ export const missingFieldLabels: Record<MissingField, string> = {
 }
 
 // These are calendar dates. Local midnight preserves the date in every time zone.
-export function calendarDate(value: string): string {
+export function calendarDate(value: string, locale?: string): string {
   const [year, month, day] = value.split('-').map(Number)
   const date = new Date(0)
   date.setFullYear(year, month - 1, day); date.setHours(0, 0, 0, 0)
-  return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+  return date.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' })
 }

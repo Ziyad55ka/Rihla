@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint . --max-warnings 0",
+    "lint": "eslint . --max-warnings 0 && npm run check:translations",
+    "check:translations": "node scripts/check-translations.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run"
   },

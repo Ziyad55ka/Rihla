@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { PlanningPanel } from '../components/PlanningPanel'
 import { getTrip } from '../lib/trips'
 import type { TripDetail } from '../types/trips'
+import { useLanguage } from '../lib/language'
 import '../trip-detail.css'
 
 export function TripDetailPage({ tripId, notice, onBack, onPreferences }: { tripId: string; notice: string; onBack: () => void; onPreferences: () => void }) {
+  const { t } = useLanguage()
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -22,11 +24,11 @@ export function TripDetailPage({ tripId, notice, onBack, onPreferences }: { trip
     return () => controller.abort()
   }, [tripId, attempt])
   return <section className="trip-detail-page">
-    <button type="button" className="trip-back" onClick={onBack}>← Back to your trips</button>
-    {error && !trip ? <div className="trip-feedback trip-feedback--error" role="alert">{error}<button type="button" className="trip-text-button" onClick={() => setAttempt((value) => value + 1)}>Try again</button></div>
-      : !trip ? <p className="trip-loading" role="status">Getting your group together…</p>
-      : <>{notice && <p className="trip-feedback trip-feedback--success" role="status">{notice}</p>}
-        {error && <p className="trip-feedback trip-feedback--error" role="alert">Could not refresh the group. {error}</p>}
+    <button type="button" className="trip-back" onClick={onBack}>← {t('Back to your trips')}</button>
+    {error && !trip ? <div className="trip-feedback trip-feedback--error" role="alert">{t(error)}<button type="button" className="trip-text-button" onClick={() => setAttempt((value) => value + 1)}>{t("Try again")}</button></div>
+      : !trip ? <p className="trip-loading" role="status">{t('Getting your group together…')}</p>
+      : <>{notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
+        {error && <p className="trip-feedback trip-feedback--error" role="alert">{t("Could not refresh the group.")} {t(error)}</p>}
         <PlanningPanel key={`planning-${trip.id}`} trip={trip} revision={attempt} onRefresh={() => setAttempt((value) => value + 1)} onPreferences={onPreferences} />
       </>}
   </section>

@@ -1,0 +1,37 @@
+/* Content remains visible when JavaScript or motion features are unavailable. */
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior:smooth; }
+  :is(.landing-page, .auth-page, .trip-workspace) button {
+    transition:transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  }
+  :is(.landing-page, .auth-page, .trip-workspace) button:hover:not(:disabled) { transform:translateY(-2px); }
+  :is(.landing-page, .auth-page, .trip-workspace) button:active:not(:disabled) { transform:translateY(0) scale(.98); }
+  :is(.landing-action, .trip-primary, .planning-preferences-button, .rihla-navbar-action):hover:not(:disabled) { box-shadow:0 7px 18px #172b2220; }
+  .landing-main-panel, .auth-page, .trip-workspace { position:relative; isolation:isolate; }
+  .landing-main-panel::before, .auth-page::before, .trip-workspace::before {
+    content:''; pointer-events:none; position:absolute; z-index:-1;
+    inset:0 0 auto; height:850px;
+    background:radial-gradient(ellipse at 18% 30%, #9fb58a28, transparent 55%), radial-gradient(ellipse at 85% 60%, #c8b68a22, transparent 50%);
+    animation:rihla-ambient 16s ease-in-out infinite alternate;
+  }
+  .landing-hero-copy, .auth-story, .trip-dashboard-hero { animation:rihla-arrive 700ms cubic-bezier(.2,.7,.2,1) both; }
+  .landing-ticket-card { animation:rihla-float 8s ease-in-out infinite; }
+  .landing-people-card { animation:rihla-float 9s ease-in-out -3s infinite; }
+  .landing-dates-card { animation:rihla-float 10s ease-in-out -5s infinite; }
+  .landing-orbit { animation:rihla-orbit 14s ease-in-out infinite alternate; }
+  [data-reveal='pending'] { opacity:0; transform:translateY(20px); }
+  [data-reveal='visible'] { animation:rihla-arrive 600ms cubic-bezier(.2,.7,.2,1) backwards; }
+  [data-reveal='pending']:focus-within { opacity:1; transform:none; }
+  .planning-invite-backdrop { animation:rihla-fade 160ms ease both; }
+  .planning-invite-dialog { animation:rihla-arrive 240ms ease both; }
+  @keyframes rihla-arrive { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes rihla-float { 0%,100% { translate:0 0; } 50% { translate:0 -9px; } }
+  @keyframes rihla-orbit { from { rotate:-10deg; } to { rotate:22deg; } }
+  @keyframes rihla-ambient { from { opacity:.55; background-position:0 0; } to { opacity:1; background-position:65px 30px; } }
+  @keyframes rihla-fade { from { opacity:0; } to { opacity:1; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior:auto; }
+  *, *::before, *::after { animation:none !important; transition:none !important; }
+  [data-reveal] { opacity:1; transform:none; }
+}

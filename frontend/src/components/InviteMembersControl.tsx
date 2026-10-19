@@ -1,8 +1,10 @@
+import { useLanguage } from '../lib/language'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { invitationUrl, issueInvitation } from '../lib/trips'
 
 export function InviteMembersControl({ tripId }: { tripId: string }) {
+  const { t } = useLanguage()
   const [link, setLink] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -49,23 +51,23 @@ export function InviteMembersControl({ tripId }: { tripId: string }) {
   }
 
   return <div className="planning-invite-control">
-    <button className="planning-invite-button" type="button" disabled={busy} onClick={() => void invite()}>{busy ? 'Creating link…' : 'Invite members'} <span aria-hidden="true">↗</span></button>
-    {error && !open && <p className="planning-invite-error" role="alert">{error}</p>}
+    <button className="planning-invite-button" type="button" disabled={busy} onClick={() => void invite()}>{busy ? t("Creating link…") : t("Invite members")} <span aria-hidden="true">↗</span></button>
+    {error && !open && <p className="planning-invite-error" role="alert">{t(error)}</p>}
     {open && link && createPortal(<div className="planning-invite-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
       <section className="planning-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="invitation-dialog-title">
-        <button ref={closeButton} className="planning-invite-close" type="button" aria-label="Close invitation" onClick={() => setOpen(false)}>×</button>
-        <p className="trip-eyebrow">BRING YOUR PEOPLE</p>
-        <h2 id="invitation-dialog-title">Invite members</h2>
-        <p>Share the simple code, or copy the full link.</p>
+        <button ref={closeButton} className="planning-invite-close" type="button" aria-label={t("Close invitation")} onClick={() => setOpen(false)}>×</button>
+        <p className="trip-eyebrow">{t("BRING YOUR PEOPLE")}</p>
+        <h2 id="invitation-dialog-title">{t("Invite members")}</h2>
+        <p>{t("Share the simple code, or copy the full link.")}</p>
         <div className="planning-invite-code">
-          <label htmlFor={`trip-invitation-code-${tripId}`}>6-digit code</label>
-          <div><input id={`trip-invitation-code-${tripId}`} readOnly value={code} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copy(code, 'code')}>{copied === 'code' ? 'Copied ✓' : 'Copy code'}</button></div>
+          <label htmlFor={`trip-invitation-code-${tripId}`}>{t("6-digit code")}</label>
+          <div><input id={`trip-invitation-code-${tripId}`} readOnly value={code} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copy(code, 'code')}>{copied === 'code' ? t("Copied ✓") : t("Copy code")}</button></div>
         </div>
         <div className="planning-invite-link">
-          <label htmlFor={`trip-invitation-${tripId}`}>Invitation link</label>
-          <div><input id={`trip-invitation-${tripId}`} readOnly value={link} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copy(link, 'link')}>{copied === 'link' ? 'Copied ✓' : 'Copy link'}</button></div>
+          <label htmlFor={`trip-invitation-${tripId}`}>{t("Invitation link")}</label>
+          <div><input id={`trip-invitation-${tripId}`} readOnly value={link} onFocus={(event) => event.currentTarget.select()} /><button type="button" onClick={() => void copy(link, 'link')}>{copied === 'link' ? t("Copied ✓") : t("Copy link")}</button></div>
         </div>
-        {error && <p className="planning-invite-error" role="alert">{error}</p>}
+        {error && <p className="planning-invite-error" role="alert">{t(error)}</p>}
       </section>
     </div>, document.body)}
   </div>
