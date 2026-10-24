@@ -17,7 +17,22 @@ export function editablePreferences(saved: SavedPreferences): MemberPreferences 
   }
 }
 
+export function preferencesForForm(saved: SavedPreferences): MemberPreferences {
+  const preferences = editablePreferences(saved)
+  if (saved.updated_at) return preferences
+  return {
+    ...preferences,
+    destinations: { ...preferences.destinations, importance: 'Essential' },
+    interests: { ...preferences.interests, importance: 'Essential' },
+    flights: { ...preferences.flights, importance: 'Essential' },
+    accommodation: { ...preferences.accommodation, importance: 'Essential' },
+  }
+}
+
 export function preferenceError(values: MemberPreferences): string | null {
+  if (!values.departure_city.trim() || !values.max_budget_sar?.trim() || !values.available_start || !values.available_end) {
+    return 'Fill in departure city, maximum budget and both travel dates before saving.'
+  }
   if (values.max_budget_sar !== null && (!/^\d+(\.\d{1,2})?$/.test(values.max_budget_sar) || Number(values.max_budget_sar) <= 0 || Number(values.max_budget_sar) >= 10000000000)) {
     return 'Enter a budget greater than 0 and below 10,000,000,000 SAR, with up to 2 decimal places.'
   }

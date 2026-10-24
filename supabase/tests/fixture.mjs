@@ -7,7 +7,7 @@ export const fixtureUsers = [
   { id: '33333333-3333-4333-8333-333333333333', name: 'Carol', email: 'carol@example.test' },
 ]
 
-export async function createFixtureDatabase() {
+export async function createFixtureDatabase({ throughMigration } = {}) {
   const db = new PGlite()
   await db.exec(`
     create role anon nologin;
@@ -21,7 +21,9 @@ export async function createFixtureDatabase() {
       $$select (auth.jwt()->>'sub')::uuid$$;
   `)
   const migrations = (await readdir(new URL('../migrations/', import.meta.url))).filter((name) => name.endsWith('.sql')).sort()
-  for (const name of migrations) await db.exec(await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+  for (const name of migrations) {
+    if (!throughMigration || name <= throughMigration) await db.exec(await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'))
+  }
   for (const user of fixtureUsers) {
     await db.query('insert into auth.users(id, email) values ($1, $2)', [user.id, user.email])
     await db.query('insert into public.profiles(id, display_name) values ($1, $2)', [user.id, user.name])

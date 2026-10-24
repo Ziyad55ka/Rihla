@@ -5,7 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.core.auth import CurrentIdentity
 from app.schemas.planning import DateCheckInput, DateCheckResult, PlanningStatus
-from app.schemas.preferences import MemberPreferences, SavedPreferences
+from app.schemas.preferences import SavedPreferences, SubmitPreferences
 from app.schemas.trips import (
     CreateTrip,
     InvitationCreated,
@@ -71,7 +71,7 @@ async def read_preferences(
 @router.put("/{trip_id}/preferences", response_model=SavedPreferences)
 async def save_preferences(
     trip_id: UUID,
-    body: MemberPreferences,
+    body: SubmitPreferences,
     identity: CurrentIdentity,
     client: SupabaseHTTP,
 ):

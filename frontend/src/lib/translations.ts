@@ -1,5 +1,14 @@
 // App-owned copy. User-entered trip names and preferences are kept as written.
 export const arabic: Record<string, string> = {
+  "Fill in departure city, maximum budget and both travel dates before saving.": "أكمل مدينة المغادرة والميزانية القصوى وتاريخَي السفر قبل الحفظ.",
+  "Departure city, maximum budget and both dates are required before saving.": "يجب إدخال مدينة المغادرة والميزانية القصوى والتاريخين قبل الحفظ.",
+  "Your travel dates are visible to your trip members. Your budget and other preferences stay private; only you can edit your inputs.": "تواريخ سفرك ظاهرة لأعضاء رحلتك. تبقى ميزانيتك وتفضيلاتك الأخرى خاصة بك، وأنت وحدك من يمكنه تعديل بياناتك.",
+  ". Complete all required fields before saving.": ". أكمل جميع الحقول المطلوبة قبل الحفظ.",
+  "Travel dates": "تواريخ السفر",
+  "Loading travel dates…": "جارٍ تحميل تواريخ السفر…",
+  "Dates not entered yet": "لم تُدخل التواريخ بعد",
+  "Not entered": "لم يُدخل",
+  "Travel dates are shared with trip members. Budgets and other preferences stay private. Only the administrator sees individual readiness.": "تواريخ السفر مشتركة مع أعضاء الرحلة. تبقى الميزانيات والتفضيلات الأخرى خاصة، ويرى المسؤول وحده جاهزية كل عضو.",
   "Home": "الرئيسية",
   "About Rihla": "عن رحلة",
   "Login": "تسجيل الدخول",

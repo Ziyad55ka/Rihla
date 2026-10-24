@@ -63,16 +63,22 @@ export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { tr
       <div className="planning-members-heading"><div><p className="trip-eyebrow">{t("YOUR TRAVEL CIRCLE")}</p><h2 id="members-title">{t("Different people. One adventure.")}</h2><p>{trip.member_count === 1 ? t('1 person making the plan together.') : t('{count} people making the plan together.', { count: trip.member_count.toLocaleString(locale) })}</p></div>
         <div className="planning-members-actions"><button className="planning-preferences-button" type="button" onClick={onPreferences}>{hasSaved === true ? t("Edit preferences") : hasSaved === false ? t("Enter preferences") : t("Your preferences")} <span aria-hidden="true">↗</span></button>{trip.role === 'administrator' && <InviteMembersControl tripId={trip.id} />}</div>
       </div>
-      {current?.own_readiness.status === 'Incomplete' && <p className="planning-own-note">{t("For your readiness, add:")} {current.own_readiness.missing_fields.map((field) => t(missingFieldLabels[field])).join('، ')}{t(". You can save your progress at any time.")}</p>}
+      {current?.own_readiness.status === 'Incomplete' && <p className="planning-own-note">{t("For your readiness, add:")} {current.own_readiness.missing_fields.map((field) => t(missingFieldLabels[field])).join('، ')}{t('. Complete all required fields before saving.')}</p>}
       <ul className="planning-member-grid">{trip.members.map((member, index) => {
         const readiness = trip.role === 'administrator' ? current?.member_readiness?.find((value) => value.user_id === member.user_id)?.status : undefined
+        const dates = current?.member_dates.find((value) => value.user_id === member.user_id)
         return <li className="planning-member-card" key={member.user_id}>
           <div className="planning-member-card-top"><span className={`planning-member-avatar planning-member-avatar--${index % 3}`} aria-hidden="true">{member.display_name.slice(0, 1).toUpperCase()}</span><span className="planning-member-number" aria-hidden="true">{(index + 1).toString().padStart(2, '0')}</span></div>
           <h3>{member.display_name}</h3><p>{member.role === 'administrator' ? t("Trip administrator") : t("Trip member")}</p>
+          <div className="planning-member-dates"><span>{t('Travel dates')}</span>
+            {!dates ? <p>{current ? t('Dates unavailable') : busy ? t('Loading travel dates…') : t('Dates unavailable')}</p>
+              : !dates.available_start && !dates.available_end ? <p>{t('Dates not entered yet')}</p>
+                : <p>{t('Available from')}: {dates.available_start ? <time dateTime={dates.available_start}>{calendarDate(dates.available_start, locale)}</time> : t('Not entered')}<br />{t('Available until')}: {dates.available_end ? <time dateTime={dates.available_end}>{calendarDate(dates.available_end, locale)}</time> : t('Not entered')}</p>}
+          </div>
           {trip.role === 'administrator' && <div className="planning-member-readiness"><span>{t("Preferences")}</span><span className={`planning-badge${readiness ? ` planning-badge--${readiness.toLowerCase()}` : ''}`}>{t(readiness ?? 'Unavailable')}</span></div>}
         </li>
       })}</ul>
-      <p className="planning-privacy-note"><span aria-hidden="true">◇</span> {t("Your preferences stay private.")} {trip.role === 'administrator' ? t("You can see each member’s readiness only.") : t("Your administrator can see readiness only.")}</p>
+      <p className="planning-privacy-note"><span aria-hidden="true">◇</span> {t('Travel dates are shared with trip members. Budgets and other preferences stay private. Only the administrator sees individual readiness.')}</p>
     </section>
   </section>
 }

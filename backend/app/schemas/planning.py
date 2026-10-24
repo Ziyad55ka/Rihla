@@ -55,11 +55,29 @@ class SharedDates(BaseModel):
         return self
 
 
+class MemberDates(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: UUID
+    available_start: date | None
+    available_end: date | None
+
+    @model_validator(mode="after")
+    def dates_in_order(self):
+        if (
+            self.available_start is not None
+            and self.available_end is not None
+            and self.available_start > self.available_end
+        ):
+            raise ValueError("Invalid member date range.")
+        return self
+
+
 class PlanningStatus(BaseModel):
     model_config = ConfigDict(extra="forbid")
     all_members_ready: bool = Field(strict=True)
     own_readiness: OwnReadiness
     member_readiness: list[MemberReadiness] | None
+    member_dates: list[MemberDates]
     shared_dates: SharedDates
 
 

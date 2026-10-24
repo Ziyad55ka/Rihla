@@ -5,7 +5,7 @@ Each participating member, including the administrator, has a **Your trip. Your 
 ## What works
 
 - Save and edit departure city, maximum individual budget in SAR, and one availability start/end range.
-- Save incomplete drafts, including clearing previously entered required fields. Null budget/dates and a blank departure city deliberately represent incomplete input.
+- All saves require departure city, maximum budget and both travel dates. New forms and legacy drafts remain readable, but cannot be saved until complete. See [shared member dates and required saves](shared-member-dates.md) for the 21 October update and migration.
 - Save optional destinations, interests, flight and accommodation preferences as short free text. Each category is Essential or Flexible; blank optional fields are allowed. Sprint 2 will interpret these inputs when proposals are built.
 - Reject nonpositive budgets, more than two fractional digits, oversized inputs, invalid calendar dates, reversed ranges and unknown importance values. Equal dates are valid. Both range endpoints count as available days.
 - Preserve edits after a failed save; show loading, retry, saving, unsaved and saved feedback. Saved values are loaded again when the trip is reopened.
@@ -13,7 +13,7 @@ Each participating member, including the administrator, has a **Your trip. Your 
 
 ## Request and privacy design
 
-`GET /api/trips/{trip_id}/preferences` returns the current member's saved inputs or an empty draft. `PUT` replaces their inputs; omitted fields reset to their empty defaults. The UI always submits the complete editable object. Response metadata includes `currency: "SAR"` and `updated_at` (null before the first save). Budget responses use decimal strings to preserve money precision.
+`GET /api/trips/{trip_id}/preferences` returns the current member's saved inputs or an empty form. `PUT` replaces their inputs; missing required fields are rejected. The UI always submits the complete editable object. Response metadata includes `currency: "SAR"` and `updated_at` (null before the first save). Budget responses use decimal strings to preserve money precision. Trip members can see each other's saved dates through the separate planning response; other detailed inputs remain private.
 
 The request cannot specify a user ID, administrator role, currency or update timestamp. FastAPI verifies the Supabase access token and forwards that same token to the two `SECURITY INVOKER` RPCs. Normal reads and writes retain the caller's identity and RLS applies.
 
@@ -28,7 +28,7 @@ No hosted database changes were made during implementation.
 1. Confirm the account and trips/invitations migrations have already been applied. If the trip screen works, do not rerun those files.
 2. Open `supabase/migrations/20261016000200_member_preferences.sql`, review it, then run its exact contents **once** in the intended development project's SQL Editor.
 3. Restart the backend if it is not running with `--reload`, refresh the frontend and open a trip. Select **Enter preferences** above the member cards to open the separate preferences page; after saving, the action becomes **Edit preferences**. See the [latest design and candidate-date checks](frontend-redesign.md) for the additional planning overview migration.
-4. Save a draft, leave and reopen the trip, then check that the values persist. Test a second account in another browser profile. It must see its own blank inputs, not the first user's inputs, and cannot change the first user's row.
+4. Apply the later [required-save migration](shared-member-dates.md), save complete required inputs, then reopen the trip and check that they persist. Test a second account in another browser profile. Its form must show its own inputs, while member cards share saved dates. It cannot change the first user's row.
 
 If the screen reports **Preference storage is unavailable**, check that the migration ran successfully after the earlier migrations and that the Data API still exposes the public schema. Do not remove RLS or use a service-role key to work around permissions.
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { editablePreferences, getPreferences, preferenceError, savePreferences } from '../lib/preferences'
+import { editablePreferences, getPreferences, preferenceError, preferencesForForm, savePreferences } from '../lib/preferences'
 import { checkTravelDates } from '../lib/date-check'
 import type { DateCheck } from '../lib/date-check'
 import type { Importance, MemberPreferences, SavedPreferences } from '../types/preferences'
@@ -15,7 +15,7 @@ const optionalFields = [
 
 function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial: SavedPreferences; onSaved: () => void }) {
   const { t, locale } = useLanguage()
-  const [values, setValues] = useState<MemberPreferences>(() => editablePreferences(initial))
+  const [values, setValues] = useState<MemberPreferences>(() => preferencesForForm(initial))
   const [savedAt, setSavedAt] = useState(initial.updated_at)
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -58,12 +58,12 @@ function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial
   return <form className="trip-form preferences-form" onSubmit={(event) => void submit(event)}>
     <fieldset disabled={busy} className="preferences-fields">
       <legend><span className="preferences-section-number">01</span> {t('Your travel essentials')}</legend>
-      <p className="trip-field-note">{t('Departure city, maximum budget and both dates are required for readiness. You can save a draft with blank fields.')}</p>
+      <p className="trip-field-note">{t('Departure city, maximum budget and both dates are required before saving.')}</p>
       <div className="preferences-grid">
-        <div><label htmlFor="departure-city">{t('Departure city')}</label><input id="departure-city" autoComplete="address-level2" maxLength={100} value={values.departure_city} placeholder={t('For example: Riyadh')} onChange={(event) => change('departure_city', event.target.value)} /></div>
-        <div><label htmlFor="maximum-budget">{t("Maximum budget")} <span>{t("SAR per person")}</span></label><input id="maximum-budget" type="number" inputMode="decimal" min="0.01" max="9999999999.99" step="0.01" value={values.max_budget_sar ?? ''} placeholder={t("Your total travel budget")} onChange={(event) => change('max_budget_sar', event.target.value || null)} /></div>
-        <div><label htmlFor="available-start">{t('Available from')}</label><input id="available-start" type="date" min="0001-01-01" max="9999-12-31" value={values.available_start ?? ''} onChange={(event) => change('available_start', event.target.value || null)} /></div>
-        <div><label htmlFor="available-end">{t('Available until')}</label><input id="available-end" type="date" min={values.available_start || '0001-01-01'} max="9999-12-31" value={values.available_end ?? ''} onChange={(event) => change('available_end', event.target.value || null)} /></div>
+        <div><label htmlFor="departure-city">{t('Departure city')}</label><input id="departure-city" required pattern=".*\S.*" autoComplete="address-level2" maxLength={100} value={values.departure_city} placeholder={t('For example: Riyadh')} onChange={(event) => change('departure_city', event.target.value)} /></div>
+        <div><label htmlFor="maximum-budget">{t("Maximum budget")} <span>{t("SAR per person")}</span></label><input id="maximum-budget" required type="number" inputMode="decimal" min="0.01" max="9999999999.99" step="0.01" value={values.max_budget_sar ?? ''} placeholder={t("Your total travel budget")} onChange={(event) => change('max_budget_sar', event.target.value || null)} /></div>
+        <div><label htmlFor="available-start">{t('Available from')}</label><input id="available-start" required type="date" min="0001-01-01" max="9999-12-31" value={values.available_start ?? ''} onChange={(event) => change('available_start', event.target.value || null)} /></div>
+        <div><label htmlFor="available-end">{t('Available until')}</label><input id="available-end" required type="date" min={values.available_start || '0001-01-01'} max="9999-12-31" value={values.available_end ?? ''} onChange={(event) => change('available_end', event.target.value || null)} /></div>
       </div>
       {currentDateCheck && <p className={`preferences-date-check preferences-date-check--${currentDateCheck}`} role={currentDateCheck === 'conflict' ? 'alert' : 'status'}>
         <span aria-hidden="true">{currentDateCheck === 'conflict' ? '↔' : currentDateCheck === 'available' ? '✓' : '◇'}</span>
@@ -77,10 +77,14 @@ function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial
     <fieldset disabled={busy} className="preferences-fields preferences-optional">
       <legend><span className="preferences-section-number">02</span> {t('The little things that matter')} <span className="preferences-optional-label">{t('Optional')}</span></legend>
       <p className="trip-field-note">{t("Essential means it must be respected. Flexible means it may be adjusted, with an explanation when proposals are introduced. Leaving these blank will not block readiness.")}</p>
-      {optionalFields.map(({ key, label, placeholder }) => <div className="preference-choice" key={key}>
-        <div><label htmlFor={`preference-${key}`}>{t(label)}</label><textarea id={`preference-${key}`} maxLength={500} rows={2} value={values[key].value} placeholder={t(placeholder)} onChange={(event) => change(key, { ...values[key], value: event.target.value })} /></div>
-        <div><label htmlFor={`importance-${key}`}>{t('Importance')}</label><select id={`importance-${key}`} value={values[key].importance} onChange={(event) => change(key, { ...values[key], importance: event.target.value as Importance })}><option value="Flexible">{t('Flexible')}</option><option value="Essential">{t('Essential')}</option></select></div>
-      </div>)}
+      {optionalFields.map(({ key, label, placeholder }) => {
+        const essential = values[key].importance === 'Essential'
+        const nextImportance: Importance = essential ? 'Flexible' : 'Essential'
+        return <div className="preference-choice" key={key}>
+          <div><label htmlFor={`preference-${key}`}>{t(label)}</label><textarea id={`preference-${key}`} maxLength={500} rows={2} value={values[key].value} placeholder={t(placeholder)} onChange={(event) => change(key, { ...values[key], value: event.target.value })} /></div>
+          <div className="importance-control"><label htmlFor={`importance-${key}`}>{t('Importance')}</label><button id={`importance-${key}`} type="button" className={`importance-toggle importance-toggle--${essential ? 'essential' : 'flexible'}`} aria-pressed={essential} onClick={() => change(key, { ...values[key], importance: nextImportance })}>{t(values[key].importance)}</button></div>
+        </div>
+      })}
     </fieldset>
     <div className="trip-form-actions preferences-actions"><button type="submit" className="trip-primary" disabled={busy || !dirty}>{busy ? t("Saving…") : t("Save preferences")} <span aria-hidden="true">↗</span></button>
       <span className="preferences-save-status" role="status">{dirty ? t("Unsaved changes") : savedAt ? t('Saved {date}', { date: new Date(savedAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) }) : t("No preferences saved yet")}</span></div>
@@ -103,7 +107,7 @@ export function PreferencesPanel({ tripId, onSaved }: { tripId: string; onSaved:
   }, [tripId, attempt])
   return <section className="preferences-panel" aria-labelledby="preferences-title">
     <div className="preferences-heading"><div><p className="trip-eyebrow">{t('A SPACE FOR YOUR INPUT')}</p><h2 id="preferences-title">{t('Your travel preferences')}</h2></div><span className="preferences-private"><span aria-hidden="true">◇</span> {t('Private to you')}</span></div>
-    <p className="trip-intro-copy">{t('Only you can read or change these inputs. Your administrator sees readiness only.')}</p>
+    <p className="trip-intro-copy">{t('Your travel dates are visible to your trip members. Your budget and other preferences stay private; only you can edit your inputs.')}</p>
     {error ? <div className="trip-feedback trip-feedback--error" role="alert">{t(error)}<button type="button" className="trip-text-button" onClick={() => { setError(''); setAttempt((value) => value + 1) }}>{t("Try again")}</button></div>
       : saved ? <PreferencesForm key={tripId} tripId={tripId} initial={saved} onSaved={onSaved} /> : <p className="trip-loading" role="status">{t("Loading your preferences…")}</p>}
   </section>

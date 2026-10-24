@@ -2,6 +2,7 @@ import { createFixtureDatabase } from './fixture.mjs'
 import { before, beforeEach, afterEach, after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 
 // Real PostgreSQL engine in memory; only Supabase's Auth schema/claims are stubbed.
 // No credentials, cloud connections, service-role keys or persistent database.
@@ -54,6 +55,32 @@ async function savePreferences(id, data = inputs) {
 const planning = (id) => rpc('rihla_get_planning_status', [id])
 const checkDates = (id, start, end) => rpc('rihla_check_trip_dates', [id, start, end])
 
+test('upgrading preserves legacy drafts and allows completing them under the new save rule', async () => {
+  const upgrade = await createFixtureDatabase({ throughMigration: '20261017000200_invitation_codes.sql' })
+  try {
+    await upgrade.exec('begin; set local role authenticated')
+    await upgrade.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: ALICE, role: 'authenticated' })])
+    const { rows } = await upgrade.query("select public.rihla_create_trip('Legacy trip', '') as result")
+    const id = rows[0].result.id
+    await upgrade.query('select public.rihla_save_preferences($1, $2)', [id, JSON.stringify({ available_start: '2026-11-10' })])
+    await upgrade.exec('commit; reset role')
+    await upgrade.exec(await readFile(new URL('../migrations/20261021000100_shared_member_dates_and_required_preferences.sql', import.meta.url), 'utf8'))
+    await upgrade.exec('begin; set local role authenticated')
+    await upgrade.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: ALICE, role: 'authenticated' })])
+    const legacy = (await upgrade.query('select public.rihla_get_preferences($1) as result', [id])).rows[0].result
+    assert.equal(legacy.departure_city, '')
+    assert.equal(legacy.available_start, '2026-11-10')
+    assert.equal(legacy.available_end, null)
+    const status = (await upgrade.query('select public.rihla_get_planning_status($1) as result', [id])).rows[0].result
+    assert.equal(status.own_readiness.status, 'Incomplete')
+    assert.deepEqual(status.member_dates, [{ user_id: ALICE, available_start: '2026-11-10', available_end: null }])
+    const completed = (await upgrade.query('select public.rihla_save_preferences($1, $2) as result', [id, JSON.stringify(inputs)])).rows[0].result
+    assert.equal(completed.departure_city, 'Riyadh')
+    await assert.rejects(() => upgrade.query('update public.member_preferences set available_end = null'), (error) => error.code === '23514')
+    await upgrade.exec('rollback')
+  } finally { await upgrade.close() }
+})
+
 test('readiness starts Incomplete with only the caller’s missing fields and pending group dates', async () => {
   const created = await trip()
   const result = await planning(created.id)
@@ -70,6 +97,27 @@ test('required inputs automatically make a member Ready; optional Essential blan
   assert.deepEqual(result.own_readiness, { status: 'Ready', missing_fields: [], has_saved_preferences: true })
   assert.equal(result.all_members_ready, true)
   assert.deepEqual(result.shared_dates, { status: 'available', start: '2026-11-10', end: '2026-11-15', duration_days: 6 })
+})
+
+test('all trip members see each other’s dates, including unsaved members, without exposing other inputs or trips', async () => {
+  const { created, invitation } = await invitedTrip()
+  await savePreferences(created.id)
+  const other = await trip()
+  await savePreferences(other.id, { ...inputs, available_start: '2027-01-01', available_end: '2027-01-05' })
+  await role(BOB); await rpc('rihla_join_trip', [invitation.token])
+  let result = await planning(created.id)
+  assert.equal(result.member_readiness, null)
+  assert.deepEqual(result.member_dates, [
+    { user_id: ALICE, available_start: '2026-11-10', available_end: '2026-11-15' },
+    { user_id: BOB, available_start: null, available_end: null },
+  ])
+  await savePreferences(created.id, { ...inputs, available_start: '2026-11-12', available_end: '2026-11-20' })
+  result = await planning(created.id)
+  assert.deepEqual(result.member_dates[1], { user_id: BOB, available_start: '2026-11-12', available_end: '2026-11-20' })
+  assert.equal((await db.query('select * from public.member_preferences where user_id = $1', [ALICE])).rows.length, 0)
+  await role(ALICE)
+  assert.deepEqual((await planning(created.id)).member_dates, result.member_dates)
+  assert.equal(JSON.stringify(result.member_dates).includes('2027-01'), false)
 })
 
 test('group intersection uses latest start and earliest end, including administrator availability', async () => {
@@ -89,19 +137,19 @@ test('group intersection uses latest start and earliest end, including administr
 test('administrator sees only status for other members; ordinary members get no readiness roster', async () => {
   const { created, invitation } = await invitedTrip()
   await role(BOB); await rpc('rihla_join_trip', [invitation.token])
-  await savePreferences(created.id, { departure_city: 'Private city', max_budget_sar: '5432.10', interests: { value: 'Private interests', importance: 'Essential' } })
+  await savePreferences(created.id, { ...inputs, departure_city: 'Private city', max_budget_sar: '5432.10', interests: { value: 'Private interests', importance: 'Essential' } })
   const own = await planning(created.id)
-  assert.deepEqual(own.own_readiness.missing_fields, ['available_start', 'available_end'])
+  assert.deepEqual(own.own_readiness.missing_fields, [])
   assert.equal(own.member_readiness, null)
   await role(ALICE)
   const administrator = await planning(created.id)
-  assert.deepEqual(administrator.member_readiness.find((member) => member.user_id === BOB), { user_id: BOB, status: 'Incomplete' })
+  assert.deepEqual(administrator.member_readiness.find((member) => member.user_id === BOB), { user_id: BOB, status: 'Ready' })
   assert.equal(JSON.stringify(administrator).includes('Private'), false)
   assert.equal(JSON.stringify(administrator).includes('5432'), false)
   assert.equal((await db.query('select * from public.member_preferences where user_id = $1', [BOB])).rows.length, 0)
 })
 
-test('all Ready members with nonoverlapping dates have a group conflict without revealing individual dates', async () => {
+test('all Ready members with nonoverlapping dates have a group conflict and shared member dates', async () => {
   const { created, invitation } = await invitedTrip()
   await savePreferences(created.id)
   await role(BOB); await rpc('rihla_join_trip', [invitation.token])
@@ -111,7 +159,10 @@ test('all Ready members with nonoverlapping dates have a group conflict without 
   const result = await planning(created.id)
   assert.ok(result.member_readiness.every((member) => member.status === 'Ready'))
   assert.deepEqual(result.shared_dates, { status: 'conflict', start: null, end: null, duration_days: null })
-  assert.equal(JSON.stringify(result).includes('2026-11'), false)
+  assert.deepEqual(result.member_dates, [
+    { user_id: ALICE, available_start: '2026-11-10', available_end: '2026-11-15' },
+    { user_id: BOB, available_start: '2026-11-16', available_end: '2026-11-20' },
+  ])
 })
 
 test('touching endpoints are a one-day overlap, and edits immediately resolve a conflict', async () => {
@@ -130,17 +181,14 @@ test('calendar duration includes leap day without timezone or DST arithmetic', a
   assert.equal((await planning(created.id)).shared_dates.duration_days, 3)
 })
 
-test('clearing required information reverses readiness while valid dates remain a separate result', async () => {
+test('clearing required information is rejected without altering saved preferences or readiness', async () => {
   const created = await trip()
   await savePreferences(created.id)
   assert.equal((await planning(created.id)).own_readiness.status, 'Ready')
-  await savePreferences(created.id, { ...inputs, departure_city: '   ', max_budget_sar: null })
-  const result = await planning(created.id)
-  assert.deepEqual(result.own_readiness, { status: 'Incomplete', missing_fields: ['departure_city', 'max_budget_sar'], has_saved_preferences: true })
-  assert.equal(result.all_members_ready, false)
-  assert.equal(result.shared_dates.status, 'available')
-  await savePreferences(created.id, { ...inputs, available_end: null })
-  assert.equal((await planning(created.id)).shared_dates.status, 'pending')
+  const original = await planning(created.id)
+  await denied(() => savePreferences(created.id, { ...inputs, departure_city: '   ', max_budget_sar: null }), '23514')
+  await denied(() => savePreferences(created.id, { ...inputs, available_end: null }), '23514')
+  assert.deepEqual(await planning(created.id), original)
 })
 
 test('a new member without inputs makes shared dates pending, duplicate joins do not reset saved inputs', async () => {
@@ -176,12 +224,11 @@ test('invalid preference updates leave readiness and shared dates unchanged', as
   assert.deepEqual(await planning(created.id), original)
 })
 
-test('members receive only a group readiness flag and their own saved-draft indicator', async () => {
+test('members receive a group readiness flag, shared dates and their own saved-input indicator', async () => {
   const { created, invitation } = await invitedTrip()
   await role(BOB); await rpc('rihla_join_trip', [invitation.token])
-  await savePreferences(created.id, {})
   let result = await planning(created.id)
-  assert.equal(result.own_readiness.has_saved_preferences, true)
+  assert.equal(result.own_readiness.has_saved_preferences, false)
   assert.equal(result.all_members_ready, false)
   assert.equal(result.member_readiness, null)
   await savePreferences(created.id)
@@ -190,7 +237,7 @@ test('members receive only a group readiness flag and their own saved-draft indi
   result = await planning(created.id)
   assert.equal(result.all_members_ready, true)
   assert.equal(result.member_readiness, null)
-  assert.deepEqual(Object.keys(result).sort(), ['all_members_ready', 'member_readiness', 'own_readiness', 'shared_dates'])
+  assert.deepEqual(Object.keys(result).sort(), ['all_members_ready', 'member_dates', 'member_readiness', 'own_readiness', 'shared_dates'])
   await role(CAROL); await rpc('rihla_join_trip', [invitation.token])
   await role(BOB)
   assert.equal((await planning(created.id)).all_members_ready, false)
@@ -213,7 +260,6 @@ test('date checks handle an empty group, incomplete other ranges and a known con
   assert.deepEqual(await checkDates(created.id, '0001-01-01', '9999-12-31'), { status: 'available' })
   assert.equal((await planning(created.id)).own_readiness.has_saved_preferences, false)
   await role(BOB); await rpc('rihla_join_trip', [invitation.token])
-  await savePreferences(created.id, { available_start: '2026-12-01' })
   await role(ALICE)
   assert.deepEqual(await checkDates(created.id, '2026-11-10', '2026-11-15'), { status: 'pending' })
   await savePreferences(created.id)
@@ -258,7 +304,7 @@ test('preferences return a private empty draft before the first save', async () 
   assert.equal('user_id' in draft, false)
 })
 
-test('own preferences save, persist, update and clear without affecting another trip', async () => {
+test('own preferences save, persist and update without affecting another trip; clearing is rejected', async () => {
   const first = await trip()
   const second = await trip()
   const saved = await savePreferences(first.id)
@@ -271,19 +317,17 @@ test('own preferences save, persist, update and clear without affecting another 
   const updated = await savePreferences(first.id, { ...inputs, departure_city: 'Jeddah' })
   assert.equal(updated.departure_city, 'Jeddah')
   assert.equal((await rpc('rihla_get_preferences', [second.id])).updated_at, null)
-  const cleared = await savePreferences(first.id, {})
-  assert.equal(cleared.max_budget_sar, null)
-  assert.equal(cleared.available_end, null)
-  assert.equal(cleared.departure_city, '')
+  await denied(() => savePreferences(first.id, {}), '23514')
+  assert.deepEqual(await rpc('rihla_get_preferences', [first.id]), updated)
   assert.equal((await db.query('select * from public.member_preferences')).rows.length, 1)
 })
 
-test('incomplete drafts and inclusive single-day availability are allowed', async () => {
+test('incomplete submissions are rejected; complete single-day availability is allowed', async () => {
   const created = await trip()
-  await savePreferences(created.id, { departure_city: 'Riyadh', available_start: '2026-11-10' })
-  const result = await savePreferences(created.id, { available_start: '2026-11-10', available_end: '2026-11-10' })
+  await denied(() => savePreferences(created.id, { departure_city: 'Riyadh', available_start: '2026-11-10' }), '23514')
+  const result = await savePreferences(created.id, { ...inputs, available_end: '2026-11-10' })
   assert.equal(result.available_start, result.available_end)
-  assert.equal(result.max_budget_sar, null)
+  assert.equal(Number(result.max_budget_sar), 4500.5)
 })
 
 test('members and administrators cannot read or update each other’s private inputs', async () => {
@@ -337,6 +381,8 @@ test('invalid budgets, date order and malformed optional preferences roll back t
   const created = await trip()
   const original = await savePreferences(created.id)
   for (const patch of [
+    { departure_city: '' }, { departure_city: '   ' }, { departure_city: '\t\n' }, { max_budget_sar: null },
+    { available_start: null }, { available_end: null },
     { max_budget_sar: '-1' }, { max_budget_sar: '0' }, { max_budget_sar: '1.001' },
     { max_budget_sar: '10000000000' }, { max_budget_sar: 'NaN' },
     { available_end: '2026-11-09' }, { available_end: 'infinity' },
@@ -355,6 +401,10 @@ test('direct Data API writes still enforce preference constraints and RLS', asyn
   await savePreferences(created.id)
   await denied(() => db.exec("update public.member_preferences set max_budget_sar = -10"), '23514')
   await denied(() => db.exec("update public.member_preferences set interests = '{}'::jsonb"), '23514')
+  await denied(() => db.exec("update public.member_preferences set departure_city = '   '"), '23514')
+  await denied(() => db.exec('update public.member_preferences set max_budget_sar = null'), '23514')
+  await denied(() => db.exec('update public.member_preferences set available_start = null'), '23514')
+  await denied(() => db.exec('update public.member_preferences set available_end = null'), '23514')
   await denied(() => db.exec('delete from public.member_preferences'))
   await root()
   assert.equal((await db.query("select relrowsecurity from pg_class where oid = 'public.member_preferences'::regclass")).rows[0].relrowsecurity, true)
