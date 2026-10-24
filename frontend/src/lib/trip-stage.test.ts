@@ -6,6 +6,7 @@ const status: PlanningStatus = {
   all_members_ready: true,
   own_readiness: { status: 'Ready', missing_fields: [], has_saved_preferences: true },
   member_readiness: null,
+  member_dates: [],
   shared_dates: { status: 'available', start: '2026-11-10', end: '2026-11-15', duration_days: 6 },
 }
 it('only shows the future AI stage when everyone is ready and dates overlap', () => {

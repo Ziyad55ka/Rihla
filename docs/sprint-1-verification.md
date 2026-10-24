@@ -4,15 +4,15 @@ The agreed Sprint 1 application flows are implemented: accounts, trips, invitati
 
 ## Readiness and dates
 
-Open a trip to see the planning stage, shared dates and member cards. **Enter/Edit preferences** opens a separate private page. See [the 17 October redesign](frontend-redesign.md) for page routes, trip card statuses and candidate-date warnings. Readiness is derived from current saved inputs, with no manual Ready button or writable readiness column. A member is Ready when departure city, a positive SAR budget and both valid availability dates are present. Blank optional preferences never prevent readiness. Clearing required information changes the member back to Incomplete after saving.
+Open a trip to see the planning stage, shared dates and member cards. **Enter/Edit preferences** opens a separate form. See [the 17 October redesign](frontend-redesign.md) for page routes, trip card statuses and candidate-date warnings. Readiness is derived from current saved inputs, with no manual Ready button or writable readiness column. A member is Ready when departure city, a positive SAR budget and both valid availability dates are present. Blank optional preferences never prevent readiness. As of 21 October, incomplete submissions cannot be saved; legacy incomplete records can be completed. See [the additional migration](shared-member-dates.md).
 
 The shared period includes every member, including the administrator. It is the latest start date through the earliest end date. Both endpoints count, so 10–15 November is six days and touching endpoints give one day. There is no separate duration preference.
 
-- **Waiting for dates:** at least one member has not saved both dates. No partial overlap or other members' ranges are returned.
+- **Waiting for dates:** at least one member has not saved both dates. No partial group overlap is returned.
 - **No shared dates:** all dates are saved but do not overlap. Individual members may still all be Ready.
 - **Shared dates found:** return only the intersection and its inclusive duration.
 
-`GET /api/trips/{trip_id}/planning` calls `rihla_get_planning_status` using the verified user's token. The narrow database function checks membership before aggregating private rows. The response contains the caller's own missing-field names, the group's date result, and an administrator-only list of `{user_id, status}`. Ordinary members receive `member_readiness: null`. No other user's budget, preferences, individual availability or missing-field names are returned. Direct table access remains owner-only under RLS.
+`GET /api/trips/{trip_id}/planning` calls `rihla_get_planning_status` using the verified user's token. The narrow database function checks membership before aggregating private rows. The response contains the caller's own missing-field names, the group's date result, and an administrator-only list of `{user_id, status}`. Ordinary members receive `member_readiness: null`. The 21 October update adds `member_dates` for all trip members. No other user's budget, other preferences or missing-field names are returned. Direct table access remains owner-only under RLS.
 
 Results recalculate on every database query. The frontend refreshes immediately after a preference save and checks for changes every 15 seconds while the trip page is visible, plus on focus or **Refresh group / Refresh planning**. Background refreshes do not reset preference drafts. Unsaved edits do not change the saved readiness result.
 

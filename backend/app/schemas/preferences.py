@@ -46,6 +46,14 @@ class MemberPreferences(BaseModel):
         return self
 
 
+class SubmitPreferences(MemberPreferences):
+    # Reads still support empty/legacy records; every new save must be complete.
+    departure_city: str = Field(min_length=1, max_length=100)
+    max_budget_sar: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    available_start: date
+    available_end: date
+
+
 class SavedPreferences(MemberPreferences):
     currency: Literal["SAR"] = "SAR"
     updated_at: datetime | None = None

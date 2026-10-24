@@ -323,6 +323,13 @@ PLANNING = {
         "has_saved_preferences": True,
     },
     "member_readiness": [{"user_id": USER, "status": "Ready"}],
+    "member_dates": [
+        {
+            "user_id": USER,
+            "available_start": "2026-11-10",
+            "available_end": "2026-11-15",
+        }
+    ],
     "shared_dates": {
         "status": "available",
         "start": "2026-11-10",
@@ -356,6 +363,16 @@ def test_planning_route_preserves_identity_and_does_not_accept_a_target_user(
 @pytest.mark.parametrize(
     "patch",
     [
+        {
+            "member_dates": [
+                {
+                    "user_id": USER,
+                    "available_start": "2026-11-10",
+                    "available_end": "2026-11-15",
+                    "max_budget_sar": "4500.50",
+                }
+            ]
+        },
         {
             "member_readiness": [
                 {
@@ -539,6 +556,11 @@ def test_preferences_keep_user_token_without_accepting_target_user(trip_client, 
         {"max_budget_sar": "1.001"},
         {"max_budget_sar": "10000000000"},
         {"max_budget_sar": "NaN"},
+        {"max_budget_sar": None},
+        {"departure_city": ""},
+        {"departure_city": "   "},
+        {"available_start": None},
+        {"available_end": None},
         {"departure_city": "a" * 101},
         {"available_end": "2026-11-09"},
         {"available_start": "2026-02-30"},
@@ -558,20 +580,57 @@ def test_invalid_preferences_never_reach_database(trip_client, patch):
     assert response.status_code == 422
 
 
-def test_preferences_allow_incomplete_drafts_and_single_day(trip_client):
+def test_preferences_allow_complete_single_day_inputs(trip_client):
     def handler(request):
         data = json.loads(request.content)["p_preferences"]
-        assert data["departure_city"] == ""
-        assert data["max_budget_sar"] is None
+        assert data["departure_city"] == "Riyadh"
+        assert data["max_budget_sar"] == "4500.50"
         assert data["available_start"] == data["available_end"]
         return httpx.Response(200, json={**data, "currency": "SAR", "updated_at": None})
 
     response = trip_client(handler).put(
         f"/api/trips/{TRIP_ID}/preferences",
-        json={"available_start": "2026-11-10", "available_end": "2026-11-10"},
+        json={**PREFERENCES, "available_end": "2026-11-10"},
         headers={"Authorization": "Bearer current-user"},
     )
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    "field", ["departure_city", "max_budget_sar", "available_start", "available_end"]
+)
+def test_omitted_required_preferences_never_reach_database(trip_client, field):
+    body = {key: value for key, value in PREFERENCES.items() if key != field}
+    response = trip_client(
+        lambda _: pytest.fail("Incomplete input reached database")
+    ).put(
+        f"/api/trips/{TRIP_ID}/preferences",
+        json=body,
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 422
+
+
+def test_preferences_read_still_allows_an_unsaved_form(trip_client):
+    response = trip_client(
+        lambda _: httpx.Response(
+            200,
+            json={
+                **PREFERENCES,
+                "departure_city": "",
+                "max_budget_sar": None,
+                "available_start": None,
+                "available_end": None,
+                "updated_at": None,
+                "currency": "SAR",
+            },
+        )
+    ).get(
+        f"/api/trips/{TRIP_ID}/preferences",
+        headers={"Authorization": "Bearer current-user"},
+    )
+    assert response.status_code == 200
+    assert response.json()["updated_at"] is None
 
 
 @pytest.mark.parametrize(

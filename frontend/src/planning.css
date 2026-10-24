@@ -48,6 +48,9 @@
 .planning-member-number { color:#8c9585; font-size:10px; font-variant-numeric:tabular-nums; }
 .planning-member-card h3 { margin:0 0 7px; color:var(--rihla-ink,#172b22); font-size:22px; font-weight:400; line-height:1.35; letter-spacing:-.6px; overflow-wrap:anywhere; }
 .planning-member-card > p { margin:0; color:var(--rihla-muted,#687267); font-size:11px; }
+.planning-member-dates { margin-top:20px; padding-top:16px; border-top:1px solid var(--rihla-line,#d4d9cd); }
+.planning-member-dates > span { color:var(--rihla-muted,#687267); font-size:11px; }
+.planning-member-dates > p { margin:8px 0 0; color:var(--rihla-ink,#172b22); font-size:12px; line-height:1.8; overflow-wrap:anywhere; }
 .planning-member-readiness { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:23px; padding-top:16px; border-top:1px solid var(--rihla-line,#d4d9cd); }
 .planning-member-readiness > span:first-child { color:var(--rihla-muted,#687267); font-size:11px; }
 .planning-invite-control { min-width:184px; }

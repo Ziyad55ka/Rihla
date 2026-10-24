@@ -17,7 +17,7 @@ Recorded 16 October 2026 from the user's decisions in the project conversation. 
 - Departure city, budget cap and availability are firm limits.
 - Optional preferences may be Essential or Flexible, with no extra flexibility levels. Essential requirements must be respected; adjustments to Flexible preferences need an explanation when proposals are introduced.
 - There is no manual Ready button. Valid required inputs determine Ready/Incomplete automatically.
-- Members can edit their own inputs throughout planning. Removing required information makes them Incomplete again.
+- Members can edit their own inputs throughout planning. As of 21 October, all saves require departure city, maximum budget and both dates; incomplete submissions cannot replace saved preferences. Older incomplete records remain readable until completed.
 
 ## Shared dates and duration
 
@@ -41,9 +41,10 @@ Recorded 16 October 2026 from the user's decisions in the project conversation. 
 ## Privacy
 
 - Members can read and edit their own detailed preferences and budget.
-- The administrator sees **only each member's Ready/Incomplete status** for readiness monitoring: no missing-field names, detailed preferences, budgets or individual availability ranges belonging to others.
+- The administrator sees **only each member's Ready/Incomplete status** for readiness monitoring: no missing-field names, detailed preferences or budgets belonging to others.
 - Members can see their own missing-field explanations.
 - Everyone in the trip can see the group shared-date result. This remains separate from individual readiness monitoring.
+- User update on 21 October: everyone in the same trip can also see each member's saved availability dates on their card. This supersedes the previous privacy rule for individual date ranges only. See [activation instructions](shared-member-dates.md).
 - These boundaries must be enforced in API responses and database access, not just by hiding interface controls. Aggregation must not expose the underlying private rows.
 
 ## Changes from the submission

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { editablePreferences, getPreferences, preferenceError, savePreferences } from './preferences'
+import { editablePreferences, getPreferences, preferenceError, preferencesForForm, savePreferences } from './preferences'
 import type { SavedPreferences } from '../types/preferences'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }))
@@ -31,8 +31,21 @@ it('sends editable inputs without response metadata or a target identity', async
   expect(request).toHaveBeenCalledWith('/api/trips/trip/preferences', { method: 'PUT', body })
 })
 
-it('accepts incomplete drafts, empty optional fields and same-day availability', () => {
-  expect(preferenceError({ ...editablePreferences(saved), departure_city: '', max_budget_sar: null, available_end: null })).toBeNull()
+it('defaults a new form to essential while preserving saved importance choices', () => {
+  const newForm = preferencesForForm({ ...saved, updated_at: null })
+  expect([newForm.destinations, newForm.interests, newForm.flights, newForm.accommodation].every((field) => field.importance === 'Essential')).toBe(true)
+  expect(preferencesForForm(saved).destinations.importance).toBe('Flexible')
+  expect(preferencesForForm(saved).flights.importance).toBe('Essential')
+})
+
+it.each([
+  { departure_city: '' }, { departure_city: '   ' }, { max_budget_sar: null },
+  { available_start: null }, { available_end: null },
+])('rejects a save with missing required inputs: %s', (patch) => {
+  expect(preferenceError({ ...editablePreferences(saved), ...patch })).toContain('before saving')
+})
+
+it('accepts empty optional fields and same-day availability', () => {
   expect(preferenceError({ ...editablePreferences(saved), available_end: saved.available_start })).toBeNull()
 })
 
