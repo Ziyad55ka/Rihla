@@ -38,6 +38,7 @@ from app.services.trip_research import (
 )
 
 EVIDENCE = [{"source_id": 1, "quote": "A cited sentence."}]
+EMPTY_PLAN = '{"feasible": true, "blocking_categories": [], "options": []}'
 
 
 def settings(tmp_path: Path) -> Settings:
@@ -143,7 +144,7 @@ def fake_planner(monkeypatch: pytest.MonkeyPatch, *plans) -> list[str]:
         result = remaining.pop(0)
         if isinstance(result, Exception):
             raise result
-        return TripPlan(options=result)
+        return TripPlan(feasible=True, blocking_categories=[], options=result)
 
     monkeypatch.setattr(proposal_generation, "call_gemini", plan)
     return payloads
@@ -462,10 +463,10 @@ def test_quota_waits_retries_once_then_succeeds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     outcome, models, sleeps, cost = run_gemini(
-        monkeypatch, tmp_path, [api_error(429), '{"options": []}']
+        monkeypatch, tmp_path, [api_error(429), EMPTY_PLAN]
     )
 
-    assert outcome == TripPlan(options=[])
+    assert outcome == TripPlan(feasible=True, blocking_categories=[], options=[])
     assert (models.calls, cost.gemini_requests) == (2, 2)
     assert len(sleeps) == 1
 

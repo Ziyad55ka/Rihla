@@ -20,7 +20,6 @@ from app.services import (
     trip_research,
 )
 from app.services.generation_precheck import (
-    FeasibilityReport,
     LocalProposalStore,
     build_group_conflicts,
     generate_checked,
@@ -101,7 +100,6 @@ def outside_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setattr(trip_research.genai, "Client", client)
     monkeypatch.setattr(trip_research, "call_gemini", recorder("gemini"))
     monkeypatch.setattr(proposal_generation, "call_gemini", recorder("gemini"))
-    monkeypatch.setattr(generation_precheck, "call_gemini", recorder("gemini"))
     monkeypatch.setattr(trip_research, "search_sources", recorder("tavily"))
     monkeypatch.setattr(trip_research, "research", recorder("research"))
     monkeypatch.setattr(flight_prices.IgnavProvider, "_post", recorder("ignav"))
@@ -135,7 +133,7 @@ def test_stage_one_stops_on_conflicting_essential_destinations(
     settings: Settings, outside_calls: list[str]
 ) -> None:
     generation = group(
-        member(1, destinations={"value": "Secret Turkey", "importance": "Essential"}),
+        member(1, destinations={"value": "Turkey", "importance": "Essential"}),
         member(2, destinations={"value": "Japan", "importance": "Essential"}),
     )
 
@@ -146,13 +144,38 @@ def test_stage_one_stops_on_conflicting_essential_destinations(
     assert "Turkey" not in str(blocked) and "Japan" not in str(blocked)
 
 
-def test_overlapping_essential_destinations_pass_stage_one(settings: Settings) -> None:
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("Turkey or Egypt", "egypt"),
+        ("Turkey", "تركيا"),
+        ("Istanbul", "Turkey"),
+        ("Somewhere warm", "Japan"),
+        ("إسطنبول", "Japan"),
+    ],
+)
+def test_overlapping_or_doubtful_destinations_pass_stage_one(
+    settings: Settings, first: str, second: str
+) -> None:
     generation = group(
-        member(1, destinations={"value": "Turkey or Egypt", "importance": "Essential"}),
-        member(2, destinations={"value": "egypt", "importance": "Essential"}),
+        member(1, destinations={"value": first, "importance": "Essential"}),
+        member(2, destinations={"value": second, "importance": "Essential"}),
     )
 
-    generation_precheck.check_input(generation, settings)
+    assert generation_precheck.find_input_conflicts(generation, settings) == []
+
+
+def test_clearly_different_countries_in_arabic_are_a_conflict(
+    settings: Settings,
+) -> None:
+    generation = group(
+        member(1, destinations={"value": "مصر أو تركيا", "importance": "Essential"}),
+        member(2, destinations={"value": "اليابان", "importance": "Essential"}),
+    )
+
+    assert generation_precheck.find_input_conflicts(generation, settings) == [
+        "destinations"
+    ]
 
 
 def test_flexible_destinations_never_conflict(settings: Settings) -> None:
@@ -173,7 +196,7 @@ def test_stage_one_stops_when_budget_is_below_the_daily_minimum(
 
     assert blocked.categories == ["budget"]
     assert outside_calls == []
-    assert "749" not in str(blocked) and "150" not in str(blocked)
+    assert "749" not in str(blocked) and "250" not in str(blocked)
 
 
 def test_daily_minimum_comes_from_settings(settings: Settings) -> None:
@@ -199,7 +222,7 @@ def test_unchanged_inputs_return_saved_proposals_with_no_calls(
     settings: Settings, outside_calls: list[str]
 ) -> None:
     generation = group()
-    store = LocalProposalStore(settings.generation_store_db)
+    store = LocalProposalStore(settings.generation_store_db, 3600)
     store.save(str(generation.trip_id), input_hash(generation), saved_result())
 
     result = asyncio.run(generate_checked(generation, settings))
@@ -231,32 +254,33 @@ def test_any_changed_input_changes_the_hash(changed: dict) -> None:
     )
 
 
-def fake_feasibility(
-    monkeypatch: pytest.MonkeyPatch, report: FeasibilityReport
-) -> list:
+def plan_answer(monkeypatch: pytest.MonkeyPatch, plan) -> list[str]:
     payloads: list[str] = []
 
     async def answer(contents, system_prompt, schema, config, cost):
         payloads.append(contents)
         cost.gemini_requests += 1
-        return report
+        return plan
 
-    monkeypatch.setattr(generation_precheck, "call_gemini", answer)
+    monkeypatch.setattr(proposal_generation, "call_gemini", answer)
     return payloads
 
 
-def test_stage_two_stops_full_generation_with_general_categories(
-    settings: Settings, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    payloads = fake_feasibility(
-        monkeypatch,
-        FeasibilityReport(feasible=False, blocking_categories=["flights", "budget"]),
+def impossible(*categories: str) -> proposal_generation.TripPlan:
+    return proposal_generation.TripPlan(
+        feasible=False, blocking_categories=list(categories), options=[]
     )
 
-    async def fail(*args, **kwargs):
-        raise AssertionError("Generation must not start")
 
-    monkeypatch.setattr(generation_precheck, "generate_proposals", fail)
+def test_impossible_answer_stops_before_any_search_in_one_request(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = plan_answer(monkeypatch, impossible("flights", "budget"))
+
+    async def fail(*args, **kwargs):
+        raise AssertionError("Research must not start")
+
+    monkeypatch.setattr(trip_research, "research", fail)
     generation = group(
         member(1, flights={"value": "Secret direct", "importance": "Essential"}),
         member(2, departure_city="Jeddah", max_budget_sar="3000"),
@@ -264,62 +288,115 @@ def test_stage_two_stops_full_generation_with_general_categories(
 
     blocked = blocked_by(generation, settings)
 
+    assert len(payloads) == 1
     assert blocked.categories == ["flights", "budget"]
     assert len(blocked.messages) == 2
     assert "Secret" not in str(blocked) and "3000" not in str(blocked)
-    # The request carries group data only.
     assert "Member" not in payloads[0] and "Jeddah" not in payloads[0]
-    assert "4000" not in payloads[0] and "3000" in payloads[0]
 
 
-def test_stage_two_with_no_category_still_gives_a_general_message(
+def test_impossible_with_no_category_still_gives_a_general_message(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake_feasibility(
-        monkeypatch, FeasibilityReport(feasible=False, blocking_categories=[])
-    )
+    plan_answer(monkeypatch, impossible())
 
     blocked = blocked_by(group(), settings)
 
     assert blocked.messages == ["The group's requirements cannot be met together."]
 
 
-def test_passing_checks_generate_and_save_then_reuse(
+def test_impossible_retry_gives_no_option_and_does_not_block(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake_feasibility(
-        monkeypatch, FeasibilityReport(feasible=True, blocking_categories=[])
+    payloads = plan_answer(monkeypatch, impossible("budget"))
+    used: set = set()
+
+    options = asyncio.run(
+        proposal_generation._plan_options(
+            1,
+            group(),
+            [],
+            used,
+            settings,
+            ResearchCost(),
+        )
     )
+
+    assert options == []
+    assert len(payloads) == 1
+
+
+def counted_generation(monkeypatch: pytest.MonkeyPatch, result=None) -> list[int]:
     runs: list[int] = []
 
     async def generated(generation, config, version):
         runs.append(version)
-        return saved_result()
+        return result or saved_result()
 
     monkeypatch.setattr(generation_precheck, "generate_proposals", generated)
+    return runs
+
+
+def test_passing_checks_generate_and_save_then_reuse(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = counted_generation(monkeypatch)
 
     first = asyncio.run(generate_checked(group(), settings))
     again = asyncio.run(generate_checked(group(), settings))
 
     assert first.reused is False
-    assert first.cost.gemini_requests == 6
+    assert first.cost.gemini_requests == 5
     assert again.reused is True
     assert runs == [1]
+
+
+def test_saved_proposals_expire_after_the_time_limit(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = counted_generation(monkeypatch)
+    asyncio.run(generate_checked(group(), settings))
+
+    now = generation_precheck.time.time()
+    monkeypatch.setattr(generation_precheck.time, "time", lambda: now + 23 * 3600)
+    assert asyncio.run(generate_checked(group(), settings)).reused is True
+
+    monkeypatch.setattr(generation_precheck.time, "time", lambda: now + 24 * 3600)
+    assert asyncio.run(generate_checked(group(), settings)).reused is False
+    assert len(runs) == 2
+
+
+def test_regenerate_skips_saved_proposals_and_replaces_them(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = counted_generation(monkeypatch)
+    asyncio.run(generate_checked(group(), settings))
+
+    fresh = asyncio.run(generate_checked(group(), settings, regenerate=True))
+    again = asyncio.run(generate_checked(group(), settings))
+
+    assert fresh.reused is False
+    assert again.reused is True
+    assert len(runs) == 2
+
+
+def test_regenerate_still_runs_stage_one(
+    settings: Settings, outside_calls: list[str]
+) -> None:
+    generation = group(member(1, max_budget_sar="749"), member(2))
+
+    blocked = blocked_by(generation, settings, regenerate=True)
+
+    assert blocked.categories == ["budget"]
+    assert outside_calls == []
 
 
 def test_partial_result_is_not_saved_for_reuse(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake_feasibility(
-        monkeypatch, FeasibilityReport(feasible=True, blocking_categories=[])
+    runs = counted_generation(
+        monkeypatch, saved_result().model_copy(update={"complete": False})
     )
-    runs: list[int] = []
-
-    async def generated(generation, config, version):
-        runs.append(version)
-        return saved_result().model_copy(update={"complete": False})
-
-    monkeypatch.setattr(generation_precheck, "generate_proposals", generated)
 
     asyncio.run(generate_checked(group(), settings))
     asyncio.run(generate_checked(group(), settings))
@@ -330,26 +407,22 @@ def test_partial_result_is_not_saved_for_reuse(
 def test_all_options_over_budget_gives_a_clear_message_without_the_figure(
     settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake_feasibility(
-        monkeypatch, FeasibilityReport(feasible=True, blocking_categories=[])
-    )
-    costly = proposal_generation.PlannedOption(
-        title="Trip",
-        destination="X",
-        country="X",
-        arrival_airport=None,
-        start_date=date(2026, 12, 13),
-        end_date=date(2026, 12, 17),
-        cities=[proposal_generation.PlannedCity(city="X", nights=4)],
-        requirement_checks=[],
-    )
+    names = iter(range(100))
 
     async def plan(*args, **kwargs):
-        return proposal_generation.TripPlan(
-            options=[costly.model_copy(update={"destination": f"Place {next(names)}"})]
+        option = proposal_generation.PlannedOption(
+            title="Trip",
+            destination=f"Place {next(names)}",
+            country="X",
+            arrival_airport=None,
+            start_date=date(2026, 12, 13),
+            end_date=date(2026, 12, 17),
+            cities=[proposal_generation.PlannedCity(city="X", nights=4)],
+            requirement_checks=[],
         )
-
-    names = iter(range(100))
+        return proposal_generation.TripPlan(
+            feasible=True, blocking_categories=[], options=[option]
+        )
 
     async def rejected(*args, **kwargs):
         raise proposal_generation.OptionRejected("over_group_budget")
@@ -374,16 +447,14 @@ def test_demo_mode_skips_the_checks(
     assert outside_calls == []
 
 
-def own(
-    importance: str = "Essential", value: str = "Secret Turkey"
-) -> MemberPreferences:
+def own(importance: str = "Essential", value: str = "Turkey") -> MemberPreferences:
     return MemberPreferences(destinations={"value": value, "importance": importance})
 
 
 def conflicting_group() -> GenerationInput:
     return group(
-        member(1, destinations={"value": "Secret Turkey", "importance": "Essential"}),
-        member(2, destinations={"value": "Hidden Japan", "importance": "Essential"}),
+        member(1, destinations={"value": "Turkey", "importance": "Essential"}),
+        member(2, destinations={"value": "Japan", "importance": "Essential"}),
     )
 
 
@@ -423,9 +494,9 @@ def test_report_never_holds_who_or_which_value(settings: Settings) -> None:
             1,
             max_budget_sar="749",
             departure_city="Jeddah",
-            destinations={"value": "Secret Turkey", "importance": "Essential"},
+            destinations={"value": "Turkey", "importance": "Essential"},
         ),
-        member(2, destinations={"value": "Hidden Japan", "importance": "Essential"}),
+        member(2, destinations={"value": "Japan", "importance": "Essential"}),
     )
 
     report = build_group_conflicts(planning(), generation, own(), settings)
@@ -484,3 +555,11 @@ def test_page_and_generation_use_the_same_rules(settings: Settings) -> None:
     blocked = blocked_by(generation, settings, planning=planning())
 
     assert blocked.categories == report.conflicts
+
+
+def test_default_daily_minimum_is_250_per_trip_day(settings: Settings) -> None:
+    just_under = group(member(1, max_budget_sar="1249.99"), member(2))
+    exactly = group(member(1, max_budget_sar="1250"), member(2))
+
+    assert generation_precheck.find_input_conflicts(just_under, settings) == ["budget"]
+    assert generation_precheck.find_input_conflicts(exactly, settings) == []

@@ -8,13 +8,17 @@ How Rihla generates three trip proposals, and what the results can and cannot be
 
 | Stage | Cost | Checks | On failure |
 | --- | --- | --- | --- |
-| 1 | No outside request | All members Ready, shared dates exist, Essential destinations overlap, lowest budget is at least `MIN_BUDGET_SAR_PER_DAY` per trip day, and whether the inputs changed | Stops. Unchanged inputs return the saved proposals |
-| 2 | 1 Gemini request | Whether Essential requirements, the lowest budget and the dates can fit together | Stops. When unsure, Gemini is told to allow it |
-| 3 | Full generation | See below | See below |
+| 1 | No outside request | All members Ready, shared dates exist, no clear conflict between Essential destinations, lowest budget is at least `MIN_BUDGET_SAR_PER_DAY` per trip day (default 250), and whether saved proposals can be reused | Stops. Unchanged inputs return proposals saved within `SAVED_PROPOSALS_TTL_HOURS` (default 24) |
+| 2 | No extra request: part of the first planning request | Whether Essential requirements, the lowest budget and the dates can fit together | Stops before any search. When unsure, Gemini is told to allow it |
+| 3 | The rest of generation | See below | See below |
+
+Stage 1 treats a destination conflict as clear only when every word in each Essential destination is a known country and they share none. Anything else, such as `Istanbul` and `Turkey`, goes to stage 2.
+
+`generate_checked(regenerate=True)` skips saved proposals but still runs stage 1. The upcoming endpoint must allow it for the trip administrator only.
 
 Failures raise `GenerationBlocked`, with messages by category only: `readiness`, `dates`, `destinations`, `flights`, `accommodation` or `budget`. They never name a member or a value, and Gemini's words are not shown. If every proposal fails on budget, the result is a `budget` message without the figure.
 
-The inputs hash covers the trip, dates and every member's data, ignoring member order. It can be guessed from budgets, so it stays in the backend. Until the proposals table exists, results are stored in `backend/.local/generations.sqlite3`. Only complete results are saved for reuse.
+The inputs hash covers the trip, dates and every member's data, ignoring member order. It can be guessed from budgets, so it stays in the backend. Until the proposals table exists, results are stored in `backend/.local/generations.sqlite3`. Only complete results are saved for reuse, and fares can change within the time limit.
 
 Demo mode skips these checks. Flights use the cheapest itinerary even when it needs two bookings.
 
@@ -70,7 +74,7 @@ Full cost per person is the costliest departure city's fare, plus every hotel ni
 | Tavily basic search | Hotels, transfers, flight fallback | 1,000 credits a month, 1 per search |
 | Ignav | Round-trip fares and booking links | 1,000 requests; a fare with a link uses 2 |
 
-One generation for one departure city uses at least 4 Gemini requests, about 5 Tavily credits and 6 Ignav requests. Results are cached for 24 hours in `backend/.local/`.
+One generation for one departure city uses at least 4 Gemini requests including the feasibility answer, about 5 Tavily credits and 6 Ignav requests. Results are cached for 24 hours in `backend/.local/`.
 
 ## Known limitations
 
@@ -83,8 +87,7 @@ One generation for one departure city uses at least 4 Gemini requests, about 5 T
 - **Airports.** Departure cities use a fixed Saudi table; an unlisted city falls back to web search. Arrival airports come from Gemini.
 - **The budget check is incomplete** when a price is `Not available`, and excludes food and activities.
 - **Currency rates are fixed and approximate.** `$` is assumed to be US dollars.
-- **The destination conflict check compares words.** Essential `Istanbul` and `Turkey` count as a conflict, even though one is inside the other.
-- **Reused proposals keep their old fares.** Unchanged inputs return saved proposals however long ago they were generated.
+- **Conflicts Gemini finds are not shown early.** A doubtful destination conflict passes stage 1, so the trip page shows no conflict until someone generates.
 - **Quota.** At 20 Gemini requests a day, only a few generations fit, and regeneration uses more.
 - **Free-plan privacy.** Check Google's current Gemini API terms before sending real members' preferences on the free plan.
 

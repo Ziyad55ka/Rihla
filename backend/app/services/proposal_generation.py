@@ -73,6 +73,10 @@ FailureReason = Literal[
 ]
 
 PLANNER_PROMPT = """You plan group trip options from the supplied JSON.
+First decide feasible: can one trip satisfy the Essential requirements, the budget
+ceiling and the dates together? Answer false only when they clearly cannot fit;
+when unsure, answer true. If false, list each blocking category using only dates,
+destinations, flights, accommodation or budget, and return no options.
 Propose count options. Each must differ clearly from the others and from every
 route in avoid_routes: prefer different destinations, otherwise clearly different
 cities. Dates must stay inside shared_start and shared_end, and nights across all
@@ -112,6 +116,8 @@ class PlannedOption(BaseModel):
 
 
 class TripPlan(BaseModel):
+    feasible: bool
+    blocking_categories: list[BlockedCategory]
     options: list[PlannedOption]
 
 
@@ -471,6 +477,7 @@ async def _plan_options(
     avoid: set[tuple[str, tuple[str, ...]]],
     settings: Settings,
     cost: ResearchCost,
+    first: bool = False,
 ) -> list[PlannedOption]:
     # Group-level data only: no member labels or departure cities reach the planner.
     payload = json.dumps(
@@ -489,6 +496,13 @@ async def _plan_options(
         ensure_ascii=False,
     )
     plan = await call_gemini(payload, PLANNER_PROMPT, TripPlan, settings, cost)
+    if not plan.feasible:
+        # Stage 2 happens in the first request. Gemini's own words are never shown.
+        if first:
+            raise GenerationBlocked(
+                *(item for item in plan.blocking_categories if item != "readiness")
+            )
+        return []
     return plan.options
 
 
@@ -606,7 +620,9 @@ async def generate_proposals(
     queue: list[PlannedOption] = []
 
     try:
-        queue = await _plan_options(3, generation, requirements, used, settings, cost)
+        queue = await _plan_options(
+            3, generation, requirements, used, settings, cost, first=True
+        )
     except ResearchError as error:
         if error.code in STOPPING_ERRORS:
             raise
