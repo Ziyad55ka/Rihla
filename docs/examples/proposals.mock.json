@@ -63,7 +63,7 @@
           "nights": 3,
           "hotel_name": {
             "value": "Mock Old Town Hotel",
-            "status": "Confirmed",
+            "status": "Sourced",
             "evidence": [{ "source_id": 1, "quote": "Mock Old Town Hotel is in Tbilisi." }]
           },
           "hotel_price_per_night": { "amount_sar": null, "status": "Not available", "evidence": [] }
@@ -92,7 +92,7 @@
           "to_city": "Batumi",
           "mode": {
             "value": "train",
-            "status": "Confirmed",
+            "status": "Sourced",
             "evidence": [{ "source_id": 3, "quote": "A train connects Tbilisi and Batumi." }]
           },
           "duration": {

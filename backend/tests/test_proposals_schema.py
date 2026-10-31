@@ -65,7 +65,7 @@ def test_price_cannot_be_confirmed() -> None:
     with pytest.raises(ValidationError):
         SarPrice(
             amount_sar="100",
-            status="Confirmed",
+            status="Sourced",
             evidence=[{"source_id": 1, "quote": "SAR 100"}],
         )
 

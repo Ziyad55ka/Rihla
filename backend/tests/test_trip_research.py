@@ -306,7 +306,7 @@ def test_sar_price_is_shown_but_never_confirmed() -> None:
     fact = extracted(
         amount=1200,
         currency="SAR",
-        status="Confirmed",
+        status="Sourced",
         quote="Flight fares from SAR 1,200 are common.",
     )
 
@@ -330,7 +330,7 @@ def test_quote_shared_by_sources_cannot_stay_confirmed() -> None:
     copy = SOURCE.model_copy(update={"id": 2, "url": "https://example.com/copy"})
     fact = extracted(
         value="Mock Hotel",
-        status="Confirmed",
+        status="Sourced",
         quote="Mock Hotel rooms cost SAR 450 per night.",
     )
 
@@ -362,3 +362,36 @@ def test_plan_searches_each_departure_city_once() -> None:
 
     assert sum(query.startswith("flights from") for query in queries) == 2
     assert any("from Jeddah to" in query for query in queries)
+
+
+def test_sources_are_ranked_and_blocked_sites_removed(tmp_path: Path) -> None:
+    def result(url: str) -> dict:
+        return {"title": "T", "url": url, "content": "C"}
+
+    response = httpx.Response(
+        200,
+        json={
+            "results": [
+                result("https://www.easemytrip.com/flights"),
+                result("https://www.youtube.com/watch?v=1"),
+                result("https://example.com/guide"),
+                result("https://www.booking.com/city/tr/istanbul.html"),
+                result("https://notyoutube.com/page"),
+            ]
+        },
+    )
+    calls: list[httpx.Request] = []
+
+    found, _ = asyncio.run(
+        search_sources(
+            "Istanbul", make_settings(tmp_path), transport_returning(response, calls)
+        )
+    )
+
+    assert [source.url for source in found] == [
+        "https://www.booking.com/city/tr/istanbul.html",
+        "https://example.com/guide",
+        "https://notyoutube.com/page",
+        "https://www.easemytrip.com/flights",
+    ]
+    assert b"youtube.com" in calls[0].content

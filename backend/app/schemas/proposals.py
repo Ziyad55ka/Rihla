@@ -8,8 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-InfoStatus = Literal["Confirmed", "Estimated", "Unconfirmed", "Not available"]
-# Public web prices are never booking offers, so a price cannot be Confirmed.
+InfoStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
+# Public web prices are never booking offers, so a price cannot be Sourced.
 PriceStatus = Literal["Estimated", "Unconfirmed", "Not available"]
 PreferenceCategory = Literal["destinations", "interests", "flights", "accommodation"]
 
