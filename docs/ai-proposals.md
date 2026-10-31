@@ -132,7 +132,7 @@ Saving goes through the secret key, and `rihla_save_proposals` is closed to brow
 
 `rihla_get_proposals` also returns `needs_regeneration` when proposals exist but none has flights from the caller's departure city. The page then asks the administrator to generate again.
 
-**Known risk:** If a member changes their departure city to another member's city, they receive that city's flights until the next generation. This shows them that someone departs from there, though not who.
+**Accepted limitation:** If a member changes their departure city to another member's city, they receive that city's flights until the next generation. This shows them that someone departs from there, though not who.
 
 ## Trying it locally
 

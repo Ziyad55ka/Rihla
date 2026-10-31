@@ -72,7 +72,7 @@ No remote migration application, deployment or push is authorized by this docume
 - Sprint 2 searches flights from every departure city in the group. Those cities are sent to the search provider without member names.
 - The stored proposal holds flights for all cities. `rihla_get_proposals` filters inside the database, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
 - Browser roles have no direct access to the proposal tables. The filter is in SQL because a function granted to `authenticated` can be called directly, bypassing the backend.
-- If a member's departure city changes after generation, the page asks the administrator to generate again. Until then, changing to another member's city shows that city's flights, which reveals that someone departs from there but not who.
+- If a member's departure city changes after generation, the page asks the administrator to generate again. Until then, changing to another member's city shows that city's flights, which reveals that someone departs from there but not who. The team accepted this as a known limitation on 2 November, because trips are among friends.
 - Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change needs a migration to `rihla_private.proposal_for_member`, plus updating this rule.
 
 ## Sprint 2 update: reading private inputs for generation (2 November 2026)
