@@ -25,6 +25,7 @@ from app.schemas.proposals import (
     IntercityTransfer,
     PreferenceCategory,
     Proposal,
+    ProposalSet,
     ProposalSource,
 )
 from app.services import trip_research
@@ -120,6 +121,7 @@ class GenerationResult(BaseModel):
     message: str | None
     failures: list[OptionFailure]
     cost: ResearchCost
+    demo: bool = False
 
 
 class OptionRejected(Exception):
@@ -402,10 +404,43 @@ async def _complete_option(
         raise OptionRejected("invalid_itinerary") from error
 
 
+def load_demo_proposals(
+    generation: GenerationInput, settings: Settings, version: int
+) -> GenerationResult:
+    """Serve saved proposals without calling Gemini or Tavily."""
+    try:
+        saved = ProposalSet.model_validate_json(
+            settings.proposals_demo_file.read_text(encoding="utf-8")
+        )
+    except (OSError, ValidationError) as error:
+        raise ResearchError(
+            "not_configured", "The saved demo proposals could not be loaded."
+        ) from error
+    return GenerationResult(
+        proposals=[
+            item.model_copy(
+                update={
+                    "id": uuid4(),
+                    "trip_id": generation.trip_id,
+                    "version": version,
+                }
+            )
+            for item in saved.proposals
+        ],
+        complete=True,
+        message="Demo mode: these are saved proposals, not newly generated ones.",
+        failures=[],
+        cost=ResearchCost(),
+        demo=True,
+    )
+
+
 async def generate_proposals(
     generation: GenerationInput, settings: Settings, version: int = 1
 ) -> GenerationResult:
     """Return up to three proposals; raise only when none could be produced."""
+    if settings.proposals_demo_mode:
+        return load_demo_proposals(generation, settings, version)
     cost = ResearchCost()
     requirements = collect_requirements(generation)
     origins = list(

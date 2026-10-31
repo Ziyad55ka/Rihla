@@ -522,3 +522,47 @@ def test_outage_stops_generation_instead_of_trying_more_options(
     assert calls == 2
     assert len(result.proposals) == 1
     assert "Gemini is unavailable." in result.message
+
+
+MOCK = Path(__file__).resolve().parents[2] / "docs/examples/proposals.mock.json"
+
+
+def test_demo_mode_is_off_by_default() -> None:
+    assert Settings(_env_file=None).proposals_demo_mode is False
+
+
+def test_demo_mode_serves_saved_proposals_without_any_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fail(*args, **kwargs):
+        raise AssertionError("Demo mode must not call Gemini or Tavily")
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", fail)
+    monkeypatch.setattr(trip_research, "research", fail)
+    config = settings(tmp_path).model_copy(
+        update={"proposals_demo_mode": True, "proposals_demo_file": MOCK}
+    )
+    generation = group()
+
+    result = asyncio.run(generate_proposals(generation, config, version=4))
+
+    assert result.demo and result.complete
+    assert "Demo mode" in result.message
+    assert len(result.proposals) == 3
+    assert all(item.trip_id == generation.trip_id for item in result.proposals)
+    assert all(item.version == 4 for item in result.proposals)
+    assert result.cost == ResearchCost()
+
+
+def test_missing_demo_file_gives_a_clear_error(tmp_path: Path) -> None:
+    config = settings(tmp_path).model_copy(
+        update={
+            "proposals_demo_mode": True,
+            "proposals_demo_file": tmp_path / "missing.json",
+        }
+    )
+
+    with pytest.raises(ResearchError) as caught:
+        asyncio.run(generate_proposals(group(), config))
+
+    assert caught.value.code == "not_configured"
