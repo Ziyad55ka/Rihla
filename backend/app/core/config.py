@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -38,6 +39,9 @@ class Settings(BaseSettings):
     # ignav: live fares, falling back to web search. tavily: web search only.
     flight_price_provider: Literal["ignav", "tavily"] = "ignav"
     ignav_api_key: str | None = None
+    # Below this per trip day, generation stops before any outside request.
+    min_budget_sar_per_day: Decimal = Field(default=Decimal(150), gt=0)
+    generation_store_db: Path = BACKEND_DIR / ".local" / "generations.sqlite3"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)

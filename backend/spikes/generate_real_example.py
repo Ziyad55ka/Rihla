@@ -13,7 +13,8 @@ from uuid import UUID
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
-from app.services.proposal_generation import generate_proposals
+from app.services.generation_precheck import generate_checked
+from app.services.proposal_generation import GenerationBlocked
 from app.services.trip_research import ResearchError
 
 EXAMPLE = GenerationInput(
@@ -31,7 +32,9 @@ async def main() -> None:
     logging.basicConfig(level=logging.WARNING)
     logging.getLogger("app.services").setLevel(logging.INFO)
     try:
-        result = await generate_proposals(EXAMPLE, Settings())
+        result = await generate_checked(EXAMPLE, Settings())
+    except GenerationBlocked as blocked:
+        sys.exit(f"[blocked] {blocked}")
     except ResearchError as error:
         sys.exit(f"[{error.code}] {error.message}")
     Path(sys.argv[1]).write_text(result.model_dump_json(indent=2), encoding="utf-8")

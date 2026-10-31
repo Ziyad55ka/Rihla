@@ -58,6 +58,9 @@ STOPPING_ERRORS = {
     "model_quota",
     "model_unavailable",
 }
+BlockedCategory = Literal[
+    "readiness", "dates", "destinations", "flights", "accommodation", "budget"
+]
 FailureReason = Literal[
     "duplicate_route",
     "over_group_budget",
@@ -132,6 +135,28 @@ class GenerationResult(BaseModel):
     failures: list[OptionFailure]
     cost: ResearchCost
     demo: bool = False
+    # True when the inputs had not changed, so saved proposals were returned.
+    reused: bool = False
+
+
+class GenerationBlocked(Exception):
+    """Generation cannot go ahead. Names categories only, safe to show any member."""
+
+    MESSAGES = {
+        "readiness": "Generation is waiting for all members to be ready.",
+        "dates": "The group's dates do not allow a trip.",
+        "destinations": "The group's required destinations conflict.",
+        "flights": "The group's flight requirements cannot be met together.",
+        "accommodation": "The group's accommodation requirements cannot be met.",
+        "budget": "The group's budget is too low for these requirements and dates.",
+    }
+
+    def __init__(self, *categories: "BlockedCategory") -> None:
+        self.categories = list(dict.fromkeys(categories))
+        self.messages = [self.MESSAGES[item] for item in self.categories] or [
+            "The group's requirements cannot be met together."
+        ]
+        super().__init__(" ".join(self.messages))
 
 
 class OptionRejected(Exception):
@@ -646,6 +671,8 @@ async def generate_proposals(
     if not proposals:
         if stopped is not None:
             raise stopped
+        if failures and all("over_group_budget" in f.reasons for f in failures):
+            raise GenerationBlocked("budget")
         raise ResearchError(
             "model_invalid_output",
             "No proposal passed the checks. Please try generating again.",
