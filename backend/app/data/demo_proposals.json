@@ -118,7 +118,7 @@
         }
       ],
       "flexible_adjustments": [],
-      "budget_status": "incomplete_prices",
+      "budget_status": "includes_unconfirmed",
       "sources": [
         {
           "id": 1,
@@ -285,7 +285,7 @@
       ],
       "intercity_transport": [],
       "flexible_adjustments": [],
-      "budget_status": "incomplete_prices",
+      "budget_status": "includes_unconfirmed",
       "sources": [
         {
           "id": 1,
@@ -447,7 +447,7 @@
         }
       ],
       "flexible_adjustments": [],
-      "budget_status": "incomplete_prices",
+      "budget_status": "includes_unconfirmed",
       "sources": [
         {
           "id": 1,

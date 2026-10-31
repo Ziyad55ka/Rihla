@@ -67,7 +67,7 @@
             "status": "Sourced",
             "evidence": [{ "source_id": 1, "quote": "Mock Old Town Hotel is in Tbilisi." }]
           },
-          "hotel_price_per_night": { "amount_sar": null, "status": "Not available", "evidence": [] }
+          "hotel_price_per_night": { "amount_sar": "300.00", "status": "Unconfirmed", "evidence": [] }
         },
         {
           "order": 2,
@@ -110,7 +110,7 @@
           "explanation": "The preferred stay type could not be found everywhere, so a standard option is suggested."
         }
       ],
-      "budget_status": "incomplete_prices",
+      "budget_status": "includes_unconfirmed",
       "sources": [
         { "id": 1, "title": "Mock Tbilisi guide", "url": "https://example.com/mock-tbilisi" },
         { "id": 2, "title": "Mock route page", "url": "https://example.com/mock-route" },
@@ -151,7 +151,7 @@
       }],
       "intercity_transport": [],
       "flexible_adjustments": [],
-      "budget_status": "incomplete_prices",
+      "budget_status": "includes_unconfirmed",
       "sources": [
         { "id": 1, "title": "Mock Baku guide", "url": "https://example.com/mock-baku" }
       ]

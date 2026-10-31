@@ -3,7 +3,7 @@ export type InfoStatus = 'Sourced' | 'Estimated' | 'Unconfirmed' | 'Not availabl
 export type PriceStatus = InfoStatus
 export type PreferenceCategory = 'destinations' | 'interests' | 'flights' | 'accommodation'
 
-export type BudgetStatus = 'within_group_budget' | 'incomplete_prices'
+export type BudgetStatus = 'within_group_budget' | 'includes_unconfirmed' | 'over_group_budget'
 
 export interface Evidence {
   source_id: number

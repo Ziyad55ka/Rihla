@@ -59,6 +59,7 @@ def extracted(
     status: str = "Estimated",
     source_id: int | None = 1,
     quote: str | None = None,
+    estimate_sar: float | None = None,
 ) -> ExtractedFact:
     return ExtractedFact(
         field_id=field_id,
@@ -68,6 +69,7 @@ def extracted(
         status=status,
         source_id=source_id,
         quote=quote,
+        estimate_sar=estimate_sar,
     )
 
 
@@ -489,3 +491,58 @@ def test_price_range_uses_the_upper_bound(amount: int) -> None:
 
     assert public.amount_sar == Decimal("1800")
     assert public.status == "Estimated"
+
+
+@pytest.mark.parametrize(
+    ("amount", "currency", "quote", "expected"),
+    [
+        (116, "EUR", "Prices begin at 116 € at the Mock Hotel.", "486.04"),
+        (158, "USD", "With an average room price of just $158.", "592.50"),
+        (450, "SAR", "Rooms from SAR 450 per night.", "450"),
+    ],
+)
+def test_hotel_prices_from_sources_are_accepted_as_estimated(
+    amount: int, currency: str, quote: str, expected: str
+) -> None:
+    spec = FieldSpec(
+        "cities.0.hotel_price_per_night",
+        "hotel_price",
+        "Price",
+        "price",
+        (trip_research.NIGHT_TOPIC,),
+    )
+    source = SOURCE.model_copy(update={"content": quote})
+    fact = extracted(amount=amount, currency=currency, status="Sourced", quote=quote)
+
+    public = to_sar_price(verify_field(spec, fact, [source]))
+
+    assert public.amount_sar == Decimal(expected)
+    assert public.status == "Estimated"
+
+
+def test_price_with_no_evidence_uses_the_estimate_as_unconfirmed() -> None:
+    fact = extracted(status="Not available", source_id=None, estimate_sar=350)
+
+    public = to_sar_price(verify_field(PRICE, fact, [SOURCE]))
+
+    assert public.amount_sar == Decimal("350.00")
+    assert public.status == "Unconfirmed"
+    assert public.evidence == []
+
+
+def test_estimate_replaces_a_rejected_quote_without_keeping_it() -> None:
+    fact = extracted(
+        amount=900, currency="SAR", quote="Not in the source.", estimate_sar=700
+    )
+
+    public = to_sar_price(verify_field(PRICE, fact, [SOURCE]))
+
+    assert (public.amount_sar, public.status) == (Decimal("700.00"), "Unconfirmed")
+
+
+def test_estimate_is_not_used_for_text_or_absurd_values() -> None:
+    fact = extracted(status="Not available", source_id=None, estimate_sar=350)
+    absurd = extracted(status="Not available", source_id=None, estimate_sar=5e9)
+
+    assert verify_field(HOTEL, fact, [SOURCE]).value is None
+    assert verify_field(PRICE, absurd, [SOURCE]).amount_sar is None

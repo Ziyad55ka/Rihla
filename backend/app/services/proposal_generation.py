@@ -27,6 +27,7 @@ from app.schemas.proposals import (
     Proposal,
     ProposalSet,
     ProposalSource,
+    SarPrice,
 )
 from app.services import trip_research
 from app.services.trip_research import (
@@ -54,7 +55,7 @@ STOPPING_ERRORS = {
 }
 FailureReason = Literal[
     "duplicate_route",
-    "over_budget",
+    "over_group_budget",
     "dates_outside_shared_range",
     "essential_not_met",
     "flexible_not_explained",
@@ -220,32 +221,32 @@ def budget_status(
     transfers: list[IntercityTransfer],
     ceiling: Decimal,
 ) -> BudgetStatus:
-    """Assume no shared rooms, so the estimate errs towards the higher cost."""
+    """Full cost per person, using every price, for the costliest departure city.
+
+    Rooms are assumed unshared so the estimate errs high. A price that is Not
+    available cannot be counted, so it reports the same as an Unconfirmed one.
+    """
     shared = Decimal(0)
-    complete = True
+    settled = True
+
+    def counted(price: SarPrice, multiplier: int = 1) -> Decimal:
+        nonlocal settled
+        if price.status in {"Unconfirmed", "Not available"} and multiplier:
+            settled = False
+        return (price.amount_sar or Decimal(0)) * multiplier
+
     for stay in proposal_cities:
-        price = stay.hotel_price_per_night.amount_sar
-        if price is None:
-            complete = complete and stay.nights == 0
-        else:
-            shared += price * stay.nights
+        shared += counted(stay.hotel_price_per_night, stay.nights)
     for leg in transfers:
-        if leg.price_per_person.amount_sar is None:
-            complete = False
-        else:
-            shared += leg.price_per_person.amount_sar
+        shared += counted(leg.price_per_person)
     if not flights:
-        complete = False
+        settled = False
     highest = shared
     for route in flights:
-        fare = route.price_per_person.amount_sar
-        if fare is None:
-            complete = False
-        else:
-            highest = max(highest, shared + fare)
+        highest = max(highest, shared + counted(route.price_per_person))
     if highest > ceiling:
-        raise OptionRejected("over_budget")
-    return "within_group_budget" if complete else "incomplete_prices"
+        raise OptionRejected("over_group_budget")
+    return "within_group_budget" if settled else "includes_unconfirmed"
 
 
 def build_proposal(

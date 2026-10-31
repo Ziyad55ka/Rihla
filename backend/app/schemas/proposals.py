@@ -13,7 +13,9 @@ InfoStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
 PriceStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
 PreferenceCategory = Literal["destinations", "interests", "flights", "accommodation"]
 # Says only whether the group fits, never the budget behind that answer.
-BudgetStatus = Literal["within_group_budget", "incomplete_prices"]
+BudgetStatus = Literal[
+    "within_group_budget", "includes_unconfirmed", "over_group_budget"
+]
 
 # Proposals are shared with the whole trip, so explanations must stay general.
 PRIVATE_DETAIL = re.compile(r"\d|\b(members?|sar)\b|عضو|أعضاء|ريال", re.IGNORECASE)
@@ -38,8 +40,10 @@ class InfoField(StrictModel):
         if self.status == "Not available":
             if self.value is not None or self.evidence:
                 raise ValueError("Not available must have no value or evidence.")
-        elif not self.value or not self.evidence:
-            raise ValueError("A shown value needs evidence.")
+        elif not self.value:
+            raise ValueError("A shown status needs a value.")
+        elif self.status != "Unconfirmed" and not self.evidence:
+            raise ValueError("A Sourced or Estimated value needs evidence.")
         return self
 
 
@@ -53,8 +57,10 @@ class SarPrice(StrictModel):
         if self.status == "Not available":
             if self.amount_sar is not None or self.evidence:
                 raise ValueError("Not available must have no amount or evidence.")
-        elif self.amount_sar is None or not self.evidence:
-            raise ValueError("A shown price needs evidence.")
+        elif self.amount_sar is None:
+            raise ValueError("A shown status needs an amount.")
+        elif self.status != "Unconfirmed" and not self.evidence:
+            raise ValueError("A Sourced or Estimated price needs evidence.")
         return self
 
 

@@ -200,7 +200,7 @@ def test_over_budget_option_is_regenerated(
     assert result.proposals[0].destination == "Muscat"
 
 
-def test_missing_prices_are_kept_but_marked_incomplete(
+def test_missing_prices_are_kept_and_reported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fake_planner(monkeypatch, THREE)
@@ -218,7 +218,7 @@ def test_missing_prices_are_kept_but_marked_incomplete(
     result = run(group(), tmp_path)
 
     assert result.complete
-    assert result.proposals[0].budget_status == "incomplete_prices"
+    assert result.proposals[0].budget_status == "includes_unconfirmed"
 
 
 def test_failed_option_stops_after_two_regenerations_and_returns_the_rest(
@@ -602,3 +602,49 @@ def test_uncited_sources_are_removed_before_saving(
     proposal = run(group(), tmp_path).proposals[0]
 
     assert [source.id for source in proposal.sources] == [1]
+
+
+def test_unconfirmed_price_is_counted_and_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        for item in result.fields:
+            if "hotel_price" in item.field_id:
+                item.status, item.evidence = "Unconfirmed", []
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert result.proposals[0].budget_status == "includes_unconfirmed"
+    price = result.proposals[0].cities[0].hotel_price_per_night
+    assert (price.status, price.evidence) == ("Unconfirmed", [])
+
+
+def test_unconfirmed_price_can_still_exceed_the_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(
+        monkeypatch,
+        [option("Costly"), option("Baku"), option("Tbilisi")],
+        [option("Muscat")],
+    )
+    fares = iter(["9000", "1000", "1000", "1000"])
+
+    async def research(request, config):
+        result = await fake_research(fare=next(fares))(request, config)
+        for item in result.fields:
+            if "flights" in item.field_id and "price" in item.field_id:
+                item.status, item.evidence = "Unconfirmed", []
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert "Costly" not in {p.destination for p in result.proposals}
+    assert result.complete
