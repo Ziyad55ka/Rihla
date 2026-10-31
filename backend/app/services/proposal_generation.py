@@ -69,6 +69,8 @@ Propose count options. Each must differ clearly from the others and from every
 route in avoid_routes: prefer different destinations, otherwise clearly different
 cities. Dates must stay inside shared_start and shared_end, and nights across all
 cities must equal the days between start_date and end_date.
+Give each option's country as its plain English name, such as Egypt.
+Give arrival_airport as the three-letter IATA code of the first city's main airport.
 The group's total cost per person must stay within budget_ceiling_sar.
 For every requirement return one check with its requirement_id, whether this option
 meets it, and for an unmet one a general explanation of what was adjusted.
@@ -93,6 +95,8 @@ class PlannedCity(BaseModel):
 class PlannedOption(BaseModel):
     title: str
     destination: str
+    country: str
+    arrival_airport: str | None
     start_date: date
     end_date: date
     cities: list[PlannedCity]
@@ -289,7 +293,7 @@ def build_proposal(
     ]
     ceiling = min(member.max_budget_sar for member in generation.members)
     status = budget_status(cities, flights, transfers, ceiling)
-    return Proposal(
+    proposal = Proposal(
         id=uuid4(),
         trip_id=generation.trip_id,
         version=version,
@@ -308,9 +312,16 @@ def build_proposal(
             for source in research.sources
         ],
     )
+    return proposal.without_uncited_sources()
+
+
+def _valid_airport(code: str | None) -> str | None:
+    cleaned = (code or "").strip().upper()
+    return cleaned if re.fullmatch(r"[A-Z]{3}", cleaned) else None
 
 
 def _add_cost(total: ResearchCost, part: ResearchCost) -> None:
+    total.ignav_requests += part.ignav_requests
     total.tavily_searches += part.tavily_searches
     total.tavily_credits += part.tavily_credits
     total.cached_searches += part.cached_searches
@@ -383,6 +394,10 @@ async def _complete_option(
     result = await trip_research.research(
         ResearchRequest(
             destination=option.destination,
+            country=option.country,
+            arrival_airport=_valid_airport(option.arrival_airport),
+            departure_date=option.start_date,
+            return_date=option.end_date,
             cities=[city.city for city in option.cities],
             period=option.start_date.strftime("%B %Y"),
             origins=origins,

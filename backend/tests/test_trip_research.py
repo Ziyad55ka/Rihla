@@ -15,6 +15,7 @@ from app.services.trip_research import (
     ResearchRequest,
     ResearchSource,
     build_search_plan,
+    describes_other_country,
     research,
     search_sources,
     to_sar_price,
@@ -418,3 +419,73 @@ def test_sources_are_ranked_and_blocked_sites_removed(tmp_path: Path) -> None:
         "https://www.easemytrip.com/flights",
     ]
     assert b"youtube.com" in calls[0].content
+
+
+def source_titled(title: str, url: str = "https://example.com/x") -> ResearchSource:
+    return ResearchSource(id=1, title=title, url=url, content="c")
+
+
+def test_city_searches_name_the_country() -> None:
+    request = ResearchRequest(
+        destination="Egypt",
+        country="Egypt",
+        cities=["Cairo", "Alexandria"],
+        period="December 2026",
+    )
+
+    queries = [group.query for group in build_search_plan(request)]
+
+    assert any("hotels in Alexandria, Egypt" in query for query in queries)
+    assert any("from Cairo to Alexandria, Egypt" in query for query in queries)
+
+
+@pytest.mark.parametrize(
+    ("source", "other"),
+    [
+        (source_titled("16 Best Hotels in Alexandria, Virginia"), True),
+        (source_titled("Hotels", "https://x.com/us/alexandria-virginia/"), True),
+        (source_titled("Best Hotels in Alexandria, Egypt"), False),
+        (source_titled("Best Hotels in Alexandria"), False),
+        (source_titled("Egypt and Jordan compared"), False),
+    ],
+)
+def test_sources_about_another_country_are_detected(
+    source: ResearchSource, other: bool
+) -> None:
+    assert describes_other_country(source, "Egypt") is other
+
+
+def test_turkey_alias_is_not_another_country() -> None:
+    assert not describes_other_country(source_titled("Hotels in Türkiye"), "Turkey")
+
+
+def test_quote_listing_many_airlines_is_unconfirmed() -> None:
+    spec = FieldSpec("flights.0.airline", "flight_airline", "Airline", "text")
+    source = SOURCE.model_copy(update={"content": "EgyptAir Saudia Flynas Nile Air"})
+    fact = extracted(
+        value="EgyptAir", status="Sourced", quote="EgyptAir Saudia Flynas Nile Air"
+    )
+
+    assert verify_field(spec, fact, [source]).status == "Unconfirmed"
+
+
+def test_quote_naming_one_airline_stays_sourced() -> None:
+    spec = FieldSpec("flights.0.airline", "flight_airline", "Airline", "text")
+    source = SOURCE.model_copy(update={"content": "Saudia flies this route daily."})
+    fact = extracted(
+        value="Saudia", status="Sourced", quote="Saudia flies this route daily."
+    )
+
+    assert verify_field(spec, fact, [source]).status == "Sourced"
+
+
+@pytest.mark.parametrize("amount", [630, 1800])
+def test_price_range_uses_the_upper_bound(amount: int) -> None:
+    quote = "Typical flight price: SAR 630–1,800."
+    source = SOURCE.model_copy(update={"content": quote})
+    fact = extracted(amount=amount, currency="SAR", status="Sourced", quote=quote)
+
+    public = to_sar_price(verify_field(PRICE, fact, [source]))
+
+    assert public.amount_sar == Decimal("1800")
+    assert public.status == "Estimated"

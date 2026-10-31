@@ -9,8 +9,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 InfoStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
-# Public web prices are never booking offers, so a price cannot be Sourced.
-PriceStatus = Literal["Estimated", "Unconfirmed", "Not available"]
+# Only a live flight fare can be Sourced: other web prices are never offers.
+PriceStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
 PreferenceCategory = Literal["destinations", "interests", "flights", "accommodation"]
 # Says only whether the group fits, never the budget behind that answer.
 BudgetStatus = Literal["within_group_budget", "incomplete_prices"]
@@ -58,6 +58,12 @@ class SarPrice(StrictModel):
         return self
 
 
+def _not_sourced(price: SarPrice) -> SarPrice:
+    if price.status == "Sourced":
+        raise ValueError("Only a live flight fare can be Sourced.")
+    return price
+
+
 class ProposalSource(StrictModel):
     id: int = Field(ge=1)
     title: str = Field(min_length=1, max_length=300)
@@ -79,6 +85,11 @@ class CityStay(StrictModel):
     hotel_name: InfoField
     hotel_price_per_night: SarPrice
 
+    @field_validator("hotel_price_per_night")
+    @classmethod
+    def hotel_price_is_not_sourced(cls, price: SarPrice) -> SarPrice:
+        return _not_sourced(price)
+
 
 class IntercityTransfer(StrictModel):
     from_city: str = Field(min_length=1, max_length=100)
@@ -86,6 +97,11 @@ class IntercityTransfer(StrictModel):
     mode: InfoField
     duration: InfoField
     price_per_person: SarPrice
+
+    @field_validator("price_per_person")
+    @classmethod
+    def transfer_price_is_not_sourced(cls, price: SarPrice) -> SarPrice:
+        return _not_sourced(price)
 
 
 class FlexibleAdjustment(StrictModel):
@@ -145,6 +161,16 @@ class Proposal(StrictModel):
             if any(item.source_id not in known for item in field.evidence):
                 raise ValueError("Evidence must cite a listed source.")
         return self
+
+    def without_uncited_sources(self) -> "Proposal":
+        cited = {
+            item.source_id
+            for field in self.evidence_fields()
+            for item in field.evidence
+        }
+        return self.model_copy(
+            update={"sources": [item for item in self.sources if item.id in cited]}
+        )
 
     def evidence_fields(self) -> list[InfoField | SarPrice]:
         fields: list[InfoField | SarPrice] = []

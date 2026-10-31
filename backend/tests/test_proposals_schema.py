@@ -9,7 +9,6 @@ from app.schemas.proposals import (
     InfoField,
     Proposal,
     ProposalSet,
-    SarPrice,
 )
 
 MOCK = Path(__file__).resolve().parents[2] / "docs/examples/proposals.mock.json"
@@ -61,13 +60,19 @@ def test_shown_value_needs_evidence() -> None:
         InfoField(value="Hotel", status="Estimated", evidence=[])
 
 
-def test_price_cannot_be_confirmed() -> None:
-    with pytest.raises(ValidationError):
-        SarPrice(
-            amount_sar="100",
-            status="Sourced",
-            evidence=[{"source_id": 1, "quote": "SAR 100"}],
-        )
+def test_hotel_price_cannot_be_sourced() -> None:
+    data = mock_data()["proposals"][0]
+    data["cities"][0]["hotel_price_per_night"]["status"] = "Sourced"
+
+    with pytest.raises(ValidationError, match="live flight fare"):
+        Proposal.model_validate(data)
+
+
+def test_flight_price_can_be_sourced() -> None:
+    data = mock_data()["proposals"][0]
+    data["flights"][0]["price_per_person"]["status"] = "Sourced"
+
+    assert Proposal.model_validate(data).flights[0].price_per_person.status == "Sourced"
 
 
 def test_private_fields_are_not_part_of_a_proposal() -> None:

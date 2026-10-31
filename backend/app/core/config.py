@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     proposals_demo_mode: bool = False
     proposals_demo_file: Path = BACKEND_DIR / "app" / "data" / "demo_proposals.json"
     # Optional for the API; required only by trip research.
+    # ignav: live fares, falling back to web search. tavily: web search only.
+    flight_price_provider: Literal["ignav", "tavily"] = "ignav"
+    ignav_api_key: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)

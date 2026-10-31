@@ -16,6 +16,8 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "FLIGHT_VISIBILITY",
         "PROPOSALS_DEMO_MODE",
         "PROPOSALS_DEMO_FILE",
+        "IGNAV_API_KEY",
+        "FLIGHT_PRICE_PROVIDER",
         "GEMINI_API_KEY",
         "GEMINI_MODEL",
         "GEMINI_RETRY_DELAY_SECONDS",

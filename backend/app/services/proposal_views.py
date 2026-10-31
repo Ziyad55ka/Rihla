@@ -20,14 +20,5 @@ def view_for_member(
         flights = [
             route for route in flights if _same_city(route.origin, departure_city)
         ]
-    view = proposal.model_copy(update={"flights": flights})
-
     # A source link can name another member's city, so keep only those still cited.
-    cited = {
-        item.source_id for field in view.evidence_fields() for item in field.evidence
-    }
-    return view.model_copy(
-        update={
-            "sources": [source for source in view.sources if source.id in cited],
-        }
-    )
+    return proposal.model_copy(update={"flights": flights}).without_uncited_sources()

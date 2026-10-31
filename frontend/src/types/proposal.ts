@@ -1,6 +1,6 @@
 // Mirrors backend/app/schemas/proposals.py. Mock data: docs/examples/proposals.mock.json.
 export type InfoStatus = 'Sourced' | 'Estimated' | 'Unconfirmed' | 'Not available'
-export type PriceStatus = Exclude<InfoStatus, 'Sourced'>
+export type PriceStatus = InfoStatus
 export type PreferenceCategory = 'destinations' | 'interests' | 'flights' | 'accommodation'
 
 export type BudgetStatus = 'within_group_budget' | 'incomplete_prices'

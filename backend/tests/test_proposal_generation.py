@@ -78,6 +78,8 @@ def option(
     return PlannedOption(
         title=title,
         destination=destination,
+        country=destination,
+        arrival_airport=None,
         start_date=start,
         end_date=date(2026, 11, 24),
         cities=[
@@ -580,3 +582,23 @@ def test_saved_demo_file_is_valid_and_holds_no_keys() -> None:
         r"(?i)api.?key",
     ):
         assert re.search(pattern, demo) is None
+
+
+def test_uncited_sources_are_removed_before_saving(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    good = fake_research()
+
+    async def research(request, config):
+        result = await good(request, config)
+        result.sources.append(
+            ResearchSource(id=2, title="U", url="https://example.com/u", content="C")
+        )
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    proposal = run(group(), tmp_path).proposals[0]
+
+    assert [source.id for source in proposal.sources] == [1]
