@@ -90,6 +90,28 @@ export interface Proposal {
   sources: ProposalSource[]
 }
 
+export type ConflictCategory = 'readiness' | 'dates' | 'destinations' | 'flights' | 'accommodation' | 'budget'
+
+export interface GroupConflicts {
+  conflicts: ConflictCategory[]
+  own_review: ConflictCategory[]
+  can_generate: boolean
+}
+
+export interface StoredProposals {
+  version: number | null
+  complete: boolean
+  generated_at: string | null
+  generating: boolean
+  proposals: Proposal[]
+}
+
+export interface GeneratedProposals extends StoredProposals {
+  message: string | null
+  reused: boolean
+  demo: boolean
+}
+
 export interface ProposalSet {
   proposals: Proposal[]
 }

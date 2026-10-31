@@ -129,3 +129,7 @@ A member can still learn something by experiment: changing their own Essential d
 The POST route takes the database lock first, which also refuses anyone but the administrator before the secret key or any quota is used. A second request while one runs gets HTTP 409. A crashed run frees the lock after ten minutes. Conflicts return HTTP 409 with categories only.
 
 **Known risk:** Saving uses the administrator's own token, because the secret key is limited to reading generation inputs. An administrator could therefore call `rihla_save_proposals` directly, and save invented proposals or booking links for their group, though only during a run they started. The function rejects other trips and known private field names, but cannot prove that content came from generation.
+
+## Trying it locally
+
+The preview server in `supabase/tests/` also covers these routes, with no outside services. Besides the steps in [the trip guide](trips-and-invitations.md), start the backend with `SUPABASE_SECRET_KEY=sb_secret_local_preview` and `PROPOSALS_DEMO_MODE=true`. The saved demo proposals depart from Riyadh, so a member from another city sees no flights.

@@ -4,6 +4,7 @@ import { tripStage } from '../lib/trip-stage'
 import type { PlanningStatus } from '../types/planning'
 import type { TripDetail } from '../types/trips'
 import { InviteMembersControl } from './InviteMembersControl'
+import { ProposalsPanel } from './ProposalsPanel'
 import { useLanguage } from '../lib/language'
 import '../planning.css'
 
@@ -59,6 +60,7 @@ export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { tr
       <button type="button" className="planning-refresh" disabled={busy} onClick={onRefresh}>{busy ? t("Checking…") : t("Refresh trip information")} <span aria-hidden="true">↻</span></button>
     </section>
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)} {t("Try Refresh planning.")}</p>}
+    <ProposalsPanel tripId={trip.id} isAdmin={trip.role === 'administrator'} revision={revision} />
     <section className="planning-members" aria-labelledby="members-title">
       <div className="planning-members-heading"><div><p className="trip-eyebrow">{t("YOUR TRAVEL CIRCLE")}</p><h2 id="members-title">{t("Different people. One adventure.")}</h2><p>{trip.member_count === 1 ? t('1 person making the plan together.') : t('{count} people making the plan together.', { count: trip.member_count.toLocaleString(locale) })}</p></div>
         <div className="planning-members-actions"><button className="planning-preferences-button" type="button" onClick={onPreferences}>{hasSaved === true ? t("Edit preferences") : hasSaved === false ? t("Enter preferences") : t("Your preferences")} <span aria-hidden="true">↗</span></button>{trip.role === 'administrator' && <InviteMembersControl tripId={trip.id} />}</div>
