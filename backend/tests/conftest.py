@@ -14,7 +14,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "SUPABASE_PUBLISHABLE_KEY",
         "SUPABASE_SECRET_KEY",
         "LOGIN_LIMIT_DB",
-        "FLIGHT_VISIBILITY",
+        "PROPOSALS_HASH_KEY",
         "PROPOSALS_DEMO_MODE",
         "PROPOSALS_DEMO_FILE",
         "IGNAV_API_KEY",

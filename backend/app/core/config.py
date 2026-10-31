@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     # Bypasses Row Level Security. Used only by services/generation_inputs.py.
     supabase_secret_key: str | None = Field(default=None, repr=False)
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
-    # own: each member sees only their departure city. all: every city, unnamed.
-    flight_visibility: Literal["own", "all"] = "own"
+    # Keys the stored inputs hash, so budgets cannot be guessed from it.
+    proposals_hash_key: str | None = Field(default=None, repr=False)
     # Serve saved proposals instead of calling Gemini and Tavily.
     proposals_demo_mode: bool = False
     proposals_demo_file: Path = BACKEND_DIR / "app" / "data" / "demo_proposals.json"

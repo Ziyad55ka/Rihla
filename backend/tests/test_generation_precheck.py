@@ -220,7 +220,9 @@ def test_unchanged_inputs_return_saved_proposals_with_no_calls(
 ) -> None:
     generation = group()
     store = LocalProposalStore(settings.generation_store_db, 3600)
-    store.save(str(generation.trip_id), input_hash(generation), saved_result())
+    asyncio.run(
+        store.save(str(generation.trip_id), input_hash(generation), saved_result())
+    )
 
     result = asyncio.run(generate_checked(generation, settings))
 
@@ -450,3 +452,8 @@ def test_default_daily_minimum_is_250_per_trip_day(settings: Settings) -> None:
 
     assert generation_precheck.find_input_conflicts(just_under, settings) == ["budget"]
     assert generation_precheck.find_input_conflicts(exactly, settings) == []
+
+
+def test_hash_changes_with_the_key_so_it_cannot_be_recomputed() -> None:
+    assert input_hash(group(), "first-key") != input_hash(group(), "second-key")
+    assert input_hash(group(), "first-key") == input_hash(group(), "first-key")

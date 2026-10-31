@@ -27,7 +27,6 @@ from app.services.proposal_generation import (
     generate_proposals,
     hotel_search_url,
 )
-from app.services.proposal_views import view_for_member
 from app.services.trip_research import (
     ResearchCost,
     ResearchError,
@@ -384,18 +383,6 @@ def test_quota_with_no_proposals_raises_a_clear_error(
         run(group(), tmp_path)
 
     assert caught.value.code == "model_quota"
-
-
-def test_generated_proposal_can_be_filtered_for_a_member(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    fake_planner(monkeypatch, THREE)
-    monkeypatch.setattr(trip_research, "research", fake_research())
-
-    proposal = run(group(), tmp_path).proposals[0]
-    body = view_for_member(proposal, "Riyadh").model_dump_json()
-
-    assert "Jeddah" not in body
 
 
 def test_logs_hold_no_private_values(

@@ -38,6 +38,12 @@ async def trip_rpc[T](
                 "Preference storage is unavailable. "
                 "Check that the preferences migration is applied.",
             )
+        if "proposal" in name or name == "rihla_get_group_conflicts":
+            raise HTTPException(
+                503,
+                "Proposals are unavailable. "
+                "Check that the proposals migrations are applied.",
+            )
         if name in {"rihla_get_planning_status", "rihla_check_trip_dates"}:
             raise HTTPException(
                 503,

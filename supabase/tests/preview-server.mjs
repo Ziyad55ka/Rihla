@@ -15,6 +15,11 @@ const rpcArguments = {
   rihla_save_preferences: ['p_trip_id', 'p_preferences'],
   rihla_get_planning_status: ['p_trip_id'],
   rihla_check_trip_dates: ['p_trip_id', 'p_start', 'p_end'],
+  rihla_get_group_conflicts: ['p_trip_id'],
+  rihla_begin_proposal_generation: ['p_trip_id'], rihla_end_proposal_generation: ['p_trip_id'],
+  rihla_has_saved_proposals: ['p_trip_id', 'p_input_hash', 'p_max_age_hours'],
+  rihla_save_proposals: ['p_trip_id', 'p_version', 'p_input_hash', 'p_complete', 'p_proposals'],
+  rihla_get_proposals: ['p_trip_id'],
 }
 let queue = Promise.resolve()
 function account(user) {
@@ -39,7 +44,7 @@ const server = createServer(async (request, response) => {
   if (request.method === 'OPTIONS') { send(200, {}); return }
   const url = new URL(request.url, 'http://127.0.0.1:54329')
   let body = {}
-  try { let text = ''; for await (const chunk of request) { text += chunk; if (text.length > 10000) throw new Error('Body too large') } if (text) body = JSON.parse(text) }
+  try { let text = ''; for await (const chunk of request) { text += chunk; if (text.length > 5000000) throw new Error('Body too large') } if (text) body = JSON.parse(text) }
   catch { send(400, {}); return }
   if (url.pathname === '/auth/v1/token') {
     const user = url.searchParams.get('grant_type') === 'refresh_token'
@@ -47,6 +52,22 @@ const server = createServer(async (request, response) => {
       : fixtureUsers.find((value) => value.email === body.email && body.password === 'PreviewOnly123!')
     if (!user) { send(400, { code: 'invalid_credentials', msg: 'Invalid preview credentials' }); return }
     send(200, session(user)); return
+  }
+  // Stands in for the backend's secret key. A fictional value with no real access.
+  if (url.pathname === '/rest/v1/rpc/rihla_trip_generation_inputs') {
+    if (request.headers.apikey !== 'sb_secret_local_preview') { send(401, { code: 'invalid_key' }); return }
+    queue = queue.then(async () => {
+      try {
+        await db.exec('begin; set local role service_role')
+        const result = await db.query('select public.rihla_trip_generation_inputs($1, $2) as result', [body.p_trip_id, body.p_admin_id])
+        await db.exec('commit')
+        send(200, result.rows[0].result)
+      } catch (error) {
+        await db.exec('rollback')
+        send(error.code === '42501' ? 403 : 400, { code: error.code, message: error.message })
+      }
+    })
+    return
   }
   const token = request.headers.authorization?.replace(/^Bearer /, '')
   const user = sessions.get(token)
@@ -71,7 +92,7 @@ const server = createServer(async (request, response) => {
       send(200, profileRequest ? result.rows : result.rows[0].result)
     } catch (error) {
       await db.exec('rollback')
-      send(error.code === '42501' ? 403 : 400, { code: error.code })
+      send(error.code === '42501' ? 403 : 400, { code: error.code, message: error.message })
     }
   })
 })

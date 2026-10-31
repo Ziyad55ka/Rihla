@@ -70,9 +70,9 @@ No remote migration application, deployment or push is authorized by this docume
 ## Flight visibility (31 October 2026)
 
 - Sprint 2 searches flights from every departure city in the group. Those cities are sent to the search provider without member names.
-- The stored proposal holds flights for all cities. The backend filters each browser response, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
-- Stored proposals must not be readable directly by members through the Data API, because that would bypass this filter. The upcoming proposals migration must enforce this.
-- Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change is `FLIGHT_VISIBILITY=all`, plus updating this rule.
+- The stored proposal holds flights for all cities. `rihla_get_proposals` filters inside the database, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
+- Browser roles have no direct access to the proposal tables. The filter is in SQL because a function granted to `authenticated` can be called directly, bypassing the backend.
+- Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change needs a migration to `rihla_private.proposal_for_member`, plus updating this rule.
 
 ## Sprint 2 update: reading private inputs for generation (2 November 2026)
 

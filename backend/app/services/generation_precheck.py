@@ -6,8 +6,10 @@ Failure messages name a category only, never a member or a value.
 """
 
 import hashlib
+import hmac
 import json
 import re
+import secrets
 import sqlite3
 import time
 from pathlib import Path
@@ -23,6 +25,9 @@ from app.services.proposal_generation import (
     load_demo_proposals,
 )
 from app.services.trip_research import ResearchCost
+
+# Without a configured key, stored hashes simply stop matching after a restart.
+_RESTART_KEY = secrets.token_bytes(32)
 
 STOP_WORDS = {"or", "and", "the", "to", "in", "أو", "و", "في", "إلى"}
 # Mirrored in SQL by rihla_private.destination_countries; a test keeps them equal.
@@ -86,9 +91,11 @@ COUNTRY_WORDS = {
 
 
 class ProposalStore(Protocol):
-    def load(self, trip_id: str, input_hash: str) -> GenerationResult | None: ...
+    async def load(self, trip_id: str, input_hash: str) -> GenerationResult | None: ...
 
-    def save(self, trip_id: str, input_hash: str, result: GenerationResult) -> None: ...
+    async def save(
+        self, trip_id: str, input_hash: str, result: GenerationResult
+    ) -> None: ...
 
 
 class LocalProposalStore:
@@ -108,7 +115,7 @@ class LocalProposalStore:
         )
         return connection
 
-    def load(self, trip_id: str, input_hash: str) -> GenerationResult | None:
+    async def load(self, trip_id: str, input_hash: str) -> GenerationResult | None:
         connection = self._connect()
         try:
             row = connection.execute(
@@ -123,7 +130,11 @@ class LocalProposalStore:
             return None
         return GenerationResult.model_validate_json(row[1])
 
-    def save(self, trip_id: str, input_hash: str, result: GenerationResult) -> None:
+    async def save(
+        self, trip_id: str, input_hash: str, result: GenerationResult
+    ) -> None:
+        if not result.complete:
+            return
         connection = self._connect()
         try:
             with connection:
@@ -135,8 +146,8 @@ class LocalProposalStore:
             connection.close()
 
 
-def input_hash(generation: GenerationInput) -> str:
-    """Stable across member order. Backend only: budgets are guessable from it."""
+def input_hash(generation: GenerationInput, key: str | None = None) -> str:
+    """Stable across member order. Keyed, so budgets cannot be guessed from it."""
     members = sorted(
         json.dumps(
             member.model_dump(mode="json", exclude={"label"}),
@@ -153,7 +164,8 @@ def input_hash(generation: GenerationInput) -> str:
             members,
         ]
     )
-    return hashlib.sha256(payload.encode()).hexdigest()
+    secret = key.encode() if key else _RESTART_KEY
+    return hmac.new(secret, payload.encode(), hashlib.sha256).hexdigest()
 
 
 def find_planning_conflicts(planning: PlanningStatus) -> list[ConflictCategory]:
@@ -220,7 +232,10 @@ async def generate_checked(
     regenerate skips saved proposals. The caller must allow it for the admin only.
     """
     if settings.proposals_demo_mode:
-        return load_demo_proposals(generation, settings, version)
+        demo = load_demo_proposals(generation, settings, version)
+        if store is not None:
+            await store.save(str(generation.trip_id), "demo", demo)
+        return demo
 
     if planning is not None:
         check_planning(planning)
@@ -230,12 +245,11 @@ async def generate_checked(
         settings.generation_store_db, settings.saved_proposals_ttl_hours * 3600
     )
     trip_id = str(generation.trip_id)
-    current_hash = input_hash(generation)
-    saved = None if regenerate else store.load(trip_id, current_hash)
+    current_hash = input_hash(generation, settings.proposals_hash_key)
+    saved = None if regenerate else await store.load(trip_id, current_hash)
     if saved is not None:
         return saved.model_copy(update={"reused": True, "cost": ResearchCost()})
 
     result = await generate_proposals(generation, settings, version)
-    if result.complete:
-        store.save(trip_id, current_hash, result)
+    await store.save(trip_id, current_hash, result)
     return result

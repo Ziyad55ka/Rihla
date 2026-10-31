@@ -1,6 +1,6 @@
 # AI proposals (US-09)
 
-How Rihla generates three trip proposals, and what the results can and cannot be trusted for. There is no API route or database storage yet: generation currently runs from `backend/spikes/generate_real_example.py` or in demo mode.
+How Rihla generates three trip proposals, and what the results can and cannot be trusted for. The routes and migrations are tested locally and have not been applied to the real Supabase project.
 
 ## Checks before generation
 
@@ -18,7 +18,7 @@ Stage 1 treats a destination conflict as clear only when every word in each Esse
 
 Failures raise `GenerationBlocked`, with messages by category only: `readiness`, `dates`, `destinations`, `flights`, `accommodation` or `budget`. They never name a member or a value, and Gemini's words are not shown. If every proposal fails on budget, the result is a `budget` message without the figure.
 
-The inputs hash covers the trip, dates and every member's data, ignoring member order. It can be guessed from budgets, so it stays in the backend. Until the proposals table exists, results are stored in `backend/.local/generations.sqlite3`. Only complete results are saved for reuse, and fares can change within the time limit.
+The inputs hash covers the trip, dates and every member's data, ignoring member order. It is keyed with `PROPOSALS_HASH_KEY` so budgets cannot be guessed from it, and no function returns it. The API stores results in the `proposals` tables; `backend/.local/generations.sqlite3` is used only when no store is passed, such as the spike. Only complete results are saved for reuse, and fares can change within the time limit.
 
 Demo mode skips these checks. Flights use the cheapest itinerary even when it needs two bookings.
 
@@ -42,7 +42,7 @@ Code: `backend/app/services/proposal_generation.py`, `trip_research.py`, `flight
 - The planner receives no member labels or departure cities. It does receive the lowest budget and the preference text.
 - Departure cities are sent to Ignav or Tavily, and to Gemini during extraction, without member identity.
 - Titles and explanations are rejected if they contain a member's budget figure or departure city. Explanations also reject any digit.
-- A stored proposal holds flights from every departure city. Browser responses must pass through `view_for_member`, which also removes sources no longer cited. See [the flight visibility decision](sprint-1-decisions.md).
+- A stored proposal holds flights from every departure city. `rihla_get_proposals` returns only the caller's city and the sources still cited, inside the database. See [the flight visibility decision](sprint-1-decisions.md).
 - Logs hold only categories and reasons, never values, queries or cities.
 
 ## Price policy
@@ -117,3 +117,15 @@ A member can still learn something by experiment: changing their own Essential d
 ## Private generation inputs
 
 `rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It is granted only to `service_role`, and `authenticated` cannot call it. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](sprint-1-decisions.md).
+
+## API
+
+| Route | Who | Does |
+| --- | --- | --- |
+| `GET /api/trips/{id}/conflicts` | Any member | Conflict categories, the member's review notice and `can_generate` |
+| `GET /api/trips/{id}/proposals` | Any member | Latest proposals, with only the caller's flights |
+| `POST /api/trips/{id}/proposals` | Administrator | Generates and saves. Body `{"regenerate": true}` skips saved proposals |
+
+The POST route takes the database lock first, which also refuses anyone but the administrator before the secret key or any quota is used. A second request while one runs gets HTTP 409. A crashed run frees the lock after ten minutes. Conflicts return HTTP 409 with categories only.
+
+**Known risk:** Saving uses the administrator's own token, because the secret key is limited to reading generation inputs. An administrator could therefore call `rihla_save_proposals` directly, and save invented proposals or booking links for their group, though only during a run they started. The function rejects other trips and known private field names, but cannot prove that content came from generation.

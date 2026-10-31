@@ -91,7 +91,7 @@ class FlightLeg(StrictModel):
 
 
 class Flights(StrictModel):
-    # Stored per departure city. Browser responses pass through view_for_member.
+    # Stored per departure city. rihla_get_proposals returns only the caller's.
     origin: str = Field(min_length=1, max_length=100)
     # round_trip: one booking. split: two bookings. one_way: return not included.
     trip_type: TripType

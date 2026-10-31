@@ -752,3 +752,143 @@ test('generation inputs refuse an unready group or unavailable dates', async () 
   await asServiceRole()
   await denied(() => generationInputs(created.id, ALICE), 'P0001')
 })
+
+// --- Sprint 2: stored proposals ---
+function storedProposal(tripId, option = 1) {
+  const fare = (sourceId) => ({ value: 'Mock Air', status: 'Estimated', evidence: [{ source_id: sourceId, quote: 'A quote.' }] })
+  return {
+    trip_id: tripId, option_number: option, title: `Option ${option}`, destination: 'Cairo', cities: [],
+    flights: [{ origin: 'Riyadh', airline: fare(1), legs: [] }, { origin: 'Jeddah', airline: fare(2), legs: [] }],
+    sources: [
+      { id: 1, title: 'Riyadh fares', url: 'https://example.com/riyadh' },
+      { id: 2, title: 'Jeddah fares', url: 'https://example.com/jeddah' },
+    ],
+  }
+}
+const begin = (id) => rpc('rihla_begin_proposal_generation', [id])
+const finish = (id) => rpc('rihla_end_proposal_generation', [id])
+const saveAll = (id, version = 1, hash = 'hash-a', complete = true, list = [storedProposal(id)]) =>
+  rpc('rihla_save_proposals', [id, version, hash, complete, JSON.stringify(list)])
+const hasSaved = (id, hash = 'hash-a', hours = 24) => rpc('rihla_has_saved_proposals', [id, hash, hours])
+const proposals = (id) => rpc('rihla_get_proposals', [id])
+
+async function savedTrip() {
+  const id = await twoMembers(member(), member({ departure_city: 'Jeddah' }))
+  await role(ALICE)
+  await begin(id)
+  await saveAll(id)
+  return id
+}
+
+test('browser roles have no direct access to proposal tables', async () => {
+  const id = await savedTrip()
+  const rows = (await db.query("select relname, relrowsecurity from pg_class where oid in ('public.proposals'::regclass, 'public.proposal_generations'::regclass)")).rows
+  assert.ok(rows.length === 2 && rows.every((row) => row.relrowsecurity))
+  for (const statement of ['select * from public.proposals', 'select input_hash from public.proposal_generations', `delete from public.proposals where trip_id = '${id}'`]) {
+    await role(ALICE)
+    await denied(() => db.query(statement))
+    await db.exec('reset role; set local role anon')
+    await denied(() => db.query(statement))
+  }
+})
+
+test('each member receives only their own departure city and its sources', async () => {
+  const id = await savedTrip()
+  await role(ALICE)
+  const alice = (await proposals(id)).proposals[0]
+  assert.deepEqual(alice.flights.map((item) => item.origin), ['Riyadh'])
+  assert.deepEqual(alice.sources.map((item) => item.id), [1])
+  assert.ok(!JSON.stringify(alice).includes('Jeddah') && !JSON.stringify(alice).includes('jeddah'))
+  await role(BOB)
+  const bob = (await proposals(id)).proposals[0]
+  assert.deepEqual(bob.flights.map((item) => item.origin), ['Jeddah'])
+  assert.deepEqual(bob.sources.map((item) => item.id), [2])
+})
+
+test('the stored hash is never returned, and outsiders cannot read proposals', async () => {
+  const id = await savedTrip()
+  await role(ALICE)
+  assert.ok(!JSON.stringify(await proposals(id)).includes('hash-a'))
+  await role(CAROL)
+  await denied(() => proposals(id))
+})
+
+test('only the administrator can begin, end, check or save a generation', async () => {
+  const id = await twoMembers()
+  await role(BOB)
+  await denied(() => begin(id))
+  await denied(() => finish(id))
+  await denied(() => hasSaved(id))
+  await denied(() => saveAll(id))
+  await role(CAROL)
+  await denied(() => begin(id))
+  await db.exec('reset role; set local role anon')
+  await denied(() => begin(id))
+})
+
+test('a running generation blocks a second one until it ends or expires', async () => {
+  const id = await twoMembers()
+  await role(ALICE)
+  assert.deepEqual(await begin(id), { started: true, version: 1 })
+  assert.deepEqual(await begin(id), { started: false, version: null })
+  await role(BOB)
+  assert.equal((await proposals(id)).generating, true)
+  await role(ALICE)
+  await finish(id)
+  assert.equal((await begin(id)).started, true)
+  await root()
+  await db.query("update public.proposal_generations set locked_until = now() - interval '1 second' where trip_id = $1", [id])
+  await role(ALICE)
+  assert.equal((await begin(id)).started, true)
+})
+
+test('saving needs the lock and the matching version, and replaces older proposals', async () => {
+  const id = await twoMembers()
+  await role(ALICE)
+  await denied(() => saveAll(id), 'P0001')
+  await begin(id)
+  await denied(() => saveAll(id, 5), 'P0001')
+  await saveAll(id, 1, 'hash-a', true, [storedProposal(id, 1), storedProposal(id, 2), storedProposal(id, 3)])
+  assert.equal((await proposals(id)).proposals.length, 3)
+  await denied(() => saveAll(id, 2), 'P0001')
+  assert.deepEqual(await begin(id), { started: true, version: 2 })
+  await saveAll(id, 2, 'hash-b', true, [storedProposal(id, 1)])
+  const latest = await proposals(id)
+  assert.equal(latest.version, 2)
+  assert.equal(latest.proposals.length, 1)
+  assert.equal(latest.generating, false)
+})
+
+test('saving rejects empty lists, another trip and private fields', async () => {
+  const id = await twoMembers()
+  const other = await trip()
+  await role(ALICE)
+  await begin(id)
+  const invalid = [[], [storedProposal(other.id)], [{ ...storedProposal(id), max_budget_sar: '4000' }], [storedProposal(id), storedProposal(id, 2), storedProposal(id, 3), storedProposal(id, 1)]]
+  for (const list of invalid) await denied(() => saveAll(id, 1, 'h', true, list), '23514')
+  assert.deepEqual((await proposals(id)).proposals, [])
+})
+
+test('saved proposals are found only for the same hash, while fresh and complete', async () => {
+  const id = await savedTrip()
+  await role(ALICE)
+  assert.equal(await hasSaved(id), true)
+  assert.equal(await hasSaved(id, 'other-hash'), false)
+  await root()
+  await db.query("update public.proposal_generations set generated_at = now() - interval '25 hours' where trip_id = $1", [id])
+  await role(ALICE)
+  assert.equal(await hasSaved(id), false)
+  await begin(id)
+  await saveAll(id, 2, 'partial', false)
+  assert.equal(await hasSaved(id, 'partial'), false)
+  assert.equal((await proposals(id)).complete, false)
+})
+
+test('a trip with no proposals reads as empty', async () => {
+  const id = await twoMembers()
+  await role(BOB)
+  const empty = await proposals(id)
+  assert.equal(empty.version, null)
+  assert.deepEqual(empty.proposals, [])
+  assert.equal(empty.generating, false)
+})
