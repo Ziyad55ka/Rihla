@@ -31,10 +31,10 @@ class Settings(BaseSettings):
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
     # own: each member sees only their departure city. all: every city, unnamed.
     flight_visibility: Literal["own", "all"] = "own"
-    # Optional for the API; required only by trip research.
     # Serve saved proposals instead of calling Gemini and Tavily.
     proposals_demo_mode: bool = False
     proposals_demo_file: Path = BACKEND_DIR / "app" / "data" / "demo_proposals.json"
+    # Optional for the API; required only by trip research.
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)

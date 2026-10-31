@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -13,6 +14,7 @@ from google.genai import errors as genai_errors
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
+from app.schemas.proposals import ProposalSet
 from app.services import proposal_generation, trip_research
 from app.services.proposal_generation import (
     PlannedCity,
@@ -566,3 +568,15 @@ def test_missing_demo_file_gives_a_clear_error(tmp_path: Path) -> None:
         asyncio.run(generate_proposals(group(), config))
 
     assert caught.value.code == "not_configured"
+
+
+def test_saved_demo_file_is_valid_and_holds_no_keys() -> None:
+    demo = Settings(_env_file=None).proposals_demo_file.read_text(encoding="utf-8")
+
+    assert len(ProposalSet.model_validate_json(demo).proposals) == 3
+    for pattern in (
+        r"AIza[0-9A-Za-z_-]{20,}",
+        r"tvly-[0-9A-Za-z]{10,}",
+        r"(?i)api.?key",
+    ):
+        assert re.search(pattern, demo) is None
