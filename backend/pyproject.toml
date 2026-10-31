@@ -9,6 +9,7 @@ description = "FastAPI foundation for the Rihla group travel planner"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi==0.143.0",
+    "google-genai==2.34.0",
     "httpx2==2.13.1",
     "pydantic-settings==2.15.0",
     "uvicorn==0.54.0",

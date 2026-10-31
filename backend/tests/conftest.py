@@ -13,6 +13,14 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "SUPABASE_URL",
         "SUPABASE_PUBLISHABLE_KEY",
         "LOGIN_LIMIT_DB",
+        "FLIGHT_VISIBILITY",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
+        "TAVILY_API_KEY",
+        "TAVILY_SEARCH_DEPTH",
+        "TAVILY_MAX_RESULTS",
+        "SEARCH_CACHE_DB",
+        "SEARCH_CACHE_TTL_HOURS",
     ):
         monkeypatch.delenv(variable, raising=False)
 

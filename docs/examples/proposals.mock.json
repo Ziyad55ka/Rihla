@@ -1,0 +1,157 @@
+{
+  "proposals": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "trip_id": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "option_number": 1,
+      "title": "MOCK: Istanbul city break",
+      "destination": "Turkey",
+      "start_date": "2026-11-20",
+      "end_date": "2026-11-24",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Istanbul",
+          "nights": 4,
+          "hotel_name": {
+            "value": "Mock Bosphorus Hotel",
+            "status": "Unconfirmed",
+            "evidence": [{ "source_id": 1, "quote": "Mock Bosphorus Hotel is listed in central Istanbul." }]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "450.00",
+            "status": "Estimated",
+            "evidence": [{ "source_id": 1, "quote": "Rooms from SAR 450 per night." }]
+          }
+        }
+      ],
+      "flights": [{
+        "origin": "Riyadh",
+        "airline": { "value": null, "status": "Not available", "evidence": [] },
+        "duration": {
+          "value": "about 5 hours",
+          "status": "Estimated",
+          "evidence": [{ "source_id": 2, "quote": "The flight takes about 5 hours." }]
+        },
+        "price_per_person": {
+          "amount_sar": "1200.00",
+          "status": "Estimated",
+          "evidence": [{ "source_id": 2, "quote": "Flight fares from SAR 1,200." }]
+        }
+      }],
+      "intercity_transport": [],
+      "flexible_adjustments": [],
+      "sources": [
+        { "id": 1, "title": "Mock hotel guide", "url": "https://example.com/mock-hotels" },
+        { "id": 2, "title": "Mock flight guide", "url": "https://example.com/mock-flights" }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "trip_id": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "option_number": 2,
+      "title": "MOCK: Georgia in two cities",
+      "destination": "Georgia",
+      "start_date": "2026-11-20",
+      "end_date": "2026-11-24",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Tbilisi",
+          "nights": 3,
+          "hotel_name": {
+            "value": "Mock Old Town Hotel",
+            "status": "Confirmed",
+            "evidence": [{ "source_id": 1, "quote": "Mock Old Town Hotel is in Tbilisi." }]
+          },
+          "hotel_price_per_night": { "amount_sar": null, "status": "Not available", "evidence": [] }
+        },
+        {
+          "order": 2,
+          "city": "Batumi",
+          "nights": 1,
+          "hotel_name": { "value": null, "status": "Not available", "evidence": [] },
+          "hotel_price_per_night": { "amount_sar": null, "status": "Not available", "evidence": [] }
+        }
+      ],
+      "flights": [{
+        "origin": "Riyadh",
+        "airline": {
+          "value": "Mock Air",
+          "status": "Unconfirmed",
+          "evidence": [{ "source_id": 2, "quote": "Mock Air has flown this route." }]
+        },
+        "duration": { "value": null, "status": "Not available", "evidence": [] },
+        "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
+      }],
+      "intercity_transport": [
+        {
+          "from_city": "Tbilisi",
+          "to_city": "Batumi",
+          "mode": {
+            "value": "train",
+            "status": "Confirmed",
+            "evidence": [{ "source_id": 3, "quote": "A train connects Tbilisi and Batumi." }]
+          },
+          "duration": {
+            "value": "about 5 hours",
+            "status": "Estimated",
+            "evidence": [{ "source_id": 3, "quote": "The train takes about 5 hours." }]
+          },
+          "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
+        }
+      ],
+      "flexible_adjustments": [
+        {
+          "category": "accommodation",
+          "explanation": "A guesthouse was not available in Batumi, so a standard hotel is suggested."
+        }
+      ],
+      "sources": [
+        { "id": 1, "title": "Mock Tbilisi guide", "url": "https://example.com/mock-tbilisi" },
+        { "id": 2, "title": "Mock route page", "url": "https://example.com/mock-route" },
+        { "id": 3, "title": "Mock rail guide", "url": "https://example.com/mock-rail" }
+      ]
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "trip_id": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "option_number": 3,
+      "title": "MOCK: Baku short stay",
+      "destination": "Azerbaijan",
+      "start_date": "2026-11-20",
+      "end_date": "2026-11-24",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Baku",
+          "nights": 4,
+          "hotel_name": {
+            "value": "Mock Caspian Hotel",
+            "status": "Estimated",
+            "evidence": [{ "source_id": 1, "quote": "Mock Caspian Hotel is a common choice in Baku." }]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "380.00",
+            "status": "Unconfirmed",
+            "evidence": [{ "source_id": 1, "quote": "Prices may start near SAR 380 per night." }]
+          }
+        }
+      ],
+      "flights": [{
+        "origin": "Riyadh",
+        "airline": { "value": null, "status": "Not available", "evidence": [] },
+        "duration": { "value": null, "status": "Not available", "evidence": [] },
+        "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
+      }],
+      "intercity_transport": [],
+      "flexible_adjustments": [],
+      "sources": [
+        { "id": 1, "title": "Mock Baku guide", "url": "https://example.com/mock-baku" }
+      ]
+    }
+  ]
+}

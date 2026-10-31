@@ -66,3 +66,10 @@ Trip/membership/invitation storage, private preferences, Essential/Flexible inpu
 The user explicitly chose **Keep Free: limit Rihla's backend login endpoint** after being told that Supabase's provider-wide Password Verification Attempt hook requires Teams/Enterprise and that an endpoint limit cannot prevent direct Supabase Auth calls. Sign-in now goes through FastAPI before Supabase verifies the password; the browser SDK still manages sessions. The backend counts five invalid credential attempts within a rolling fifteen-minute window and then blocks its login endpoint for fifteen minutes. Successful requests do not erase failures in that rolling window. Persistence, concurrent attempts, expiry and provider outages are tested. This is the accepted endpoint-only protection, not a claim of provider-wide account lockout.
 
 No remote migration application, deployment or push is authorized by this document. The earlier constraint against modifying the remote database remains in effect.
+
+## Flight visibility (31 October 2026)
+
+- Sprint 2 searches flights from every departure city in the group. Those cities are sent to the search provider without member names.
+- The stored proposal holds flights for all cities. The backend filters each browser response, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
+- Stored proposals must not be readable directly by members through the Data API, because that would bypass this filter. The upcoming proposals migration must enforce this.
+- Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change is `FLIGHT_VISIBILITY=all`, plus updating this rule.

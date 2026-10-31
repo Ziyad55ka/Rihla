@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
+    # own: each member sees only their departure city. all: every city, unnamed.
+    flight_visibility: Literal["own", "all"] = "own"
+    # Optional for the API; required only by trip research.
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-3-flash-preview"
+    tavily_api_key: str | None = None
+    tavily_search_depth: Literal["basic", "advanced"] = "basic"
+    tavily_max_results: int = Field(default=5, ge=1, le=20)
+    search_cache_db: Path = BACKEND_DIR / ".local" / "search-cache.sqlite3"
+    search_cache_ttl_hours: int = Field(default=24, ge=1)
 
     @field_validator("supabase_url")
     @classmethod
