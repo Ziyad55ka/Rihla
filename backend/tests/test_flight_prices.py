@@ -37,7 +37,12 @@ def itinerary(amount, *, self_transfer=False, status="verified") -> dict:
 
 LINKS = {
     "booking_options": [
-        {"links": [{"provider_name": "Saudia", "url": "https://saudia.example/book"}]}
+        {
+            "legs": [{}, {}],
+            "links": [
+                {"provider_name": "Saudia", "url": "https://saudia.example/book"}
+            ],
+        }
     ]
 }
 
@@ -246,3 +251,38 @@ def test_cached_fare_spends_no_request(tmp_path: Path) -> None:
     assert again == first
     assert provider.requests_made == made
     assert flight_prices.format_duration(200) == "3h 20m"
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        {"legs": [{}], "links": [{"url": "https://air.example/book"}]},
+        {
+            "legs": [{}, {}],
+            "links": [{"url": "https://air.example/?flightMode=oneway"}],
+        },
+    ],
+)
+def test_link_for_one_direction_cannot_make_a_fare_verified(option: dict) -> None:
+    provider, _ = provider_with(
+        httpx.Response(200, json={"itineraries": [itinerary(729)]}),
+        httpx.Response(200, json={"booking_options": [option]}),
+    )
+
+    assert asyncio.run(provider.find(QUERY)).verified is False
+
+
+def test_whole_trip_link_is_preferred() -> None:
+    options = [
+        {"legs": [{}], "links": [{"url": "https://air.example/one"}]},
+        {"legs": [{}, {}], "links": [{"url": "https://air.example/both"}]},
+    ]
+    provider, _ = provider_with(
+        httpx.Response(200, json={"itineraries": [itinerary(729)]}),
+        httpx.Response(200, json={"booking_options": options}),
+    )
+
+    fare = asyncio.run(provider.find(QUERY))
+
+    assert fare.booking_url == "https://air.example/both"
+    assert fare.verified is True

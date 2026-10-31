@@ -1,254 +1,27 @@
 {
   "proposals": [
     {
-      "id": "99a0f9da-9142-462a-acc7-c73be05b1e98",
+      "id": "647c7fad-10bb-46aa-b5a0-9e4d27010116",
       "trip_id": "00000000-0000-4000-8000-0000000000dd",
       "version": 1,
       "option_number": 1,
-      "title": "A Cultural Journey through the Nile Delta",
-      "destination": "Egypt",
+      "title": "Nile Heritage Experience",
+      "destination": "Cairo",
       "start_date": "2026-12-13",
       "end_date": "2026-12-17",
       "cities": [
         {
           "order": 1,
           "city": "Cairo",
-          "nights": 2,
-          "hotel_name": {
-            "value": "Grand lotus hotel downtown",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 6,
-                "quote": "Grand lotus hotel downtown Hotel in Downtown Cairo, Cairo Central location"
-              }
-            ]
-          },
-          "hotel_price_per_night": {
-            "amount_sar": null,
-            "status": "Not available",
-            "evidence": []
-          }
-        },
-        {
-          "order": 2,
-          "city": "Alexandria",
-          "nights": 2,
-          "hotel_name": {
-            "value": null,
-            "status": "Not available",
-            "evidence": []
-          },
-          "hotel_price_per_night": {
-            "amount_sar": null,
-            "status": "Not available",
-            "evidence": []
-          }
-        }
-      ],
-      "flights": [
-        {
-          "origin": "Riyadh",
-          "airline": {
-            "value": "EgyptAir",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 1,
-                "quote": "EgyptAir Saudia Flynas Nile Air Air Cairo Flyadeal Air Arabia Egypt Nesma Airlines Riyadh Air"
-              }
-            ]
-          },
-          "duration": {
-            "value": "3 hours and 20 minutes",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 1,
-                "quote": "This route is operated by 9 airlines and the flight time is 3 hours and 20 minutes."
-              }
-            ]
-          },
-          "price_per_person": {
-            "amount_sar": "630.0",
-            "status": "Estimated",
-            "evidence": [
-              {
-                "source_id": 2,
-                "quote": "Typical price: SAR 630–1,800 … 2 hr 49 min is the shortest flight time from Riyadh to Cairo."
-              }
-            ]
-          }
-        }
-      ],
-      "intercity_transport": [
-        {
-          "from_city": "Cairo",
-          "to_city": "Alexandria",
-          "mode": {
-            "value": "Train",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 16,
-                "quote": "Train travel is a safe and scenic mode of transportation between Cairo and Alexandria."
-              }
-            ]
-          },
-          "duration": {
-            "value": "1.5-2 hours",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 16,
-                "quote": "Train Duration: 1.5-2 hours Starting price: $49"
-              }
-            ]
-          },
-          "price_per_person": {
-            "amount_sar": "183.75",
-            "status": "Estimated",
-            "evidence": [
-              {
-                "source_id": 16,
-                "quote": "Train Duration: 1.5-2 hours Starting price: $49"
-              }
-            ]
-          }
-        }
-      ],
-      "flexible_adjustments": [],
-      "budget_status": "includes_unconfirmed",
-      "sources": [
-        {
-          "id": 1,
-          "title": "Direct (non-stop) flights from Riyadh to Cairo - schedules",
-          "url": "https://www.flightsfrom.com/RUH-CAI"
-        },
-        {
-          "id": 2,
-          "title": "Find Cheap Flights from Riyadh to Cairo (RUH - CAI)",
-          "url": "https://www.google.com/travel/flights/flights-from-riyadh-to-cairo.html?gl=SA&hl=en"
-        },
-        {
-          "id": 3,
-          "title": "Cheap Flights from Riyadh to Cairo (RUH-CAI)",
-          "url": "https://www.expedia.com/lp/flights/ruh/cai/riyadh-to-cairo"
-        },
-        {
-          "id": 4,
-          "title": "Flights from Riyadh to Sharm el-Sheikh: RUH to SSH Flights + Flight Schedule",
-          "url": "https://www.flightconnections.com/flights-from-ruh-to-ssh"
-        },
-        {
-          "id": 5,
-          "title": "Egyptair (MS) - Flights, Airline Tickets & Reviews",
-          "url": "https://www.kayak.com/Egypt-Air.MS.airline.html"
-        },
-        {
-          "id": 6,
-          "title": "10 Best Cairo Hotels, Egypt (From MXN 314)",
-          "url": "https://www.booking.com/city/eg/cairo.html"
-        },
-        {
-          "id": 7,
-          "title": "THE 10 BEST Hotels in Cairo, Egypt 2026 (from $15) - Tripadvisor",
-          "url": "https://www.tripadvisor.com/Hotels-g294201-Cairo_Cairo_Governorate-Hotels.html"
-        },
-        {
-          "id": 8,
-          "title": "16 Best Hotels in Cairo. Hotels from $8/night - KAYAK",
-          "url": "https://www.kayak.com/Cairo-Hotels.9087.hotel.ksp"
-        },
-        {
-          "id": 9,
-          "title": "Cairo City Center Hotel, Cairo | 2026 Updated Prices, Deals",
-          "url": "https://www.agoda.com/cairo-city-center-hotel/hotel/cairo-eg.html"
-        },
-        {
-          "id": 10,
-          "title": "Hotéis em Cairo - compare preços | Skyscanner",
-          "url": "https://www.skyscanner.com/hotels/egypt/cairo-hotels/ci-27539681"
-        },
-        {
-          "id": 11,
-          "title": "Hotels in Alexandria, VA | Hotel Indigo Old Town Alexandria",
-          "url": "https://www.ihg.com/hotelindigo/hotels/us/en/alexandria/axein/hoteldetail"
-        },
-        {
-          "id": 12,
-          "title": "Top 10 Hotels in Alexandria, VA (from $77) 2026",
-          "url": "https://www.expedia.com/Alexandria-Hotels.d5980.Travel-Guide-Hotels"
-        },
-        {
-          "id": 13,
-          "title": "16 Best Hotels in Alexandria, Virginia. Hotels from $81/night - KAYAK",
-          "url": "https://www.kayak.com/Alexandria-Hotels.29793.hotel.ksp"
-        },
-        {
-          "id": 14,
-          "title": "Hotel Deals in Alexandria - Book Now from $64/night",
-          "url": "https://www.priceline.com/hotel-deals/en-us/P3000022190/hotels-in-alexandria.ssp"
-        },
-        {
-          "id": 15,
-          "title": "2025-26 RPCA Holiday Operating Schedule | City of Alexandria, VA",
-          "url": "https://www.alexandriava.gov/recreation-centers/2025-26-rpca-holiday-operating-schedule"
-        },
-        {
-          "id": 16,
-          "title": "Getting from Cairo to Alexandria",
-          "url": "https://www.bookaway.com/routes/egypt/cairo-to-alexandria"
-        },
-        {
-          "id": 17,
-          "title": "Cairo to Alexandria Transportation: A Complete Guide | URE",
-          "url": "https://ureeg.com/en/blog/cairo-to-alexandria-transportation"
-        },
-        {
-          "id": 18,
-          "title": "Bus from Cairo to Alexandria, EG from $4",
-          "url": "https://www.checkmybus.com/cairo/alexandria-eg"
-        },
-        {
-          "id": 19,
-          "title": "How To Get From Cairo To Alexandria",
-          "url": "https://www.touristegypt.com/how-to-get-from-cairo-to-alexandria"
-        },
-        {
-          "id": 20,
-          "title": "Day Trip to Alexandria from Cairo: Is It Worth It, and Which ...",
-          "url": "https://gowithguide.com/blog/day-trip-to-alexandria-from-cairo-is-it-worth-it-and-which-tour-should-you-book-6274"
-        }
-      ]
-    },
-    {
-      "id": "5b46a08b-6d38-4703-afa3-3d7f2b570e97",
-      "trip_id": "00000000-0000-4000-8000-0000000000dd",
-      "version": 1,
-      "option_number": 2,
-      "title": "A Historic City Break between Continents",
-      "destination": "Turkey",
-      "start_date": "2026-12-13",
-      "end_date": "2026-12-17",
-      "cities": [
-        {
-          "order": 1,
-          "city": "Istanbul",
           "nights": 4,
           "hotel_name": {
-            "value": "Anthemis Hotel",
-            "status": "Sourced",
-            "evidence": [
-              {
-                "source_id": 6,
-                "quote": "Anthemis Hotel Hotel in Fatih, Istanbul Central location"
-              }
-            ]
+            "value": null,
+            "status": "Not available",
+            "evidence": []
           },
           "hotel_price_per_night": {
-            "amount_sar": null,
-            "status": "Not available",
+            "amount_sar": "375.00",
+            "status": "Unconfirmed",
             "evidence": []
           }
         }
@@ -257,27 +30,32 @@
         {
           "origin": "Riyadh",
           "airline": {
-            "value": "Saudia",
+            "value": "طيران ناس",
             "status": "Sourced",
             "evidence": [
               {
                 "source_id": 1,
-                "quote": "All weekly departures with Saudia."
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
               }
             ]
           },
           "duration": {
-            "value": null,
-            "status": "Not available",
-            "evidence": []
+            "value": "3h 0m",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
           },
           "price_per_person": {
-            "amount_sar": "1335.00",
+            "amount_sar": "729.00",
             "status": "Estimated",
             "evidence": [
               {
-                "source_id": 3,
-                "quote": "A flight to Türkiye (Turkey) costs $356 on average."
+                "source_id": 1,
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
               }
             ]
           }
@@ -289,63 +67,105 @@
       "sources": [
         {
           "id": 1,
-          "title": "Direct (non-stop) flights from Riyadh to Istanbul - schedules - FlightsFrom.com",
-          "url": "https://www.flightsfrom.com/RUH-IST"
-        },
-        {
-          "id": 2,
-          "title": "Cheap Flights from Riyadh to Istanbul (RUH-IST)",
-          "url": "https://www.expedia.com/lp/flights/ruh/ist/riyadh-to-istanbul"
-        },
-        {
-          "id": 3,
-          "title": "Cheap Flights from Saudi Arabia to Türkiye (Turkey)",
-          "url": "https://www.kayak.com/flight-routes/Saudi-Arabia-SA0/Tuerkiye-TR0"
-        },
-        {
-          "id": 4,
-          "title": "Cheap flights from Saudi Arabia to Türkiye (Turkey)",
-          "url": "https://www.skyscanner.com/routes/sa/tr/saudi-arabia-to-turkiye-turkey.html"
-        },
-        {
-          "id": 5,
-          "title": "Cheap flights from Saudi Arabia to the United States ...",
-          "url": "https://www.momondo.com/flights/saudi-arabia/united-states"
-        },
-        {
-          "id": 6,
-          "title": "10 Best Istanbul Hotels, Turkey (From ₱ 2,361)",
-          "url": "https://www.booking.com/city/tr/istanbul.html"
-        },
-        {
-          "id": 7,
-          "title": "Istanbul Hotels | Top Hotels in Istanbul, Turkey by IHG",
-          "url": "https://www.ihg.com/istanbul-turkey"
-        },
-        {
-          "id": 8,
-          "title": "Where To Stay In Istanbul in 2026 - Best Areas & Hotels - GlobeTrove",
-          "url": "https://www.globetrove.com/where-to-stay-in-istanbul-turkey"
-        },
-        {
-          "id": 9,
-          "title": "16 Best Hotels in Istanbul. Hotels from $10/night - KAYAK",
-          "url": "https://www.kayak.com/Istanbul-Hotels.3430.hotel.ksp"
-        },
-        {
-          "id": 10,
-          "title": "Hotels in Istanbul from P1,506! Book Istanbul Hotels @Skyscanner",
-          "url": "https://www.skyscanner.com/hotels/turkiye-turkey/istanbul-hotels/ci-27542903"
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/?gclid=AAcRjHLFC9mDFvkAllUO2cRM-k50-IvMvUPwCKarE8hSIBkFjoaQQm8FpJr-L_mlHOc67QZtw1TKtzeLaWNfIjI8N--YYCuBJhYvhYKB-AsE78iQduZg&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
         }
       ]
     },
     {
-      "id": "520daefa-9b54-4c21-9fa3-d968bb3ee609",
+      "id": "d7061010-5d20-4ab2-9421-d36f82592d2d",
+      "trip_id": "00000000-0000-4000-8000-0000000000dd",
+      "version": 1,
+      "option_number": 2,
+      "title": "Bosphorus Cultural Gateway",
+      "destination": "Istanbul",
+      "start_date": "2026-12-13",
+      "end_date": "2026-12-17",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Istanbul",
+          "nights": 4,
+          "hotel_name": {
+            "value": "Seres Hotel",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 4,
+                "quote": "It is part of the Seres Hotel which was how we discovered it."
+              }
+            ]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "472.50",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 4,
+                "quote": "Price: $126 per night"
+              }
+            ]
+          }
+        }
+      ],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "airline": {
+            "value": "طيران ناس",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "duration": {
+            "value": "4h 15m",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "918.00",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          }
+        }
+      ],
+      "intercity_transport": [],
+      "flexible_adjustments": [],
+      "budget_status": "within_group_budget",
+      "sources": [
+        {
+          "id": 1,
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/?gclid=AAcRjHJhvTVMGOH55XJlODoFrmIrwP5ohhEE_376IK3CdQrVSoqptQoM6XG0ekmc8F6_MN0-ZmA_vzKLAbVFpoHbzQlqHyaAXKpYNcSNMV7xONFOZjrE&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+        },
+        {
+          "id": 4,
+          "title": "Where To Stay In Istanbul in 2026 - Best Areas & Hotels - GlobeTrove",
+          "url": "https://www.globetrove.com/where-to-stay-in-istanbul-turkey"
+        }
+      ]
+    },
+    {
+      "id": "8b6d99ca-bde2-4928-abfa-9ed5892b4a1b",
       "trip_id": "00000000-0000-4000-8000-0000000000dd",
       "version": 1,
       "option_number": 3,
-      "title": "An Ancient Trail across the Levant",
-      "destination": "Jordan",
+      "title": "Jordanian Landmark Expedition",
+      "destination": "Amman and the Dead Sea",
       "start_date": "2026-12-13",
       "end_date": "2026-12-17",
       "cities": [
@@ -358,35 +178,45 @@
             "status": "Sourced",
             "evidence": [
               {
-                "source_id": 6,
-                "quote": "Prices begin at 116 € at the InterContinental Amman and 124 € at the W Amman."
+                "source_id": 2,
+                "quote": "Around the Third Circle, prices begin with 116 € at the InterContinental Amman and 141 € at the Grand Hyatt Amman."
               }
             ]
           },
           "hotel_price_per_night": {
-            "amount_sar": null,
-            "status": "Not available",
-            "evidence": []
+            "amount_sar": "486.04",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "Around the Third Circle, prices begin with 116 € at the InterContinental Amman and 141 € at the Grand Hyatt Amman."
+              }
+            ]
           }
         },
         {
           "order": 2,
-          "city": "Petra",
+          "city": "Dead Sea",
           "nights": 2,
           "hotel_name": {
-            "value": "Town Season Hotel",
+            "value": "Hilton Dead Sea Resort & Spa",
             "status": "Sourced",
             "evidence": [
               {
-                "source_id": 11,
-                "quote": "With an average room price of just $158, Town Season Hotel provides exceptional value for money, allowing you to experience the wonders of Petra"
+                "source_id": 10,
+                "quote": "From $126 per night Hilton Dead Sea Resort & Spa"
               }
             ]
           },
           "hotel_price_per_night": {
-            "amount_sar": null,
-            "status": "Not available",
-            "evidence": []
+            "amount_sar": "472.50",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 10,
+                "quote": "From $126 per night Hilton Dead Sea Resort & Spa"
+              }
+            ]
           }
         }
       ],
@@ -394,54 +224,64 @@
         {
           "origin": "Riyadh",
           "airline": {
-            "value": "Saudi Arabian Airlines",
+            "value": "طيران ناس",
             "status": "Sourced",
             "evidence": [
               {
-                "source_id": 2,
-                "quote": "Popular airline. Saudi Arabian Airlines."
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
               }
             ]
           },
           "duration": {
-            "value": "2 hours 34 mins",
-            "status": "Estimated",
+            "value": "2h 30m",
+            "status": "Sourced",
             "evidence": [
               {
-                "source_id": 2,
-                "quote": "Average flight time. 2 hours 34 mins."
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
               }
             ]
           },
           "price_per_person": {
-            "amount_sar": null,
-            "status": "Not available",
-            "evidence": []
+            "amount_sar": "818.00",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
           }
         }
       ],
       "intercity_transport": [
         {
           "from_city": "Amman",
-          "to_city": "Petra",
+          "to_city": "Dead Sea",
           "mode": {
             "value": "JETT Bus",
             "status": "Sourced",
             "evidence": [
               {
-                "source_id": 18,
-                "quote": "The JETT Bus departs Amman at 6:30 am and reaches Petra in around four hours."
+                "source_id": 12,
+                "quote": "JETT Bus (Amman) | 1.5 hours | 10 JOD (one way) / 15 JOD (return) | Budget travelers, day-trippers"
               }
             ]
           },
           "duration": {
-            "value": null,
-            "status": "Not available",
-            "evidence": []
+            "value": "1.5 hours",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 12,
+                "quote": "JETT Bus (Amman) | 1.5 hours | 10 JOD (one way) / 15 JOD (return) | Budget travelers, day-trippers"
+              }
+            ]
           },
           "price_per_person": {
-            "amount_sar": null,
-            "status": "Not available",
+            "amount_sar": "53.00",
+            "status": "Unconfirmed",
             "evidence": []
           }
         }
@@ -451,103 +291,23 @@
       "sources": [
         {
           "id": 1,
-          "title": "$360 Cheap Flights to Jordan in 2026/27 | momondo",
-          "url": "https://www.momondo.com/flights/jordan"
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/?gclid=AAcRjHI8Ittk77VZ9qVRSsjhKaPzWMj62UtBwerIsIMx6uV829rTfpqLbzGKx0gIp3iCWgj3i1OC0VVsOf1c8obRvCyww4qR7sI_DsBWE_DyU3rWh3jZ&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
         },
         {
           "id": 2,
-          "title": "Cheap Flights from Riyadh (RUH) to Amman (AMM)",
-          "url": "https://www.expedia.com/lp/flights/ruh/amm/riyadh-to-amman"
-        },
-        {
-          "id": 3,
-          "title": "Travel Updates and Passenger Support - Royal Jordanian",
-          "url": "https://www.rj.com/en/travel-updates-and-passenger-support"
-        },
-        {
-          "id": 4,
-          "title": "Nonstop Flights To Make Your Travels Easier - Wendy Perrin",
-          "url": "https://www.wendyperrin.com/new-nonstop-flights-to-make-your-travels-easier"
-        },
-        {
-          "id": 5,
-          "title": "$352 CHEAP FLIGHTS to Saudi Arabia | KAYAK",
-          "url": "https://www.kayak.com/flight-routes/United-States-US0/Saudi-Arabia-SA0"
-        },
-        {
-          "id": 6,
           "title": "The 7 Best Luxury Hotels in Amman – 5-Star Hotels (2026)",
           "url": "https://suitespot.com/en-US/luxury-hotels/jordan/amman"
         },
         {
-          "id": 7,
-          "title": "Top 10 Hotels in Amman (from $30) 2026",
-          "url": "https://www.expedia.com/Amman-Hotels.d375.Travel-Guide-Hotels"
-        },
-        {
-          "id": 8,
-          "title": "THE 10 BEST Hotels in Jordan 2026 (with Prices)",
-          "url": "https://www.tripadvisor.com/Hotels-g293985-Jordan-Hotels.html"
-        },
-        {
-          "id": 9,
-          "title": "7 Best Luxury Hotels In Amman, Jordan | Almatar",
-          "url": "https://almatar.com/blog/the-7-best-luxury-hotels-in-amman-jordan"
-        },
-        {
           "id": 10,
-          "title": "The Ritz-Carlton, Amman | 5-Star Hotel with Spa, Dining & Excursions",
-          "url": "https://www.ritzcarlton.com/en/hotels/ammrz-the-ritz-carlton-amman/overview"
-        },
-        {
-          "id": 11,
-          "title": "Town Season Hotel, Petra | 2026 Updated Prices, Deals",
-          "url": "https://www.agoda.com/town-season-hotel/hotel/petra-jo.html"
+          "title": "Dead Sea Travel Guide: Places to Visit, Things to Do & Hotels | Destina Holidays",
+          "url": "https://www.destinaholidays.com/destinations/jordan/dead-sea"
         },
         {
           "id": 12,
-          "title": "Petra Pillars Luxury Hotel Reviews, Deals & Photos 2026",
-          "url": "https://www.expedia-aarp.com/Wadi-Musa-Hotels-Petra-Pillars-Luxury-Hotel.h123286471.Hotel-Information"
-        },
-        {
-          "id": 13,
-          "title": "THE 10 BEST Hotels in Petra - Wadi Musa",
-          "url": "https://www.tripadvisor.com/Hotels-g318895-Petra_Wadi_Musa_Ma_an_Governorate-Hotels.html"
-        },
-        {
-          "id": 14,
-          "title": "Petra Guest House Hotel from $97. Wadi Musa ...",
-          "url": "https://www.kayak.com/Wadi-Musa-Hotels-Petra-Guest-House.443618.ksp"
-        },
-        {
-          "id": 15,
-          "title": "Petra Moon Luxury Hotel, Wadi Musa - Guest Reviews 2026",
-          "url": "https://www.expedia.com/Wadi-Musa-Hotels-Petra-Moon-Luxury-Hotel.h90744106.Hotel-Information"
-        },
-        {
-          "id": 16,
-          "title": "Amman to Petra: Top 3 Travel Routes",
-          "url": "https://www.bookmundi.com/ng/amman-to-petra"
-        },
-        {
-          "id": 17,
-          "title": "Bus Amman to Petra - Compare all Companies",
-          "url": "https://www.checkmybus.com/amman/petra"
-        },
-        {
-          "id": 18,
-          "title": "How to Get From Amman to Petra",
-          "url": "https://www.touristjordan.com/get-amman-petra"
-        },
-        {
-          "id": 19,
-          "title": "How to Get from Amman to Petra: A Complete Guide",
-          "url": "https://jordantraveler.com/amman-to-petra"
-        },
-        {
-          "id": 20,
-          "title": "What is the best way to visit Petra, Jordan for a day trip from ...",
-          "url": "https://www.quora.com/What-is-the-best-way-to-visit-Petra-Jordan-for-a-day-trip-from-Amman"
+          "title": "Getting to the Dead Sea: Routes from Amman, Petra & Aqaba - Travel Tour Shop",
+          "url": "https://traveltourshop.com/blog/dead-sea-jordan-transport-guide"
         }
       ]
     }

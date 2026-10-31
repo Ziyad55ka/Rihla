@@ -62,7 +62,7 @@ class FlightFare:
     duration_minutes: int
     amount: str
     currency: str
-    # False when the provider has not checked this price against a live offer.
+    # True only for a checked price whose link books both directions together.
     verified: bool
     booking_url: str
     provider_name: str
@@ -138,13 +138,22 @@ class IgnavProvider:
             },
         )
 
-    async def _booking_link(self, ignav_id: str) -> tuple[str, str]:
+    async def _booking_link(self, ignav_id: str) -> tuple[str, str, bool]:
+        """Return a link, its provider, and whether it covers both directions."""
         body = await self._post("/fares/booking-links", {"ignav_id": ignav_id})
-        for option in body.get("booking_options") or []:
+        options = sorted(
+            body.get("booking_options") or [],
+            key=lambda option: len(option.get("legs") or []) < 2,
+        )
+        for option in options:
             for link in option.get("links") or []:
                 url = str(link.get("url") or "")
                 if url.startswith("https://") and len(url) <= MAX_BOOKING_URL_LENGTH:
-                    return url, str(link.get("provider_name") or "Ignav")
+                    whole_trip = (
+                        len(option.get("legs") or []) >= 2
+                        and "oneway" not in url.casefold()
+                    )
+                    return url, str(link.get("provider_name") or "Ignav"), whole_trip
         raise IgnavError("no_booking_link")
 
     async def find(self, query: FlightQuery) -> FlightFare | None:
@@ -158,14 +167,16 @@ class IgnavProvider:
             if choice is None:
                 logger.info("flight_provider_fallback reason=no_itinerary")
                 return None
-            url, provider_name = await self._booking_link(str(choice["ignav_id"]))
+            url, provider_name, whole_trip = await self._booking_link(
+                str(choice["ignav_id"])
+            )
             price = choice["price"]
             fare = FlightFare(
                 airline=str(choice["outbound"]["carrier"]),
                 duration_minutes=int(choice["outbound"]["duration_minutes"]),
                 amount=str(price["amount"]),
                 currency=str(price["currency"]).upper(),
-                verified=price.get("status") == "verified",
+                verified=price.get("status") == "verified" and whole_trip,
                 booking_url=url,
                 provider_name=provider_name,
             )
