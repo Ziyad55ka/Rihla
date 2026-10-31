@@ -3,7 +3,7 @@
 import re
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -19,6 +19,10 @@ BudgetStatus = Literal[
 
 # Proposals are shared with the whole trip, so explanations must stay general.
 PRIVATE_DETAIL = re.compile(r"\d|\b(members?|sar)\b|عضو|أعضاء|ريال", re.IGNORECASE)
+
+
+TripType = Literal["round_trip", "split", "one_way"]
+BookingUrl = Annotated[str, Field(pattern=r"^https://", max_length=2000)] | None
 
 
 class StrictModel(BaseModel):
@@ -76,12 +80,41 @@ class ProposalSource(StrictModel):
     url: str = Field(pattern=r"^https?://", max_length=2000)
 
 
+class FlightLeg(StrictModel):
+    direction: Literal["outbound", "return"]
+    date: date
+    airline: InfoField
+    duration: InfoField
+    # On a round_trip the price is on the whole trip, so this is Not available.
+    price: SarPrice
+    booking_url: BookingUrl
+
+
 class Flights(StrictModel):
     # Stored per departure city. Browser responses pass through view_for_member.
     origin: str = Field(min_length=1, max_length=100)
+    # round_trip: one booking. split: two bookings. one_way: return not included.
+    trip_type: TripType
+    legs: list[FlightLeg] = Field(min_length=1, max_length=2)
     airline: InfoField
     duration: InfoField
+    # The whole trip's cost. On one_way, the return is not counted.
     price_per_person: SarPrice
+
+    @model_validator(mode="after")
+    def legs_match_trip_type(self):
+        directions = [leg.direction for leg in self.legs]
+        if self.trip_type == "one_way":
+            if directions != ["outbound"]:
+                raise ValueError("A one_way trip has only an outbound leg.")
+        elif directions != ["outbound", "return"]:
+            raise ValueError("This trip needs an outbound and a return leg.")
+        if self.trip_type == "round_trip":
+            if self.legs[0].booking_url != self.legs[1].booking_url:
+                raise ValueError("A round_trip has one booking link.")
+        elif self.price_per_person.status == "Sourced":
+            raise ValueError("Only a round_trip fare can be Sourced.")
+        return self
 
 
 class CityStay(StrictModel):
@@ -90,6 +123,7 @@ class CityStay(StrictModel):
     nights: int = Field(ge=0)
     hotel_name: InfoField
     hotel_price_per_night: SarPrice
+    booking_url: BookingUrl
 
     @field_validator("hotel_price_per_night")
     @classmethod
@@ -156,6 +190,13 @@ class Proposal(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def one_way_cost_is_not_settled(self):
+        one_way = any(route.trip_type == "one_way" for route in self.flights)
+        if one_way and self.budget_status == "within_group_budget":
+            raise ValueError("A one_way trip leaves its return cost uncounted.")
+        return self
+
+    @model_validator(mode="after")
     def evidence_uses_listed_sources(self):
         known = {source.id for source in self.sources}
         if len(known) != len(self.sources):
@@ -182,6 +223,8 @@ class Proposal(StrictModel):
         fields: list[InfoField | SarPrice] = []
         for route in self.flights:
             fields += [route.airline, route.duration, route.price_per_person]
+            for leg in route.legs:
+                fields += [leg.airline, leg.duration, leg.price]
         for stay in self.cities:
             fields += [stay.hotel_name, stay.hotel_price_per_night]
         for leg in self.intercity_transport:

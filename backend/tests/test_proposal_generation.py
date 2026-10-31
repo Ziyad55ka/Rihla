@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.schemas.generation import GenerationInput
 from app.schemas.proposals import ProposalSet
 from app.services import proposal_generation, trip_research
+from app.services.flight_prices import FareLeg, FlightFare
 from app.services.proposal_generation import (
     PlannedCity,
     PlannedOption,
@@ -24,6 +25,7 @@ from app.services.proposal_generation import (
     collect_requirements,
     contains_private_detail,
     generate_proposals,
+    hotel_search_url,
 )
 from app.services.proposal_views import view_for_member
 from app.services.trip_research import (
@@ -648,3 +650,92 @@ def test_unconfirmed_price_can_still_exceed_the_budget(
 
     assert "Costly" not in {p.destination for p in result.proposals}
     assert result.complete
+
+
+def test_hotel_link_uses_hotel_city_country_dates_and_group_size() -> None:
+    url = hotel_search_url(
+        "Mock Hotel", "Cairo", "Egypt", date(2026, 12, 13), date(2026, 12, 17), 2
+    )
+
+    assert url == (
+        "https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt"
+        "&checkin=2026-12-13&checkout=2026-12-17&group_adults=2"
+    )
+
+
+def test_unknown_hotel_searches_the_city_and_zero_nights_has_no_link() -> None:
+    day = date(2026, 12, 13)
+
+    assert "ss=Cairo%2C+Egypt" in hotel_search_url(
+        None, "Cairo", "Egypt", day, date(2026, 12, 14), 2
+    )
+    assert hotel_search_url(None, "Cairo", "Egypt", day, day, 2) is None
+
+
+def test_generated_hotels_get_consecutive_dates_and_all_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    two_cities = option("Georgia")
+    two_cities.cities = [
+        PlannedCity(city="Tbilisi", nights=3),
+        PlannedCity(city="Batumi", nights=1),
+    ]
+    fake_planner(monkeypatch, [two_cities, option("Baku"), option("Tbilisi")])
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        result.fields += [
+            field("intercity.0.mode", "Train"),
+            field("intercity.0.duration", "5 hours"),
+            field("intercity.0.price_per_person", sar="100"),
+        ]
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    stays = run(group(), tmp_path).proposals[0].cities
+
+    assert "checkin=2026-11-20&checkout=2026-11-23" in stays[0].booking_url
+    assert "checkin=2026-11-23&checkout=2026-11-24" in stays[1].booking_url
+    assert "group_adults=2" in stays[1].booking_url
+
+
+def test_one_way_fare_reports_includes_unconfirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    leg = FareLeg(
+        "outbound", "2026-11-20", "Saudia", 200, "1000", "SAR", "https://a.example/out"
+    )
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        result.fares = {
+            index: FlightFare(
+                "Saudia", 200, "1000", "SAR", False, "Saudia", "one_way", (leg,)
+            )
+            for index in range(len(request.origins))
+        }
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    proposal = run(group(), tmp_path).proposals[0]
+
+    route = proposal.flights[0]
+    assert route.trip_type == "one_way"
+    assert route.legs[0].booking_url == "https://a.example/out"
+    assert route.legs[0].price.amount_sar == Decimal("1000.00")
+    assert proposal.budget_status == "includes_unconfirmed"
+
+
+def test_web_search_flight_has_null_booking_links(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    route = run(group(), tmp_path).proposals[0].flights[0]
+
+    assert route.trip_type == "round_trip"
+    assert [leg.booking_url for leg in route.legs] == [None, None]

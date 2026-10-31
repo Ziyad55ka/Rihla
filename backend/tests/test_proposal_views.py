@@ -15,6 +15,9 @@ def stored_proposal() -> Proposal:
     jeddah["origin"] = "Jeddah"
     jeddah["duration"]["evidence"][0]["source_id"] = 3
     jeddah["price_per_person"]["evidence"][0]["source_id"] = 3
+    jeddah["legs"][0]["duration"]["evidence"][0]["source_id"] = 3
+    for leg in jeddah["legs"]:
+        leg["booking_url"] = "https://air.example/jeddah-booking"
     data["flights"].append(jeddah)
     data["sources"].append(
         {"id": 3, "title": "Jeddah flights", "url": "https://example.com/jeddah"}

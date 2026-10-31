@@ -12,13 +12,16 @@ import pytest
 from app.core.config import Settings
 from app.services import flight_prices, trip_research
 from app.services.flight_prices import (
+    FareLeg,
     FlightFare,
     FlightQuery,
     IgnavProvider,
     WebSearchOnly,
     airport_for_city,
     cheapest_itinerary,
+    fare_from_itinerary,
     get_flight_provider,
+    link_matches,
 )
 from app.services.trip_research import ResearchRequest, ResearchSource, research
 
@@ -35,16 +38,14 @@ def itinerary(amount, *, self_transfer=False, status="verified") -> dict:
     }
 
 
-LINKS = {
-    "booking_options": [
-        {
-            "legs": [{}, {}],
-            "links": [
-                {"provider_name": "Saudia", "url": "https://saudia.example/book"}
-            ],
-        }
-    ]
-}
+def option(legs, url="https://air.example/book", price=None, name="Saudia") -> dict:
+    return {
+        "legs": legs,
+        "links": [{"provider_name": name, "url": url, "price": price}],
+    }
+
+
+LINKS = {"booking_options": [option(["outbound", "inbound"])]}
 
 
 def provider_with(*responses: httpx.Response) -> tuple[IgnavProvider, list]:
@@ -85,7 +86,7 @@ def test_find_searches_then_gets_the_booking_link() -> None:
 
     fare = asyncio.run(provider.find(QUERY))
 
-    assert fare.booking_url == "https://saudia.example/book"
+    assert fare.source_url == "https://air.example/book"
     assert (fare.amount, fare.currency, fare.verified) == ("1450", "SAR", True)
     assert provider.requests_made == 2
     search = json.loads(requests[0].content)
@@ -149,8 +150,19 @@ class FakeProvider:
 
 
 def fare(amount="1450", currency="SAR", verified=True) -> FlightFare:
+    url = "https://saudia.example/b"
     return FlightFare(
-        "Saudia", 200, amount, currency, verified, "https://saudia.example/b", "Saudia"
+        "Saudia",
+        200,
+        amount,
+        currency,
+        verified,
+        "Saudia",
+        "round_trip",
+        (
+            FareLeg("outbound", "2026-12-13", "Saudia", 200, None, None, url),
+            FareLeg("return", "2026-12-17", "Saudia", 210, None, None, url),
+        ),
     )
 
 
@@ -253,36 +265,116 @@ def test_cached_fare_spends_no_request(tmp_path: Path) -> None:
     assert flight_prices.format_duration(200) == "3h 20m"
 
 
-@pytest.mark.parametrize(
-    "option",
-    [
-        {"legs": [{}], "links": [{"url": "https://air.example/book"}]},
+SAR = {"amount": 300, "currency": "SAR", "status": "verified"}
+
+
+def classify(links: dict, choice: dict | None = None) -> FlightFare:
+    return fare_from_itinerary(choice or itinerary(729), links, QUERY)
+
+
+def test_one_option_for_both_directions_is_round_trip() -> None:
+    found = classify(LINKS)
+
+    assert found.trip_type == "round_trip"
+    assert found.verified is True
+    assert [leg.direction for leg in found.legs] == ["outbound", "return"]
+    assert found.legs[0].booking_url == found.legs[1].booking_url
+    assert found.legs[1].date == "2026-12-17"
+    assert found.legs[0].amount is None
+
+
+def test_separate_options_are_split_with_their_own_link_and_price() -> None:
+    found = classify(
         {
-            "legs": [{}, {}],
-            "links": [{"url": "https://air.example/?flightMode=oneway"}],
-        },
+            "booking_options": [
+                option(["outbound"], "https://a.example/out", SAR),
+                option(["inbound"], "https://b.example/back", SAR),
+            ]
+        }
+    )
+
+    assert found.trip_type == "split"
+    assert found.verified is False
+    assert found.legs[0].booking_url == "https://a.example/out"
+    assert found.legs[1].booking_url == "https://b.example/back"
+    assert found.legs[1].amount == "300"
+
+
+def test_real_cairo_link_is_split_with_no_return_link() -> None:
+    url = (
+        "https://booking.flynas.com/#/booking/search-redirect?origin=RUH"
+        "&destination=CAI&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026"
+        "&flightMode=oneway"
+    )
+
+    found = classify({"booking_options": [option(["outbound"], url)]})
+
+    assert found.trip_type == "split"
+    assert found.legs[0].booking_url == url
+    assert found.legs[1].booking_url is None
+    assert found.verified is False
+
+
+def test_no_return_flight_is_one_way() -> None:
+    choice = itinerary(500)
+    choice["inbound"] = None
+
+    found = classify({"booking_options": [option(["outbound"], price=SAR)]}, choice)
+
+    assert found.trip_type == "one_way"
+    assert len(found.legs) == 1
+
+
+@pytest.mark.parametrize(
+    ("directions", "url", "valid"),
+    [
+        ({"outbound", "inbound"}, "https://a.example/?flightMode=oneway", False),
+        ({"outbound"}, "https://a.example/?flightMode=round", False),
+        ({"outbound"}, "https://a.example/#x?departureDate=12%2F13%2F2026", True),
+        ({"outbound"}, "https://a.example/?departureDate=12%2F14%2F2026", False),
+        ({"inbound"}, "https://a.example/?departureDate=2026-12-17", True),
+        ({"inbound"}, "https://a.example/?departureDate=2026-12-13", False),
+        (
+            {"outbound", "inbound"},
+            "https://a.example/?departureDate=2026-12-13&returnDate=2026-12-13",
+            False,
+        ),
+        ({"outbound"}, "http://a.example/", False),
     ],
 )
-def test_link_for_one_direction_cannot_make_a_fare_verified(option: dict) -> None:
-    provider, _ = provider_with(
-        httpx.Response(200, json={"itineraries": [itinerary(729)]}),
-        httpx.Response(200, json={"booking_options": [option]}),
+def test_link_must_match_its_direction_and_date(
+    directions: set, url: str, valid: bool
+) -> None:
+    assert link_matches(url, directions, QUERY) is valid
+
+
+def test_link_with_wrong_date_is_dropped_and_leaves_null() -> None:
+    found = classify(
+        {
+            "booking_options": [
+                option(["outbound"], "https://a.example/out"),
+                option(["inbound"], "https://b.example/?departureDate=2026-12-13"),
+            ]
+        }
     )
 
-    assert asyncio.run(provider.find(QUERY)).verified is False
+    assert found.legs[1].booking_url is None
 
 
-def test_whole_trip_link_is_preferred() -> None:
-    options = [
-        {"legs": [{}], "links": [{"url": "https://air.example/one"}]},
-        {"legs": [{}, {}], "links": [{"url": "https://air.example/both"}]},
-    ]
-    provider, _ = provider_with(
-        httpx.Response(200, json={"itineraries": [itinerary(729)]}),
-        httpx.Response(200, json={"booking_options": options}),
-    )
+def test_exact_flight_link_is_preferred() -> None:
+    links = {
+        "booking_options": [
+            {
+                "legs": ["outbound", "inbound"],
+                "links": [
+                    {
+                        "url": "https://a.example/search",
+                        "specificity": "search_results",
+                    },
+                    {"url": "https://a.example/exact", "specificity": "exact_flight"},
+                ],
+            }
+        ]
+    }
 
-    fare = asyncio.run(provider.find(QUERY))
-
-    assert fare.booking_url == "https://air.example/both"
-    assert fare.verified is True
+    assert classify(links).legs[0].booking_url == "https://a.example/exact"

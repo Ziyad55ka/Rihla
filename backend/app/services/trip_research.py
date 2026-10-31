@@ -218,6 +218,8 @@ class ResearchCost(BaseModel):
 
 
 class ResearchResult(BaseModel):
+    # Live fares by departure-city position.
+    fares: dict[int, FlightFare] = {}
     fields: list[VerifiedField]
     sources: list[ResearchSource]
     cost: ResearchCost
@@ -799,11 +801,12 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
     ]
     fare_fields: list[VerifiedField] = []
     for index, (query, fare) in fares.items():
-        ids_by_url[fare.booking_url] = len(ids_by_url) + 1
+        # Two origins can share a fallback link, so each fare gets its own id.
+        ids_by_url[f"{index}|{fare.source_url}"] = len(ids_by_url) + 1
         source = ResearchSource(
-            id=ids_by_url[fare.booking_url],
+            id=ids_by_url[f"{index}|{fare.source_url}"],
             title=f"Ignav booking link: {fare.provider_name}",
-            url=fare.booking_url,
+            url=fare.source_url,
             content=fare_quote(fare, query),
         )
         public_sources.append(source)
@@ -836,7 +839,10 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         for spec in group.fields
     ]
     return ResearchResult(
-        fields=fare_fields + fields, sources=public_sources, cost=cost
+        fields=fare_fields + fields,
+        sources=public_sources,
+        cost=cost,
+        fares={index: fare for index, (_, fare) in fares.items()},
     )
 
 
@@ -871,17 +877,21 @@ async def _find_fares(
     return fares
 
 
-def _fare_in_sar(fare: FlightFare) -> Decimal | None:
+def sar_amount(value: str | None, currency: str | None) -> Decimal | None:
     try:
-        amount = Decimal(fare.amount)
+        amount = Decimal(value or "")
     except InvalidOperation:
         return None
     if amount <= 0:
         return None
-    if fare.currency == "SAR":
+    if currency == "SAR":
         return amount.quantize(Decimal("0.01"))
-    rate = SAR_PER_UNIT.get(fare.currency)
+    rate = SAR_PER_UNIT.get(currency or "")
     return (amount * rate).quantize(Decimal("0.01")) if rate else None
+
+
+def _fare_in_sar(fare: FlightFare) -> Decimal | None:
+    return sar_amount(fare.amount, fare.currency)
 
 
 def _fare_fields(

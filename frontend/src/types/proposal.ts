@@ -5,6 +5,8 @@ export type PreferenceCategory = 'destinations' | 'interests' | 'flights' | 'acc
 
 export type BudgetStatus = 'within_group_budget' | 'includes_unconfirmed' | 'over_group_budget'
 
+export type TripType = 'round_trip' | 'split' | 'one_way'
+
 export interface Evidence {
   source_id: number
   quote: string
@@ -29,8 +31,20 @@ export interface ProposalSource {
   url: string
 }
 
+export interface FlightLeg {
+  direction: 'outbound' | 'return'
+  date: string
+  airline: InfoField
+  duration: InfoField
+  // On a round_trip the price is on the whole trip, so this is Not available.
+  price: SarPrice
+  booking_url: string | null
+}
+
 export interface Flights {
   origin: string
+  trip_type: TripType
+  legs: FlightLeg[]
   airline: InfoField
   duration: InfoField
   price_per_person: SarPrice
@@ -42,6 +56,7 @@ export interface CityStay {
   nights: number
   hotel_name: InfoField
   hotel_price_per_night: SarPrice
+  booking_url: string | null
 }
 
 export interface IntercityTransfer {

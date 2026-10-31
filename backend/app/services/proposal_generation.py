@@ -8,9 +8,10 @@ report, because free-text preferences cannot be fully verified in code.
 import json
 import logging
 import re
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Literal
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -20,8 +21,11 @@ from app.schemas.generation import GenerationInput
 from app.schemas.proposals import (
     BudgetStatus,
     CityStay,
+    Evidence,
     FlexibleAdjustment,
+    FlightLeg,
     Flights,
+    InfoField,
     IntercityTransfer,
     PreferenceCategory,
     Proposal,
@@ -30,6 +34,7 @@ from app.schemas.proposals import (
     SarPrice,
 )
 from app.services import trip_research
+from app.services.flight_prices import FareLeg, FlightFare, format_duration
 from app.services.trip_research import (
     ResearchCost,
     ResearchError,
@@ -243,10 +248,107 @@ def budget_status(
         settled = False
     highest = shared
     for route in flights:
+        if route.trip_type == "one_way":
+            settled = False
         highest = max(highest, shared + counted(route.price_per_person))
     if highest > ceiling:
         raise OptionRejected("over_group_budget")
     return "within_group_budget" if settled else "includes_unconfirmed"
+
+
+def hotel_search_url(
+    hotel: str | None,
+    city: str,
+    country: str,
+    check_in: date,
+    check_out: date,
+    adults: int,
+) -> str | None:
+    """A Booking.com search link; it does not check availability or price."""
+    if check_in >= check_out:
+        return None
+    place = ", ".join(part for part in (hotel, city, country) if part)
+    query = urlencode(
+        {
+            "ss": place,
+            "checkin": check_in.isoformat(),
+            "checkout": check_out.isoformat(),
+            "group_adults": adults,
+        }
+    )
+    return f"https://www.booking.com/searchresults.html?{query}"
+
+
+NOT_AVAILABLE = InfoField(value=None, status="Not available", evidence=[])
+NO_PRICE = SarPrice(amount_sar=None, status="Not available", evidence=[])
+
+
+def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
+    def known(value: str | None) -> InfoField:
+        if not value:
+            return NOT_AVAILABLE
+        return InfoField(value=value, status="Sourced", evidence=evidence)
+
+    minutes = leg.duration_minutes
+    amount = trip_research.sar_amount(leg.amount, leg.currency)
+    return FlightLeg(
+        direction=leg.direction,
+        date=date.fromisoformat(leg.date),
+        airline=known(leg.airline),
+        duration=known(format_duration(minutes) if minutes else None),
+        # A link's price is a single seller's offer, so it stays an estimate.
+        price=(
+            SarPrice(amount_sar=amount, status="Estimated", evidence=evidence)
+            if amount
+            else NO_PRICE
+        ),
+        booking_url=leg.booking_url,
+    )
+
+
+def _build_route(
+    index: int,
+    origin: str,
+    option: PlannedOption,
+    by_id: dict[str, VerifiedField],
+    fare: FlightFare | None,
+) -> Flights:
+    airline = to_info_field(by_id[f"flights.{index}.airline"])
+    duration = to_info_field(by_id[f"flights.{index}.duration"])
+    price = to_sar_price(by_id[f"flights.{index}.price_per_person"])
+    if fare is not None:
+        evidence = price.evidence
+        legs = [_fare_leg(leg, evidence) for leg in fare.legs]
+        trip_type = fare.trip_type
+    else:
+        # A web search gives a typical round-trip fare and no booking links.
+        trip_type = "round_trip"
+        legs = [
+            FlightLeg(
+                direction="outbound",
+                date=option.start_date,
+                airline=airline,
+                duration=duration,
+                price=NO_PRICE,
+                booking_url=None,
+            ),
+            FlightLeg(
+                direction="return",
+                date=option.end_date,
+                airline=NOT_AVAILABLE,
+                duration=NOT_AVAILABLE,
+                price=NO_PRICE,
+                booking_url=None,
+            ),
+        ]
+    return Flights(
+        origin=origin,
+        trip_type=trip_type,
+        legs=legs,
+        airline=airline,
+        duration=duration,
+        price_per_person=price,
+    )
 
 
 def build_proposal(
@@ -260,26 +362,34 @@ def build_proposal(
 ) -> Proposal:
     by_id: dict[str, VerifiedField] = {item.field_id: item for item in research.fields}
     flights = [
-        Flights(
-            origin=origin,
-            airline=to_info_field(by_id[f"flights.{index}.airline"]),
-            duration=to_info_field(by_id[f"flights.{index}.duration"]),
-            price_per_person=to_sar_price(by_id[f"flights.{index}.price_per_person"]),
-        )
+        _build_route(index, origin, option, by_id, research.fares.get(index))
         for index, origin in enumerate(origins)
     ]
-    cities = [
-        CityStay(
-            order=index + 1,
-            city=city.city,
-            nights=city.nights,
-            hotel_name=to_info_field(by_id[f"cities.{index}.hotel_name"]),
-            hotel_price_per_night=to_sar_price(
-                by_id[f"cities.{index}.hotel_price_per_night"]
-            ),
+    cities = []
+    check_in = option.start_date
+    for index, city in enumerate(option.cities):
+        check_out = check_in + timedelta(days=city.nights)
+        hotel = to_info_field(by_id[f"cities.{index}.hotel_name"])
+        cities.append(
+            CityStay(
+                order=index + 1,
+                city=city.city,
+                nights=city.nights,
+                hotel_name=hotel,
+                hotel_price_per_night=to_sar_price(
+                    by_id[f"cities.{index}.hotel_price_per_night"]
+                ),
+                booking_url=hotel_search_url(
+                    hotel.value,
+                    city.city,
+                    option.country,
+                    check_in,
+                    check_out,
+                    len(generation.members),
+                ),
+            )
         )
-        for index, city in enumerate(option.cities)
-    ]
+        check_in = check_out
     transfers = [
         IntercityTransfer(
             from_city=start.city,

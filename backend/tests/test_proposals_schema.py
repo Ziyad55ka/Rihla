@@ -89,3 +89,41 @@ def test_private_fields_are_not_part_of_a_proposal() -> None:
 def test_adjustment_explanations_cannot_reveal_private_details(text: str) -> None:
     with pytest.raises(ValidationError, match="must not mention"):
         FlexibleAdjustment(category="flights", explanation=text)
+
+
+def test_round_trip_must_share_one_link() -> None:
+    data = mock_data()["proposals"][0]
+    data["flights"][0]["legs"][1]["booking_url"] = "https://other.example/"
+
+    with pytest.raises(ValidationError, match="one booking link"):
+        Proposal.model_validate(data)
+
+
+def test_split_total_cannot_be_sourced() -> None:
+    data = mock_data()["proposals"][0]
+    data["flights"][0]["trip_type"] = "split"
+    data["flights"][0]["price_per_person"]["status"] = "Sourced"
+
+    with pytest.raises(ValidationError, match="round_trip"):
+        Proposal.model_validate(data)
+
+
+def test_one_way_has_one_leg_and_cannot_be_within_budget() -> None:
+    data = mock_data()["proposals"][0]
+    data["flights"][0]["trip_type"] = "one_way"
+
+    with pytest.raises(ValidationError, match="only an outbound"):
+        Proposal.model_validate(data)
+
+    data["flights"][0]["legs"].pop()
+    data["budget_status"] = "within_group_budget"
+    with pytest.raises(ValidationError, match="uncounted"):
+        Proposal.model_validate(data)
+
+
+def test_booking_links_must_be_https_or_null() -> None:
+    data = mock_data()["proposals"][0]
+    data["cities"][0]["booking_url"] = "http://booking.example/"
+
+    with pytest.raises(ValidationError):
+        Proposal.model_validate(data)

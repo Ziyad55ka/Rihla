@@ -2,10 +2,12 @@
 
 import hashlib
 import logging
+import re
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Protocol
+from typing import Literal, Protocol
+from urllib.parse import unquote
 
 import httpx2 as httpx
 
@@ -57,6 +59,18 @@ class FlightQuery:
 
 
 @dataclass(frozen=True)
+class FareLeg:
+    direction: Literal["outbound", "return"]
+    date: str
+    airline: str | None
+    duration_minutes: int | None
+    # A link's own price, which covers only this leg. None on a round_trip.
+    amount: str | None
+    currency: str | None
+    booking_url: str | None
+
+
+@dataclass(frozen=True)
 class FlightFare:
     airline: str
     duration_minutes: int
@@ -64,8 +78,16 @@ class FlightFare:
     currency: str
     # True only for a checked price whose link books both directions together.
     verified: bool
-    booking_url: str
     provider_name: str
+    trip_type: Literal["round_trip", "split", "one_way"]
+    legs: tuple[FareLeg, ...]
+
+    @property
+    def source_url(self) -> str:
+        for leg in self.legs:
+            if leg.booking_url:
+                return leg.booking_url
+        return "https://ignav.com/"
 
 
 class FlightPriceProvider(Protocol):
@@ -138,48 +160,23 @@ class IgnavProvider:
             },
         )
 
-    async def _booking_link(self, ignav_id: str) -> tuple[str, str, bool]:
-        """Return a link, its provider, and whether it covers both directions."""
-        body = await self._post("/fares/booking-links", {"ignav_id": ignav_id})
-        options = sorted(
-            body.get("booking_options") or [],
-            key=lambda option: len(option.get("legs") or []) < 2,
-        )
-        for option in options:
-            for link in option.get("links") or []:
-                url = str(link.get("url") or "")
-                if url.startswith("https://") and len(url) <= MAX_BOOKING_URL_LENGTH:
-                    whole_trip = (
-                        len(option.get("legs") or []) >= 2
-                        and "oneway" not in url.casefold()
-                    )
-                    return url, str(link.get("provider_name") or "Ignav"), whole_trip
-        raise IgnavError("no_booking_link")
-
     async def find(self, query: FlightQuery) -> FlightFare | None:
-        key = hashlib.sha256(f"ignav|{query}".encode()).hexdigest()
+        key = hashlib.sha256(f"ignav-legs|{query}".encode()).hexdigest()
         cached = self.cache.get(key) if self.cache else None
         if cached:
-            return FlightFare(**cached[0])
+            saved = dict(cached[0])
+            saved["legs"] = tuple(FareLeg(**leg) for leg in saved["legs"])
+            return FlightFare(**saved)
         try:
             body = await self.search(query)
             choice = cheapest_itinerary(body)
             if choice is None:
                 logger.info("flight_provider_fallback reason=no_itinerary")
                 return None
-            url, provider_name, whole_trip = await self._booking_link(
-                str(choice["ignav_id"])
+            links = await self._post(
+                "/fares/booking-links", {"ignav_id": str(choice["ignav_id"])}
             )
-            price = choice["price"]
-            fare = FlightFare(
-                airline=str(choice["outbound"]["carrier"]),
-                duration_minutes=int(choice["outbound"]["duration_minutes"]),
-                amount=str(price["amount"]),
-                currency=str(price["currency"]).upper(),
-                verified=price.get("status") == "verified" and whole_trip,
-                booking_url=url,
-                provider_name=provider_name,
-            )
+            fare = fare_from_itinerary(choice, links, query)
         except IgnavError as error:
             logger.info("flight_provider_fallback reason=%s", error)
             return None
@@ -208,6 +205,113 @@ def cheapest_itinerary(body: dict) -> dict | None:
     return min(usable, key=amount) if usable else None
 
 
+def _url_date(url: str, parameter: str) -> date | None:
+    match = re.search(rf"[?&#]{parameter}=([^&#]+)", unquote(url), re.IGNORECASE)
+    if match is None:
+        return None
+    for pattern in ("%m/%d/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(match.group(1), pattern).date()
+        except ValueError:
+            continue
+    return None
+
+
+def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
+    """Reject a link whose own parameters contradict its direction or dates."""
+    if not url.startswith("https://") or len(url) > MAX_BOOKING_URL_LENGTH:
+        return False
+    both = len(directions) == 2
+    mode = re.search(r"flightMode=(\w+)", url, re.IGNORECASE)
+    if mode and (mode.group(1).casefold() == "oneway") == both:
+        return False
+    expected = query.return_date if directions == {"inbound"} else query.departure_date
+    departure = _url_date(url, "departureDate")
+    if departure is not None and departure != expected:
+        return False
+    if both:
+        back = _url_date(url, "returnDate")
+        if back is not None and back != query.return_date:
+            return False
+    return True
+
+
+def _pick_link(
+    options: list[dict], directions: set[str], query: FlightQuery
+) -> dict | None:
+    """The first valid link for these directions, preferring an exact flight."""
+    links = [
+        link
+        for option in options
+        if set(option.get("legs") or []) == directions
+        for link in option.get("links") or []
+        if link_matches(str(link.get("url") or ""), directions, query)
+    ]
+    links.sort(key=lambda link: link.get("specificity") != "exact_flight")
+    return links[0] if links else None
+
+
+def _leg(
+    direction: Literal["outbound", "return"],
+    on: date,
+    part: dict,
+    link: dict | None,
+    priced: bool,
+) -> FareLeg:
+    price = (link or {}).get("price") if priced else None
+    return FareLeg(
+        direction=direction,
+        date=on.isoformat(),
+        airline=part.get("carrier"),
+        duration_minutes=part.get("duration_minutes"),
+        amount=str(price["amount"]) if price else None,
+        currency=str(price["currency"]).upper() if price else None,
+        booking_url=str(link["url"]) if link else None,
+    )
+
+
+def fare_from_itinerary(choice: dict, links: dict, query: FlightQuery) -> FlightFare:
+    """Classify the trip from which booking options Ignav returned."""
+    options = links.get("booking_options") or []
+    outbound, inbound = choice["outbound"], choice.get("inbound")
+    whole = _pick_link(options, {"outbound", "inbound"}, query) if inbound else None
+    out_link = _pick_link(options, {"outbound"}, query)
+    back_link = _pick_link(options, {"inbound"}, query)
+    if not (whole or out_link or back_link):
+        raise IgnavError("no_booking_link")
+
+    if whole:
+        trip_type = "round_trip"
+        legs = (
+            _leg("outbound", query.departure_date, outbound, whole, False),
+            _leg("return", query.return_date, inbound, whole, False),
+        )
+    elif inbound:
+        trip_type = "split"
+        legs = (
+            _leg("outbound", query.departure_date, outbound, out_link, True),
+            _leg("return", query.return_date, inbound, back_link, True),
+        )
+    else:
+        if out_link is None:
+            raise IgnavError("no_booking_link")
+        trip_type = "one_way"
+        legs = (_leg("outbound", query.departure_date, outbound, out_link, True),)
+
+    price = choice["price"]
+    provider = whole or out_link or back_link
+    return FlightFare(
+        airline=str(outbound["carrier"]),
+        duration_minutes=int(outbound["duration_minutes"]),
+        amount=str(price["amount"]),
+        currency=str(price["currency"]).upper(),
+        verified=trip_type == "round_trip" and price.get("status") == "verified",
+        provider_name=str(provider.get("provider_name") or "Ignav"),
+        trip_type=trip_type,
+        legs=legs,
+    )
+
+
 def get_flight_provider(
     settings: Settings, cache: FareCache | None = None
 ) -> FlightPriceProvider:
@@ -218,8 +322,13 @@ def get_flight_provider(
 
 def fare_quote(fare: FlightFare, query: FlightQuery) -> str:
     """The evidence text: what the provider returned, written out for readers."""
+    kind = {
+        "round_trip": "round trip on one booking",
+        "split": "round trip on separate bookings",
+        "one_way": "outbound only, return not included",
+    }[fare.trip_type]
     return (
-        f"{fare.airline}: {fare.amount} {fare.currency} round trip, "
+        f"{fare.airline}: {fare.amount} {fare.currency} {kind}, "
         f"{query.origin_airport}-{query.destination_airport}, "
         f"{query.departure_date} to {query.return_date}, via Ignav."
     )

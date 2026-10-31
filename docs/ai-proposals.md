@@ -29,8 +29,8 @@ Code: `backend/app/services/proposal_generation.py`, `trip_research.py`, `flight
 
 | Situation | Result | Evidence |
 | --- | --- | --- |
-| Live Ignav fare in SAR, verified, with a booking option covering the whole trip | `Sourced` (flights only) | Booking link |
-| Any other Ignav fare | `Estimated` | Booking link |
+| Verified Ignav `round_trip` fare in SAR | `Sourced` (flights only) | Booking link |
+| Ignav `split` or `one_way` fare, or any other Ignav fare | `Estimated` | Booking link |
 | Web price in SAR | `Estimated` | Quote |
 | Web price in another currency, a range or "starting from" | `Estimated`, converted to SAR; a range uses its upper bound | Quote |
 | No usable price in the sources | `Unconfirmed`, Gemini's general estimate | None |
@@ -61,6 +61,7 @@ One generation for one departure city uses at least 4 Gemini requests, about 5 T
 - **Essential requirements rely on Gemini's own report.** Preferences are free text, so code checks the report, not the truth.
 - **Hotel prices are estimates.** A quote may describe a different hotel, room or date. Availability on the trip dates is not checked.
 - **`Sourced` means a source said it,** not that the fact was independently confirmed.
+- **Booking links.** Ignav links are rejected when their own parameters contradict their direction or dates, which can only be checked when the link includes them. A flight from the web search has no links and is reported as `round_trip`.
 - **Ignav fares can change.** Ignav says a search price is not a reserved fare or a guarantee of one combined ticket. The round-trip cost may need separate bookings.
 - **Multi-city trips** price a round trip to the first city only, which may not match the actual route home.
 - **Airports.** Departure cities use a fixed Saudi table; an unlisted city falls back to web search. Arrival airports come from Gemini.
@@ -79,3 +80,7 @@ Source of truth: `backend/app/schemas/proposals.py`, mirrored in `frontend/src/t
 - `Unconfirmed` values and prices may have an empty `evidence` list. `Sourced` and `Estimated` must have evidence, so check for an empty list before showing quotes.
 - New `budget_status`: `within_group_budget`, `includes_unconfirmed` or `over_group_budget`. It never reveals the budget.
 - `sources` holds only sources that are cited.
+- New `flights[].trip_type`: `round_trip` (one booking), `split` (two bookings, total is `Estimated`) or `one_way` (return not counted, so `budget_status` is `includes_unconfirmed`).
+- New `flights[].legs`, one or two entries with `direction` (`outbound` or `return`), `date`, `airline`, `duration`, `price` and `booking_url`. On a `round_trip`, both legs share one link and leg prices are `Not available`, so use `price_per_person`.
+- New `cities[].booking_url`: a Booking.com search built from the hotel, city, country, dates and group size. It uses the city alone when the hotel is unknown. It does not confirm availability or price.
+- Every `booking_url` is an `https` link or `null`. Links are separate fields; do not read them from `sources`.

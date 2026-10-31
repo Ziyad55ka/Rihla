@@ -17,35 +17,118 @@
           "hotel_name": {
             "value": "Mock Bosphorus Hotel",
             "status": "Unconfirmed",
-            "evidence": [{ "source_id": 1, "quote": "Mock Bosphorus Hotel is listed in central Istanbul." }]
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "Mock Bosphorus Hotel is listed in central Istanbul."
+              }
+            ]
           },
           "hotel_price_per_night": {
             "amount_sar": "450.00",
             "status": "Estimated",
-            "evidence": [{ "source_id": 1, "quote": "Rooms from SAR 450 per night." }]
-          }
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "Rooms from SAR 450 per night."
+              }
+            ]
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Bosphorus+Hotel%2C+Istanbul%2C+Turkey&checkin=2026-11-20&checkout=2026-11-24&group_adults=4"
         }
       ],
-      "flights": [{
-        "origin": "Riyadh",
-        "airline": { "value": null, "status": "Not available", "evidence": [] },
-        "duration": {
-          "value": "about 5 hours",
-          "status": "Estimated",
-          "evidence": [{ "source_id": 2, "quote": "The flight takes about 5 hours." }]
-        },
-        "price_per_person": {
-          "amount_sar": "1200.00",
-          "status": "Estimated",
-          "evidence": [{ "source_id": 2, "quote": "Flight fares from SAR 1,200." }]
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "airline": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "duration": {
+            "value": "about 5 hours",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "The flight takes about 5 hours."
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "1200.00",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "Flight fares from SAR 1,200."
+              }
+            ]
+          },
+          "trip_type": "round_trip",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-11-20",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": "about 5 hours",
+                "status": "Estimated",
+                "evidence": [
+                  {
+                    "source_id": 2,
+                    "quote": "The flight takes about 5 hours."
+                  }
+                ]
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            },
+            {
+              "direction": "return",
+              "date": "2026-11-24",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            }
+          ]
         }
-      }],
+      ],
       "intercity_transport": [],
       "flexible_adjustments": [],
       "budget_status": "within_group_budget",
       "sources": [
-        { "id": 1, "title": "Mock hotel guide", "url": "https://example.com/mock-hotels" },
-        { "id": 2, "title": "Mock flight guide", "url": "https://example.com/mock-flights" }
+        {
+          "id": 1,
+          "title": "Mock hotel guide",
+          "url": "https://example.com/mock-hotels"
+        },
+        {
+          "id": 2,
+          "title": "Mock flight guide",
+          "url": "https://example.com/mock-flights"
+        }
       ]
     },
     {
@@ -65,28 +148,110 @@
           "hotel_name": {
             "value": "Mock Old Town Hotel",
             "status": "Sourced",
-            "evidence": [{ "source_id": 1, "quote": "Mock Old Town Hotel is in Tbilisi." }]
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "Mock Old Town Hotel is in Tbilisi."
+              }
+            ]
           },
-          "hotel_price_per_night": { "amount_sar": "300.00", "status": "Unconfirmed", "evidence": [] }
+          "hotel_price_per_night": {
+            "amount_sar": "300.00",
+            "status": "Unconfirmed",
+            "evidence": []
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Old+Town+Hotel%2C+Tbilisi%2C+Georgia&checkin=2026-11-20&checkout=2026-11-23&group_adults=4"
         },
         {
           "order": 2,
           "city": "Batumi",
           "nights": 1,
-          "hotel_name": { "value": null, "status": "Not available", "evidence": [] },
-          "hotel_price_per_night": { "amount_sar": null, "status": "Not available", "evidence": [] }
+          "hotel_name": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "hotel_price_per_night": {
+            "amount_sar": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Batumi%2C+Georgia&checkin=2026-11-23&checkout=2026-11-24&group_adults=4"
         }
       ],
-      "flights": [{
-        "origin": "Riyadh",
-        "airline": {
-          "value": "Mock Air",
-          "status": "Unconfirmed",
-          "evidence": [{ "source_id": 2, "quote": "Mock Air has flown this route." }]
-        },
-        "duration": { "value": null, "status": "Not available", "evidence": [] },
-        "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
-      }],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "airline": {
+            "value": "Mock Air",
+            "status": "Unconfirmed",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "Mock Air has flown this route."
+              }
+            ]
+          },
+          "duration": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "price_per_person": {
+            "amount_sar": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "trip_type": "round_trip",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-11-20",
+              "airline": {
+                "value": "Mock Air",
+                "status": "Unconfirmed",
+                "evidence": [
+                  {
+                    "source_id": 2,
+                    "quote": "Mock Air has flown this route."
+                  }
+                ]
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            },
+            {
+              "direction": "return",
+              "date": "2026-11-24",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            }
+          ]
+        }
+      ],
       "intercity_transport": [
         {
           "from_city": "Tbilisi",
@@ -94,14 +259,28 @@
           "mode": {
             "value": "train",
             "status": "Sourced",
-            "evidence": [{ "source_id": 3, "quote": "A train connects Tbilisi and Batumi." }]
+            "evidence": [
+              {
+                "source_id": 3,
+                "quote": "A train connects Tbilisi and Batumi."
+              }
+            ]
           },
           "duration": {
             "value": "about 5 hours",
             "status": "Estimated",
-            "evidence": [{ "source_id": 3, "quote": "The train takes about 5 hours." }]
+            "evidence": [
+              {
+                "source_id": 3,
+                "quote": "The train takes about 5 hours."
+              }
+            ]
           },
-          "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
+          "price_per_person": {
+            "amount_sar": null,
+            "status": "Not available",
+            "evidence": []
+          }
         }
       ],
       "flexible_adjustments": [
@@ -112,9 +291,21 @@
       ],
       "budget_status": "includes_unconfirmed",
       "sources": [
-        { "id": 1, "title": "Mock Tbilisi guide", "url": "https://example.com/mock-tbilisi" },
-        { "id": 2, "title": "Mock route page", "url": "https://example.com/mock-route" },
-        { "id": 3, "title": "Mock rail guide", "url": "https://example.com/mock-rail" }
+        {
+          "id": 1,
+          "title": "Mock Tbilisi guide",
+          "url": "https://example.com/mock-tbilisi"
+        },
+        {
+          "id": 2,
+          "title": "Mock route page",
+          "url": "https://example.com/mock-route"
+        },
+        {
+          "id": 3,
+          "title": "Mock rail guide",
+          "url": "https://example.com/mock-rail"
+        }
       ]
     },
     {
@@ -134,26 +325,98 @@
           "hotel_name": {
             "value": "Mock Caspian Hotel",
             "status": "Estimated",
-            "evidence": [{ "source_id": 1, "quote": "Mock Caspian Hotel is a common choice in Baku." }]
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "Mock Caspian Hotel is a common choice in Baku."
+              }
+            ]
           },
           "hotel_price_per_night": {
             "amount_sar": "380.00",
             "status": "Unconfirmed",
-            "evidence": [{ "source_id": 1, "quote": "Prices may start near SAR 380 per night." }]
-          }
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "Prices may start near SAR 380 per night."
+              }
+            ]
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Caspian+Hotel%2C+Baku%2C+Azerbaijan&checkin=2026-11-20&checkout=2026-11-24&group_adults=4"
         }
       ],
-      "flights": [{
-        "origin": "Riyadh",
-        "airline": { "value": null, "status": "Not available", "evidence": [] },
-        "duration": { "value": null, "status": "Not available", "evidence": [] },
-        "price_per_person": { "amount_sar": null, "status": "Not available", "evidence": [] }
-      }],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "airline": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "duration": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "price_per_person": {
+            "amount_sar": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "trip_type": "round_trip",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-11-20",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            },
+            {
+              "direction": "return",
+              "date": "2026-11-24",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            }
+          ]
+        }
+      ],
       "intercity_transport": [],
       "flexible_adjustments": [],
       "budget_status": "includes_unconfirmed",
       "sources": [
-        { "id": 1, "title": "Mock Baku guide", "url": "https://example.com/mock-baku" }
+        {
+          "id": 1,
+          "title": "Mock Baku guide",
+          "url": "https://example.com/mock-baku"
+        }
       ]
     }
   ]
