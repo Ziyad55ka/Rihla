@@ -13,6 +13,7 @@ from app.core.config import Settings
 from app.services.generation_inputs import (
     GenerationInputsError,
     fetch_generation_inputs,
+    save_generated_proposals,
 )
 from app.services.generation_precheck import COUNTRY_WORDS, STOP_WORDS
 
@@ -157,3 +158,52 @@ def test_legacy_service_role_key_is_also_sent_as_a_bearer_token() -> None:
 
     assert calls[0].headers["apikey"] == "eyJlegacy"
     assert calls[0].headers["authorization"] == "Bearer eyJlegacy"
+
+
+def test_saving_uses_the_secret_key_and_verified_admin() -> None:
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={"saved": True})
+
+    asyncio.run(
+        save_generated_proposals(
+            str(TRIP),
+            ADMIN,
+            2,
+            "hash",
+            True,
+            [],
+            settings(),
+            httpx.MockTransport(handler),
+        )
+    )
+
+    assert calls[0].url.path == "/rest/v1/rpc/rihla_save_proposals"
+    assert calls[0].headers["apikey"] == "test-secret"
+    sent = json.loads(calls[0].content)
+    assert sent["p_admin_id"] == str(ADMIN)
+    assert sent["p_version"] == 2
+
+
+def test_saving_failure_is_general_and_hides_the_key() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="test-secret leaked")
+
+    with pytest.raises(GenerationInputsError) as caught:
+        asyncio.run(
+            save_generated_proposals(
+                str(TRIP),
+                ADMIN,
+                1,
+                "h",
+                True,
+                [],
+                settings(),
+                httpx.MockTransport(handler),
+            )
+        )
+
+    assert caught.value.code == "unavailable"
+    assert "test-secret" not in str(caught.value)

@@ -46,6 +46,7 @@ class StoredProposals(BaseModel):
     complete: bool
     generated_at: datetime | None
     generating: bool
+    needs_regeneration: bool
     proposals: list[Proposal]
 
 

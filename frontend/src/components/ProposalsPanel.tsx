@@ -36,6 +36,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
     {generating && <p className="proposals-note" role="status">{t('This can take a few minutes. You can stay on this page.')}</p>}
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
+    {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'These proposals have no flights from your departure city. Generate them again to include it.' : 'These proposals have no flights from your departure city. The administrator needs to generate them again.')}</p>}
     {stored && stored.version !== null && !stored.complete && <p className="proposals-note">{t('Some proposals could not pass the checks, so fewer than three are shown.')}</p>}
     {proposals.length > 0 ? <ol className="proposals-list">
       {proposals.map((proposal) => <li className="proposals-card" key={proposal.id}>

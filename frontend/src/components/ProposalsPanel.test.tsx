@@ -8,7 +8,7 @@ vi.mock('../lib/supabase', () => ({ supabase: null, supabaseConfiguration: { sta
 
 const clear: GroupConflicts = { conflicts: [], own_review: [], can_generate: true }
 const conflicted: GroupConflicts = { conflicts: ['destinations'], own_review: ['destinations'], can_generate: false }
-const empty: StoredProposals = { version: null, complete: false, generated_at: null, generating: false, proposals: [] }
+const empty: StoredProposals = { version: null, complete: false, generated_at: null, generating: false, needs_regeneration: false, proposals: [] }
 
 function view(props: Partial<Parameters<typeof ProposalsView>[0]> = {}) {
   return renderToStaticMarkup(<LanguageProvider>
@@ -28,6 +28,12 @@ describe('ProposalsView', () => {
   it('disables the button while this or another request is generating', () => {
     expect(button(view({ busy: true }))).toContain('disabled')
     expect(button(view({ stored: { ...empty, generating: true } }))).toContain('disabled')
+  })
+  it('tells a member and the administrator when proposals need regenerating', () => {
+    const stored = { ...empty, needs_regeneration: true }
+    expect(view({ isAdmin: false, stored })).toContain('The administrator needs to generate them again')
+    expect(view({ stored })).toContain('Generate them again to include it')
+    expect(view({ isAdmin: false })).not.toContain('no flights from your departure city')
   })
   it('shows members no button', () => {
     expect(view({ isAdmin: false })).not.toContain('<button')

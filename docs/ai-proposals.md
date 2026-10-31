@@ -116,7 +116,7 @@ A member can still learn something by experiment: changing their own Essential d
 
 ## Private generation inputs
 
-`rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It is granted only to `service_role`, and `authenticated` cannot call it. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](sprint-1-decisions.md).
+`rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It and `rihla_save_proposals` are granted only to `service_role`, and `authenticated` cannot call them. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](sprint-1-decisions.md).
 
 ## API
 
@@ -128,7 +128,11 @@ A member can still learn something by experiment: changing their own Essential d
 
 The POST route takes the database lock first, which also refuses anyone but the administrator before the secret key or any quota is used. A second request while one runs gets HTTP 409. A crashed run frees the lock after ten minutes. Conflicts return HTTP 409 with categories only.
 
-**Known risk:** Saving uses the administrator's own token, because the secret key is limited to reading generation inputs. An administrator could therefore call `rihla_save_proposals` directly, and save invented proposals or booking links for their group, though only during a run they started. The function rejects other trips and known private field names, but cannot prove that content came from generation.
+Saving goes through the secret key, and `rihla_save_proposals` is closed to browser roles, so nobody can store invented proposals or booking links, including the administrator.
+
+`rihla_get_proposals` also returns `needs_regeneration` when proposals exist but none has flights from the caller's departure city. The page then asks the administrator to generate again.
+
+**Known risk:** If a member changes their departure city to another member's city, they receive that city's flights until the next generation. This shows them that someone departs from there, though not who.
 
 ## Trying it locally
 

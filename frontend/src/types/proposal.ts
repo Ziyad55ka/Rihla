@@ -103,6 +103,7 @@ export interface StoredProposals {
   complete: boolean
   generated_at: string | null
   generating: boolean
+  needs_regeneration: boolean
   proposals: Proposal[]
 }
 

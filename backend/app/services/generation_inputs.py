@@ -1,8 +1,10 @@
 """The only place that uses the Supabase secret key.
 
-The key bypasses Row Level Security, so it is used for this one read and nothing
-else. The caller must first verify the signed-in account, then pass its id. The
-result holds private member data: never return it to a browser or log it.
+The key bypasses Row Level Security, so it is used for these two calls and nothing
+else: reading generation inputs, and saving generated proposals so that nobody can
+store invented ones. The caller must first verify the signed-in account, then pass
+its id. The inputs hold private member data: never return them to a browser or log
+them.
 """
 
 from uuid import UUID
@@ -12,6 +14,7 @@ from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
+from app.schemas.proposals import Proposal
 
 
 class GenerationInputsError(Exception):
@@ -22,12 +25,12 @@ class GenerationInputsError(Exception):
         self.code = code
 
 
-async def fetch_generation_inputs(
-    trip_id: UUID,
-    admin_id: UUID,
+async def _secret_rpc(
+    name: str,
+    args: dict,
     settings: Settings,
-    transport: httpx.AsyncBaseTransport | None = None,
-) -> GenerationInput:
+    transport: httpx.AsyncBaseTransport | None,
+) -> httpx.Response:
     if not settings.supabase_url or not settings.supabase_secret_key:
         raise GenerationInputsError("not_configured")
     key = settings.supabase_secret_key
@@ -44,10 +47,7 @@ async def fetch_generation_inputs(
             trust_env=False,
             transport=transport,
         ) as client:
-            response = await client.post(
-                "rest/v1/rpc/rihla_trip_generation_inputs",
-                json={"p_trip_id": str(trip_id), "p_admin_id": str(admin_id)},
-            )
+            response = await client.post(f"rest/v1/rpc/{name}", json=args)
     except httpx.RequestError as error:
         raise GenerationInputsError("unavailable") from error
     if response.status_code != 200:
@@ -57,7 +57,47 @@ async def fetch_generation_inputs(
         if "trip_access_denied" in body:
             raise GenerationInputsError("access_denied")
         raise GenerationInputsError("unavailable")
+    return response
+
+
+async def fetch_generation_inputs(
+    trip_id: UUID,
+    admin_id: UUID,
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> GenerationInput:
+    response = await _secret_rpc(
+        "rihla_trip_generation_inputs",
+        {"p_trip_id": str(trip_id), "p_admin_id": str(admin_id)},
+        settings,
+        transport,
+    )
     try:
         return GenerationInput.model_validate_json(response.content)
     except ValidationError as error:
         raise GenerationInputsError("invalid_response") from error
+
+
+async def save_generated_proposals(
+    trip_id: str,
+    admin_id: UUID,
+    version: int,
+    input_hash: str,
+    complete: bool,
+    proposals: list[Proposal],
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> None:
+    await _secret_rpc(
+        "rihla_save_proposals",
+        {
+            "p_trip_id": trip_id,
+            "p_admin_id": str(admin_id),
+            "p_version": version,
+            "p_input_hash": input_hash,
+            "p_complete": complete,
+            "p_proposals": [item.model_dump(mode="json") for item in proposals],
+        },
+        settings,
+        transport,
+    )

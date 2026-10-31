@@ -1,9 +1,10 @@
-"""Stored proposals, reached with the signed-in administrator's own token."""
+"""Stored proposals. Saving goes through the one module holding the secret key."""
 
 import httpx2 as httpx
 
 from app.core.auth import Identity
 from app.core.config import Settings
+from app.services.generation_inputs import save_generated_proposals
 from app.services.proposal_generation import GenerationResult
 from app.services.trip_research import ResearchCost
 from app.services.trips import trip_rpc
@@ -48,18 +49,12 @@ class SupabaseProposalStore:
     async def save(
         self, trip_id: str, input_hash: str, result: GenerationResult
     ) -> None:
-        await trip_rpc(
-            self.client,
-            self.identity,
-            "rihla_save_proposals",
-            {
-                "p_trip_id": trip_id,
-                "p_version": self.version,
-                "p_input_hash": input_hash,
-                "p_complete": result.complete,
-                "p_proposals": [
-                    item.model_dump(mode="json") for item in result.proposals
-                ],
-            },
-            dict,
+        await save_generated_proposals(
+            trip_id,
+            self.identity.account.id,
+            self.version,
+            input_hash,
+            result.complete,
+            result.proposals,
+            self.settings,
         )

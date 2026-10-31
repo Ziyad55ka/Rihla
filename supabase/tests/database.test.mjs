@@ -767,8 +767,13 @@ function storedProposal(tripId, option = 1) {
 }
 const begin = (id) => rpc('rihla_begin_proposal_generation', [id])
 const finish = (id) => rpc('rihla_end_proposal_generation', [id])
-const saveAll = (id, version = 1, hash = 'hash-a', complete = true, list = [storedProposal(id)]) =>
-  rpc('rihla_save_proposals', [id, version, hash, complete, JSON.stringify(list)])
+const saveArgs = (id, admin, version, hash, complete, list) => [id, admin, version, hash, complete, JSON.stringify(list)]
+async function saveAll(id, version = 1, hash = 'hash-a', complete = true, list = [storedProposal(id)], admin = ALICE) {
+  await asServiceRole()
+  const result = await rpc('rihla_save_proposals', saveArgs(id, admin, version, hash, complete, list))
+  await role(ALICE)
+  return result
+}
 const hasSaved = (id, hash = 'hash-a', hours = 24) => rpc('rihla_has_saved_proposals', [id, hash, hours])
 const proposals = (id) => rpc('rihla_get_proposals', [id])
 
@@ -819,7 +824,6 @@ test('only the administrator can begin, end, check or save a generation', async 
   await denied(() => begin(id))
   await denied(() => finish(id))
   await denied(() => hasSaved(id))
-  await denied(() => saveAll(id))
   await role(CAROL)
   await denied(() => begin(id))
   await db.exec('reset role; set local role anon')
@@ -892,3 +896,57 @@ test('a trip with no proposals reads as empty', async () => {
   assert.deepEqual(empty.proposals, [])
   assert.equal(empty.generating, false)
 })
+
+test('browser roles can never save proposals, not even the administrator', async () => {
+  const id = await twoMembers()
+  await role(ALICE)
+  await begin(id)
+  await root()
+  const privileges = (await db.query(`select
+    has_function_privilege('authenticated', 'public.rihla_save_proposals(uuid,uuid,integer,text,boolean,jsonb)', 'execute') as signed_in,
+    has_function_privilege('anon', 'public.rihla_save_proposals(uuid,uuid,integer,text,boolean,jsonb)', 'execute') as anonymous,
+    has_function_privilege('service_role', 'public.rihla_save_proposals(uuid,uuid,integer,text,boolean,jsonb)', 'execute') as backend`)).rows[0]
+  assert.deepEqual(privileges, { signed_in: false, anonymous: false, backend: true })
+  const args = saveArgs(id, ALICE, 1, 'forged', true, [storedProposal(id)])
+  await role(ALICE)
+  await denied(() => rpc('rihla_save_proposals', args))
+  await db.exec('reset role; set local role anon')
+  await denied(() => rpc('rihla_save_proposals', args))
+  await role(ALICE)
+  assert.deepEqual((await proposals(id)).proposals, [])
+})
+
+test('the backend role can save only for the trip administrator', async () => {
+  const id = await twoMembers()
+  await role(ALICE)
+  await begin(id)
+  await asServiceRole()
+  for (const admin of [BOB, CAROL, null]) {
+    await denied(() => rpc('rihla_save_proposals', saveArgs(id, admin, 1, 'h', true, [storedProposal(id)])))
+  }
+})
+
+test('a member whose departure city changed is told proposals need regenerating', async () => {
+  const id = await savedTrip()
+  await role(BOB)
+  assert.equal((await proposals(id)).needs_regeneration, false)
+  await savePreferences(id, member({ departure_city: 'Dammam' }))
+  const changed = await proposals(id)
+  assert.equal(changed.needs_regeneration, true)
+  assert.deepEqual(changed.proposals[0].flights, [])
+  await role(ALICE)
+  assert.equal((await proposals(id)).needs_regeneration, false)
+})
+
+test('needs_regeneration is false with no proposals and ignores letter case', async () => {
+  const id = await twoMembers()
+  await role(BOB)
+  assert.equal((await proposals(id)).needs_regeneration, false)
+  await root()
+  await role(ALICE)
+  await begin(id)
+  await saveAll(id)
+  await savePreferences(id, member({ departure_city: ' riyadh ' }))
+  assert.equal((await proposals(id)).needs_regeneration, false)
+})
+

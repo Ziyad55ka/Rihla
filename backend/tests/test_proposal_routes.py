@@ -23,6 +23,7 @@ STORED = {
     "complete": True,
     "generated_at": "2026-11-02T00:00:00Z",
     "generating": False,
+    "needs_regeneration": False,
     "proposals": [],
 }
 INPUT = GenerationInput(

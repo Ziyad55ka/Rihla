@@ -393,6 +393,8 @@ export const arabic: Record<string, string> = {
   "Switch to English": "التبديل إلى الإنجليزية",
   "Invalid project URL": "رابط المشروع غير صالح",
   "Not available": "غير متاح",
+  "These proposals have no flights from your departure city. The administrator needs to generate them again.": "هذه العروض لا تشمل رحلات من مدينة انطلاقك. يحتاج المسؤول إلى إعادة توليدها.",
+  "These proposals have no flights from your departure city. Generate them again to include it.": "هذه العروض لا تشمل رحلات من مدينة انطلاقك. أعد توليدها لإضافتها.",
   "Your group is ready for trip proposals.": "مجموعتكم جاهزة لعروض الرحلة.",
   "TRIP PROPOSALS": "عروض الرحلة",
   "Three ways to go.": "ثلاث طرق للسفر.",

@@ -18,7 +18,6 @@ const rpcArguments = {
   rihla_get_group_conflicts: ['p_trip_id'],
   rihla_begin_proposal_generation: ['p_trip_id'], rihla_end_proposal_generation: ['p_trip_id'],
   rihla_has_saved_proposals: ['p_trip_id', 'p_input_hash', 'p_max_age_hours'],
-  rihla_save_proposals: ['p_trip_id', 'p_version', 'p_input_hash', 'p_complete', 'p_proposals'],
   rihla_get_proposals: ['p_trip_id'],
 }
 let queue = Promise.resolve()
@@ -54,12 +53,17 @@ const server = createServer(async (request, response) => {
     send(200, session(user)); return
   }
   // Stands in for the backend's secret key. A fictional value with no real access.
-  if (url.pathname === '/rest/v1/rpc/rihla_trip_generation_inputs') {
+  const secretCalls = {
+    '/rest/v1/rpc/rihla_trip_generation_inputs': ['rihla_trip_generation_inputs', ['p_trip_id', 'p_admin_id']],
+    '/rest/v1/rpc/rihla_save_proposals': ['rihla_save_proposals', ['p_trip_id', 'p_admin_id', 'p_version', 'p_input_hash', 'p_complete', 'p_proposals']],
+  }
+  const secretCall = secretCalls[url.pathname]
+  if (secretCall) {
     if (request.headers.apikey !== 'sb_secret_local_preview') { send(401, { code: 'invalid_key' }); return }
     queue = queue.then(async () => {
       try {
         await db.exec('begin; set local role service_role')
-        const result = await db.query('select public.rihla_trip_generation_inputs($1, $2) as result', [body.p_trip_id, body.p_admin_id])
+        const result = await db.query(`select public.${secretCall[0]}(${secretCall[1].map((_, index) => `$${index + 1}`).join(',')}) as result`, secretCall[1].map((key) => body[key]))
         await db.exec('commit')
         send(200, result.rows[0].result)
       } catch (error) {

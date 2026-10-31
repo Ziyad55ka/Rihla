@@ -116,15 +116,22 @@ $$;
 revoke all on function public.rihla_has_saved_proposals(uuid, text, integer) from public, anon, authenticated;
 grant execute on function public.rihla_has_saved_proposals(uuid, text, integer) to authenticated;
 
--- Administrator only, and only while holding the lock. Older versions are replaced.
+-- Backend only, through the secret key, so nobody can store invented proposals or
+-- booking links. There is no signed-in user here, so the backend passes the account
+-- it verified. Requires the lock from this run. Older versions are replaced.
 create function public.rihla_save_proposals(
-    p_trip_id uuid, p_version integer, p_input_hash text, p_complete boolean, p_proposals jsonb
+    p_trip_id uuid, p_admin_id uuid, p_version integer, p_input_hash text,
+    p_complete boolean, p_proposals jsonb
 ) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare
     v_item jsonb;
 begin
-    perform rihla_private.require_trip_admin(p_trip_id);
+    if p_admin_id is null or not exists (
+        select 1 from public.trips where id = p_trip_id and created_by = p_admin_id
+    ) then
+        raise exception using errcode = '42501', message = 'trip_access_denied';
+    end if;
     if jsonb_typeof(p_proposals) <> 'array' or jsonb_array_length(p_proposals) not between 1 and 3 then
         raise exception using errcode = '23514', message = 'invalid_proposals';
     end if;
@@ -153,8 +160,8 @@ begin
     return jsonb_build_object('saved', true, 'version', p_version);
 end;
 $$;
-revoke all on function public.rihla_save_proposals(uuid, integer, text, boolean, jsonb) from public, anon, authenticated;
-grant execute on function public.rihla_save_proposals(uuid, integer, text, boolean, jsonb) to authenticated;
+revoke all on function public.rihla_save_proposals(uuid, uuid, integer, text, boolean, jsonb) from public, anon, authenticated;
+grant execute on function public.rihla_save_proposals(uuid, uuid, integer, text, boolean, jsonb) to service_role;
 
 -- Any member. Each caller receives only the flights from their own departure city.
 create function public.rihla_get_proposals(p_trip_id uuid) returns jsonb
@@ -175,6 +182,16 @@ begin
         'complete', coalesce(v_generation.complete, false),
         'generated_at', v_generation.generated_at,
         'generating', coalesce(v_generation.locked_until > now(), false),
+        -- Proposals exist, but none has flights from the caller's departure city,
+        -- which happens when it changed after generation.
+        'needs_regeneration', exists (
+            select 1 from public.proposals item where item.trip_id = p_trip_id
+        ) and not exists (
+            select 1 from public.proposals item,
+                jsonb_array_elements(item.data->'flights') as flight
+            where item.trip_id = p_trip_id
+                and lower(btrim(flight->>'origin')) = lower(btrim(coalesce(v_city, '')))
+        ),
         'proposals', coalesce((
             select jsonb_agg(rihla_private.proposal_for_member(item.data, v_city)
                 order by item.option_number)
