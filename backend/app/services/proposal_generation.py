@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
+from app.schemas.planning import ConflictCategory
 from app.schemas.proposals import (
     BudgetStatus,
     CityStay,
@@ -58,9 +59,7 @@ STOPPING_ERRORS = {
     "model_quota",
     "model_unavailable",
 }
-BlockedCategory = Literal[
-    "readiness", "dates", "destinations", "flights", "accommodation", "budget"
-]
+BlockedCategory = ConflictCategory
 FailureReason = Literal[
     "duplicate_route",
     "over_group_budget",

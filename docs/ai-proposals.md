@@ -102,3 +102,7 @@ Source of truth: `backend/app/schemas/proposals.py`, mirrored in `frontend/src/t
 - New `flights[].legs`, one or two entries with `direction` (`outbound` or `return`), `date`, `airline`, `duration`, `price` and `booking_url`. On a `round_trip`, both legs share one link and leg prices are `Not available`, so use `price_per_person`.
 - New `cities[].booking_url`: a Booking.com search built from the hotel, city, country, dates and group size. It uses the city alone when the hotel is unknown. It does not confirm availability or price.
 - Every `booking_url` is an `https` link or `null`. Links are separate fields; do not read them from `sources`.
+
+## Showing conflicts before generation
+
+`build_group_conflicts` in `generation_precheck.py` uses the same stage 1 rules as generation. It returns `conflicts` by category, `own_review` when the member has an Essential in a conflicting category, and `can_generate`. It holds no member or value. A budget conflict gives no review notice, because that would tell a member their budget is the lowest. The logic is ready and tested, but no route, database function or page uses it yet.
