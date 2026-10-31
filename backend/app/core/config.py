@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     # Optional for the API; required only by trip research.
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
+    gemini_retry_delay_seconds: float = Field(default=20, ge=0)
     tavily_api_key: str | None = None
     tavily_search_depth: Literal["basic", "advanced"] = "basic"
     tavily_max_results: int = Field(default=5, ge=1, le=20)

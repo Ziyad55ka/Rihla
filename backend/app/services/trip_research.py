@@ -4,6 +4,7 @@ Queries and results leave the system: never put member names, budgets or
 preferences in a query. Links always come from Tavily, never from the model.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -233,7 +234,7 @@ def build_search_plan(request: ResearchRequest) -> list[SearchGroup]:
                 FieldSpec(
                     f"flights.{index}.price_per_person",
                     "flight_price",
-                    f"Typical flight price per person from {origin}",
+                    f"Typical round-trip flight price per person from {origin}",
                     "price",
                     (FLIGHT_TOPIC,),
                 ),
@@ -439,7 +440,7 @@ def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
-def _numbers(text: str) -> set[Decimal]:
+def numbers_in(text: str) -> set[Decimal]:
     western = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789"))
     plain = re.sub(r"(?<=\d),(?=\d)", "", western)
     return {Decimal(item) for item in re.findall(r"\d+(?:\.\d+)?", plain)}
@@ -509,7 +510,7 @@ def verify_field(
     if spec.kind == "duration":
         if not re.search(ANY_DURATION, quote, re.IGNORECASE):
             return _unavailable(spec, "rejected_wrong_topic")
-        if not _numbers(value) or not _numbers(value) <= _numbers(quote):
+        if not numbers_in(value) or not numbers_in(value) <= numbers_in(quote):
             return _unavailable(spec, "rejected_value_not_in_quote")
     elif _normalize(value) not in normalized_quote:
         return _unavailable(spec, "rejected_value_not_in_quote")
@@ -537,7 +538,7 @@ def _verify_price(
         amount = Decimal(str(fact.amount))
     except InvalidOperation:
         return _unavailable(spec, "rejected_value_not_in_quote")
-    if amount <= 0 or amount not in _numbers(quote):
+    if amount <= 0 or amount not in numbers_in(quote):
         return _unavailable(spec, "rejected_value_not_in_quote")
     currency = fact.currency.strip().upper()
     marker = CURRENCY_MARKERS.get(currency)
@@ -593,18 +594,71 @@ def to_sar_price(verified: VerifiedField) -> SarPrice:
     )
 
 
-async def extract_facts(
-    groups: list[SearchGroup], settings: Settings, cost: ResearchCost
-) -> list[ExtractedFact]:
+async def call_gemini[SchemaT: BaseModel](
+    contents: str,
+    system_prompt: str,
+    schema: type[SchemaT],
+    settings: Settings,
+    cost: ResearchCost,
+) -> SchemaT:
+    """Ask for JSON. Wait and retry once on a quota limit or an outage."""
     if not settings.gemini_api_key:
         raise ResearchError("not_configured", "GEMINI_API_KEY is not configured.")
-    # One attempt only: the free plan allows very few requests per day.
+    # The SDK's own retries are off: the free plan allows few requests per day.
     client = genai.Client(
         api_key=settings.gemini_api_key,
         http_options=types.HttpOptions(
             retry_options=types.HttpRetryOptions(attempts=1)
         ),
     )
+    failure: ResearchError | None = None
+    for attempt in range(2):
+        if attempt:
+            await asyncio.sleep(settings.gemini_retry_delay_seconds)
+        cost.gemini_requests += 1
+        try:
+            response = await client.aio.models.generate_content(
+                model=settings.gemini_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                ),
+            )
+        except genai_errors.APIError as error:
+            if error.code == 429:
+                failure = ResearchError(
+                    "model_quota", "The Gemini quota has been reached. Try again later."
+                )
+            elif (error.code or 0) >= 500:
+                failure = ResearchError(
+                    "model_unavailable", "Gemini is temporarily unavailable."
+                )
+            else:
+                raise ResearchError(
+                    "model_unavailable", "Gemini could not complete the request."
+                ) from error
+            failure.__cause__ = error
+            continue
+        except Exception as error:  # The SDK raises its own network error types.
+            failure = ResearchError("model_unavailable", "Gemini could not be reached.")
+            failure.__cause__ = error
+            continue
+        if response.usage_metadata:
+            cost.gemini_tokens += response.usage_metadata.total_token_count or 0
+        try:
+            return schema.model_validate_json(response.text or "")
+        except ValidationError as error:
+            raise ResearchError(
+                "model_invalid_output", "Gemini returned invalid JSON."
+            ) from error
+    raise failure
+
+
+async def extract_facts(
+    groups: list[SearchGroup], settings: Settings, cost: ResearchCost
+) -> list[ExtractedFact]:
     payload = json.dumps(
         {
             "groups": [
@@ -627,37 +681,8 @@ async def extract_facts(
         },
         ensure_ascii=False,
     )
-    try:
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model,
-            contents=payload,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                response_mime_type="application/json",
-                response_schema=ExtractionDraft,
-            ),
-        )
-    except genai_errors.APIError as error:
-        if error.code == 429:
-            raise ResearchError(
-                "model_quota", "The Gemini quota has been reached."
-            ) from error
-        raise ResearchError(
-            "model_unavailable", "Gemini could not complete the request."
-        ) from error
-    except httpx.RequestError as error:
-        raise ResearchError(
-            "model_unavailable", "Gemini could not be reached."
-        ) from error
-    cost.gemini_requests += 1
-    if response.usage_metadata:
-        cost.gemini_tokens += response.usage_metadata.total_token_count or 0
-    try:
-        return ExtractionDraft.model_validate_json(response.text or "").facts
-    except ValidationError as error:
-        raise ResearchError(
-            "model_invalid_output", "Gemini returned invalid JSON."
-        ) from error
+    draft = await call_gemini(payload, SYSTEM_PROMPT, ExtractionDraft, settings, cost)
+    return draft.facts
 
 
 async def research(request: ResearchRequest, settings: Settings) -> ResearchResult:

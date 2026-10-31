@@ -16,6 +16,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "FLIGHT_VISIBILITY",
         "GEMINI_API_KEY",
         "GEMINI_MODEL",
+        "GEMINI_RETRY_DELAY_SECONDS",
         "TAVILY_API_KEY",
         "TAVILY_SEARCH_DEPTH",
         "TAVILY_MAX_RESULTS",

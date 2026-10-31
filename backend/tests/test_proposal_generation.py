@@ -1,0 +1,524 @@
+"""Generation tests. Gemini and Tavily are fake, so these spend no quota."""
+
+import asyncio
+import logging
+from datetime import date
+from decimal import Decimal
+from pathlib import Path
+from types import SimpleNamespace
+from uuid import UUID
+
+import pytest
+from google.genai import errors as genai_errors
+
+from app.core.config import Settings
+from app.schemas.generation import GenerationInput
+from app.services import proposal_generation, trip_research
+from app.services.proposal_generation import (
+    PlannedCity,
+    PlannedOption,
+    RequirementCheck,
+    TripPlan,
+    collect_requirements,
+    contains_private_detail,
+    generate_proposals,
+)
+from app.services.proposal_views import view_for_member
+from app.services.trip_research import (
+    ResearchCost,
+    ResearchError,
+    ResearchResult,
+    ResearchSource,
+    VerifiedField,
+    call_gemini,
+)
+
+EVIDENCE = [{"source_id": 1, "quote": "A cited sentence."}]
+
+
+def settings(tmp_path: Path) -> Settings:
+    return Settings(
+        _env_file=None,
+        gemini_api_key="fake",
+        tavily_api_key="fake",
+        gemini_retry_delay_seconds=0,
+        search_cache_db=tmp_path / "cache.sqlite3",
+    )
+
+
+def group(**first_member) -> GenerationInput:
+    member = {
+        "label": "Member 1",
+        "departure_city": "Riyadh",
+        "max_budget_sar": "5000",
+    }
+    return GenerationInput(
+        trip_id=UUID("00000000-0000-4000-8000-0000000000aa"),
+        shared_start=date(2026, 11, 20),
+        shared_end=date(2026, 11, 24),
+        members=[
+            {**member, **first_member},
+            {
+                "label": "Member 2",
+                "departure_city": "Jeddah",
+                "max_budget_sar": "3000",
+            },
+        ],
+    )
+
+
+def option(
+    destination: str,
+    title: str = "A relaxed city break",
+    checks: list[RequirementCheck] | None = None,
+    start: date = date(2026, 11, 20),
+) -> PlannedOption:
+    return PlannedOption(
+        title=title,
+        destination=destination,
+        start_date=start,
+        end_date=date(2026, 11, 24),
+        cities=[
+            PlannedCity(city=destination, nights=(date(2026, 11, 24) - start).days)
+        ],
+        requirement_checks=checks or [],
+    )
+
+
+def field(
+    field_id: str, value: str | None = None, sar: str | None = None
+) -> VerifiedField:
+    shown = value is not None or sar is not None
+    return VerifiedField(
+        field_id=field_id,
+        category="test",
+        value=value or sar,
+        status="Estimated" if shown else "Not available",
+        evidence=EVIDENCE if shown else [],
+        amount_sar=Decimal(sar) if sar else None,
+    )
+
+
+def fake_research(fare: str = "1000", night: str = "200"):
+    async def research(request, config) -> ResearchResult:
+        fields = []
+        for index, _ in enumerate(request.origins):
+            fields += [
+                field(f"flights.{index}.airline", "Mock Air"),
+                field(f"flights.{index}.duration", "5 hours"),
+                field(f"flights.{index}.price_per_person", sar=fare),
+            ]
+        for index, _ in enumerate(request.cities):
+            fields += [
+                field(f"cities.{index}.hotel_name", "Mock Hotel"),
+                field(f"cities.{index}.hotel_price_per_night", sar=night),
+            ]
+        return ResearchResult(
+            fields=fields,
+            sources=[
+                ResearchSource(
+                    id=1, title="T", url="https://example.com/a", content="C"
+                )
+            ],
+            cost=ResearchCost(tavily_searches=len(request.origins) + 1),
+        )
+
+    return research
+
+
+def fake_planner(monkeypatch: pytest.MonkeyPatch, *plans) -> list[str]:
+    """Each call returns the next plan, or raises it if it is an error."""
+    remaining = list(plans)
+    payloads: list[str] = []
+
+    async def plan(contents, system_prompt, schema, config, cost):
+        payloads.append(contents)
+        cost.gemini_requests += 1
+        result = remaining.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return TripPlan(options=result)
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", plan)
+    return payloads
+
+
+def run(generation: GenerationInput, tmp_path: Path):
+    return asyncio.run(generate_proposals(generation, settings(tmp_path)))
+
+
+THREE = [option("Istanbul"), option("Baku"), option("Tbilisi")]
+
+
+def test_three_distinct_proposals_are_built(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert result.complete and result.message is None
+    assert [p.option_number for p in result.proposals] == [1, 2, 3]
+    assert {p.destination for p in result.proposals} == {"Istanbul", "Baku", "Tbilisi"}
+    assert all(p.budget_status == "within_group_budget" for p in result.proposals)
+    assert [r.origin for r in result.proposals[0].flights] == ["Riyadh", "Jeddah"]
+
+
+def test_planner_never_receives_members_or_departure_cities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    run(group(), tmp_path)
+
+    assert "Member" not in payloads[0]
+    assert "Riyadh" not in payloads[0]
+    assert '"budget_ceiling_sar": "3000"' in payloads[0]
+    assert "5000" not in payloads[0]
+
+
+def test_over_budget_option_is_regenerated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE, [option("Doha")], [option("Muscat")])
+    fares = iter(["9000", "9000", "1000", "1000", "1000"])
+
+    async def research(request, config):
+        return await fake_research(fare=next(fares))(request, config)
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert result.complete
+    assert result.proposals[0].destination == "Muscat"
+
+
+def test_missing_prices_are_kept_but_marked_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        for item in result.fields:
+            if "price" in item.field_id:
+                item.value, item.status = None, "Not available"
+                item.evidence, item.amount_sar = [], None
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert result.complete
+    assert result.proposals[0].budget_status == "incomplete_prices"
+
+
+def test_failed_option_stops_after_two_regenerations_and_returns_the_rest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outside = date(2026, 11, 1)
+    payloads = fake_planner(
+        monkeypatch,
+        [option("Baku"), option("Tbilisi")],
+        [option("A", start=outside)],
+        [option("B", start=outside)],
+        [option("C", start=outside)],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert len(result.proposals) == 2
+    assert not result.complete
+    assert "2 of 3" in result.message
+    assert result.failures[0].reasons == ["dates_outside_shared_range"]
+    assert len(payloads) == 4
+
+
+def test_essential_not_met_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    essential = {"value": "Direct flights", "importance": "Essential"}
+    good = [RequirementCheck(requirement_id="R1", met=True, explanation=None)]
+    bad = [RequirementCheck(requirement_id="R1", met=False, explanation="Not found")]
+    fake_planner(
+        monkeypatch,
+        [
+            option("Bad", checks=bad),
+            option("Baku", checks=good),
+            option("Tbilisi", checks=good),
+        ],
+        [option("Muscat", checks=good)],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(flights=essential), tmp_path)
+
+    assert {p.destination for p in result.proposals} == {"Muscat", "Baku", "Tbilisi"}
+
+
+def test_essential_wins_when_members_share_a_preference() -> None:
+    generation = group(flights={"value": "Direct", "importance": "Essential"})
+    generation.members[1].flights.value = "direct"
+
+    [requirement] = collect_requirements(generation)
+
+    assert requirement.importance == "Essential"
+
+
+def test_unmet_flexible_needs_an_explanation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    flexible = {"value": "Museums", "importance": "Flexible"}
+    silent = [RequirementCheck(requirement_id="R1", met=False, explanation=None)]
+    explained = [
+        RequirementCheck(
+            requirement_id="R1", met=False, explanation="Outdoor sights fit better."
+        )
+    ]
+    fake_planner(
+        monkeypatch,
+        [
+            option("Silent", checks=silent),
+            option("Baku", checks=explained),
+            option("Tbilisi", checks=explained),
+        ],
+        [option("Muscat", checks=explained)],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(interests=flexible), tmp_path)
+
+    assert result.complete
+    adjustment = result.proposals[0].flexible_adjustments[0]
+    assert (adjustment.category, adjustment.explanation) == (
+        "interests",
+        "Outdoor sights fit better.",
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Stay under 3,000", "Under ٣٠٠٠ for all", "Fits 5000", "Flying from Jeddah"],
+)
+def test_private_figures_and_cities_are_found(text: str) -> None:
+    assert contains_private_detail(text, group())
+
+
+def test_general_text_is_allowed() -> None:
+    assert not contains_private_detail("Suits the group's budget", group())
+
+
+def test_title_with_a_member_budget_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(
+        monkeypatch,
+        [option("Leak", title="Trip under 3000"), option("Baku"), option("Tbilisi")],
+        [option("Muscat")],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert {p.destination for p in result.proposals} == {"Muscat", "Baku", "Tbilisi"}
+
+
+def test_duplicate_route_is_not_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(
+        monkeypatch,
+        [option("Baku"), option("baku"), option("Tbilisi")],
+        [option("Muscat")],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert len({p.destination.casefold() for p in result.proposals}) == 3
+
+
+def test_quota_during_generation_returns_what_succeeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    good = fake_research()
+    calls = 0
+
+    async def research(request, config):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise ResearchError(
+                "search_quota", "The Tavily plan limit has been reached."
+            )
+        return await good(request, config)
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert len(result.proposals) == 1
+    assert "Tavily plan limit" in result.message
+    assert calls == 2
+
+
+def test_quota_with_no_proposals_raises_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, ResearchError("model_quota", "The Gemini quota."))
+
+    with pytest.raises(ResearchError) as caught:
+        run(group(), tmp_path)
+
+    assert caught.value.code == "model_quota"
+
+
+def test_generated_proposal_can_be_filtered_for_a_member(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    proposal = run(group(), tmp_path).proposals[0]
+    body = view_for_member(proposal, "Riyadh").model_dump_json()
+
+    assert "Jeddah" not in body
+
+
+def test_logs_hold_no_private_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    outside = date(2026, 11, 1)
+    fake_planner(
+        monkeypatch,
+        [option("Secret place", start=outside), option("Baku"), option("Tbilisi")],
+        [option("A", start=outside)],
+        [option("B", start=outside)],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    with caplog.at_level(logging.INFO):
+        run(group(), tmp_path)
+
+    logs = " ".join(caplog.messages)
+    assert "generation_option_failed" in logs
+    for private in ("Secret", "Riyadh", "Jeddah", "3000", "5000"):
+        assert private not in logs
+
+
+class FakeModels:
+    def __init__(self, outcomes: list) -> None:
+        self.outcomes = outcomes
+        self.calls = 0
+
+    async def generate_content(self, **kwargs):
+        self.calls += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return SimpleNamespace(text=outcome, usage_metadata=None)
+
+
+def run_gemini(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, outcomes: list
+) -> tuple[object, FakeModels, list[float], ResearchCost]:
+    models = FakeModels(outcomes)
+    sleeps: list[float] = []
+
+    async def no_wait(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(trip_research.asyncio, "sleep", no_wait)
+    monkeypatch.setattr(
+        trip_research.genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=models)),
+    )
+    cost = ResearchCost()
+    try:
+        outcome = asyncio.run(call_gemini("x", "y", TripPlan, settings(tmp_path), cost))
+    except ResearchError as error:
+        outcome = error
+    return outcome, models, sleeps, cost
+
+
+def api_error(code: int) -> genai_errors.APIError:
+    return genai_errors.APIError(code, {"error": {"message": "secret detail"}})
+
+
+def test_quota_waits_retries_once_then_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcome, models, sleeps, cost = run_gemini(
+        monkeypatch, tmp_path, [api_error(429), '{"options": []}']
+    )
+
+    assert outcome == TripPlan(options=[])
+    assert (models.calls, cost.gemini_requests) == (2, 2)
+    assert len(sleeps) == 1
+
+
+@pytest.mark.parametrize(
+    ("failure", "code"),
+    [
+        (api_error(429), "model_quota"),
+        (api_error(503), "model_unavailable"),
+        (ConnectionError("down"), "model_unavailable"),
+    ],
+)
+def test_second_failure_returns_a_clear_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception, code: str
+) -> None:
+    outcome, models, _, _ = run_gemini(monkeypatch, tmp_path, [failure, failure])
+
+    assert isinstance(outcome, ResearchError)
+    assert outcome.code == code
+    assert models.calls == 2
+    assert "secret detail" not in outcome.message
+
+
+def test_bad_request_is_not_retried(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcome, models, sleeps, _ = run_gemini(monkeypatch, tmp_path, [api_error(400)])
+
+    assert outcome.code == "model_unavailable"
+    assert (models.calls, sleeps) == (1, [])
+
+
+def test_invalid_json_is_reported_without_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    outcome, models, _, _ = run_gemini(monkeypatch, tmp_path, ["not json"])
+
+    assert outcome.code == "model_invalid_output"
+    assert models.calls == 1
+
+
+def test_outage_stops_generation_instead_of_trying_more_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    calls = 0
+    good = fake_research()
+
+    async def research(request, config):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise ResearchError("model_unavailable", "Gemini is unavailable.")
+        return await good(request, config)
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert calls == 2
+    assert len(result.proposals) == 1
+    assert "Gemini is unavailable." in result.message

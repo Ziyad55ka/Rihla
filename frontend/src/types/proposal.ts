@@ -3,6 +3,8 @@ export type InfoStatus = 'Sourced' | 'Estimated' | 'Unconfirmed' | 'Not availabl
 export type PriceStatus = Exclude<InfoStatus, 'Sourced'>
 export type PreferenceCategory = 'destinations' | 'interests' | 'flights' | 'accommodation'
 
+export type BudgetStatus = 'within_group_budget' | 'incomplete_prices'
+
 export interface Evidence {
   source_id: number
   quote: string
@@ -69,6 +71,7 @@ export interface Proposal {
   flights: Flights[]
   intercity_transport: IntercityTransfer[]
   flexible_adjustments: FlexibleAdjustment[]
+  budget_status: BudgetStatus
   sources: ProposalSource[]
 }
 

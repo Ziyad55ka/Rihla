@@ -12,11 +12,11 @@ InfoStatus = Literal["Sourced", "Estimated", "Unconfirmed", "Not available"]
 # Public web prices are never booking offers, so a price cannot be Sourced.
 PriceStatus = Literal["Estimated", "Unconfirmed", "Not available"]
 PreferenceCategory = Literal["destinations", "interests", "flights", "accommodation"]
+# Says only whether the group fits, never the budget behind that answer.
+BudgetStatus = Literal["within_group_budget", "incomplete_prices"]
 
 # Proposals are shared with the whole trip, so explanations must stay general.
-PRIVATE_DETAIL = re.compile(
-    r"\d|\b(budget|member|sar)\b|ميزاني|عضو|ريال", re.IGNORECASE
-)
+PRIVATE_DETAIL = re.compile(r"\d|\b(members?|sar)\b|عضو|أعضاء|ريال", re.IGNORECASE)
 
 
 class StrictModel(BaseModel):
@@ -113,6 +113,7 @@ class Proposal(StrictModel):
     flights: list[Flights]
     intercity_transport: list[IntercityTransfer]
     flexible_adjustments: list[FlexibleAdjustment]
+    budget_status: BudgetStatus
     sources: list[ProposalSource]
 
     @model_validator(mode="after")

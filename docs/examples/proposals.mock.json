@@ -42,6 +42,7 @@
       }],
       "intercity_transport": [],
       "flexible_adjustments": [],
+      "budget_status": "within_group_budget",
       "sources": [
         { "id": 1, "title": "Mock hotel guide", "url": "https://example.com/mock-hotels" },
         { "id": 2, "title": "Mock flight guide", "url": "https://example.com/mock-flights" }
@@ -106,9 +107,10 @@
       "flexible_adjustments": [
         {
           "category": "accommodation",
-          "explanation": "A guesthouse was not available in Batumi, so a standard hotel is suggested."
+          "explanation": "The preferred stay type could not be found everywhere, so a standard option is suggested."
         }
       ],
+      "budget_status": "incomplete_prices",
       "sources": [
         { "id": 1, "title": "Mock Tbilisi guide", "url": "https://example.com/mock-tbilisi" },
         { "id": 2, "title": "Mock route page", "url": "https://example.com/mock-route" },
@@ -149,6 +151,7 @@
       }],
       "intercity_transport": [],
       "flexible_adjustments": [],
+      "budget_status": "incomplete_prices",
       "sources": [
         { "id": 1, "title": "Mock Baku guide", "url": "https://example.com/mock-baku" }
       ]
