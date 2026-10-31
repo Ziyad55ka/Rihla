@@ -6,12 +6,10 @@ from pathlib import Path
 from uuid import UUID
 
 import pytest
-from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
-from app.schemas.planning import GroupConflicts, PlanningStatus
-from app.schemas.preferences import MemberPreferences
+from app.schemas.planning import PlanningStatus
 from app.schemas.proposals import ProposalSet
 from app.services import (
     flight_prices,
@@ -21,7 +19,6 @@ from app.services import (
 )
 from app.services.generation_precheck import (
     LocalProposalStore,
-    build_group_conflicts,
     generate_checked,
     input_hash,
 )
@@ -445,116 +442,6 @@ def test_demo_mode_skips_the_checks(
 
     assert result.demo is True
     assert outside_calls == []
-
-
-def own(importance: str = "Essential", value: str = "Turkey") -> MemberPreferences:
-    return MemberPreferences(destinations={"value": value, "importance": importance})
-
-
-def conflicting_group() -> GenerationInput:
-    return group(
-        member(1, destinations={"value": "Turkey", "importance": "Essential"}),
-        member(2, destinations={"value": "Japan", "importance": "Essential"}),
-    )
-
-
-def test_clear_group_can_generate(settings: Settings) -> None:
-    report = build_group_conflicts(planning(), group(), own(), settings)
-
-    assert report == GroupConflicts(conflicts=[], own_review=[], can_generate=True)
-
-
-def test_member_with_essential_gets_the_review_notice(settings: Settings) -> None:
-    report = build_group_conflicts(planning(), conflicting_group(), own(), settings)
-
-    assert report.conflicts == ["destinations"]
-    assert report.own_review == ["destinations"]
-    assert report.can_generate is False
-
-
-@pytest.mark.parametrize(
-    "preferences",
-    [None, own(importance="Flexible"), own(value="")],
-)
-def test_other_members_see_the_conflict_without_the_notice(
-    settings: Settings, preferences: MemberPreferences | None
-) -> None:
-    report = build_group_conflicts(
-        planning(), conflicting_group(), preferences, settings
-    )
-
-    assert report.conflicts == ["destinations"]
-    assert report.own_review == []
-    assert report.can_generate is False
-
-
-def test_report_never_holds_who_or_which_value(settings: Settings) -> None:
-    generation = group(
-        member(
-            1,
-            max_budget_sar="749",
-            departure_city="Jeddah",
-            destinations={"value": "Turkey", "importance": "Essential"},
-        ),
-        member(2, destinations={"value": "Japan", "importance": "Essential"}),
-    )
-
-    report = build_group_conflicts(planning(), generation, own(), settings)
-    body = report.model_dump_json()
-
-    assert report.conflicts == ["destinations", "budget"]
-    assert report.own_review == ["destinations"]
-    for private in ("Secret", "Hidden", "Turkey", "Japan", "749", "Member", "Jeddah"):
-        assert private not in body
-
-
-def test_budget_conflict_gives_no_one_a_review_notice(settings: Settings) -> None:
-    generation = group(member(1, max_budget_sar="749"), member(2))
-
-    report = build_group_conflicts(planning(), generation, own(), settings)
-
-    assert report.conflicts == ["budget"]
-    assert report.own_review == []
-
-
-@pytest.mark.parametrize(
-    ("status", "expected"),
-    [
-        (planning(ready=False), ["readiness"]),
-        (planning(dates="conflict"), ["dates"]),
-        (planning(ready=False, dates="pending"), ["readiness", "dates"]),
-        (planning(), ["readiness"]),
-    ],
-)
-def test_no_generation_input_keeps_generation_blocked(
-    settings: Settings, status: PlanningStatus, expected: list[str]
-) -> None:
-    report = build_group_conflicts(status, None, own(), settings)
-
-    assert report.conflicts == expected
-    assert report.can_generate is False
-
-
-def test_building_the_report_makes_no_outside_calls(
-    settings: Settings, outside_calls: list[str]
-) -> None:
-    build_group_conflicts(planning(), conflicting_group(), own(), settings)
-
-    assert outside_calls == []
-
-
-def test_can_generate_cannot_contradict_the_conflicts() -> None:
-    with pytest.raises(ValidationError):
-        GroupConflicts(conflicts=["dates"], own_review=[], can_generate=True)
-
-
-def test_page_and_generation_use_the_same_rules(settings: Settings) -> None:
-    generation = conflicting_group()
-
-    report = build_group_conflicts(planning(), generation, None, settings)
-    blocked = blocked_by(generation, settings, planning=planning())
-
-    assert blocked.categories == report.conflicts
 
 
 def test_default_daily_minimum_is_250_per_trip_day(settings: Settings) -> None:

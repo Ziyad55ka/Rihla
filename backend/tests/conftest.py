@@ -12,6 +12,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "CORS_ORIGINS",
         "SUPABASE_URL",
         "SUPABASE_PUBLISHABLE_KEY",
+        "SUPABASE_SECRET_KEY",
         "LOGIN_LIMIT_DB",
         "FLIGHT_VISIBILITY",
         "PROPOSALS_DEMO_MODE",

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Optional for /health; required by authenticated account/profile endpoints.
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
+    # Bypasses Row Level Security. Used only by services/generation_inputs.py.
+    supabase_secret_key: str | None = Field(default=None, repr=False)
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
     # own: each member sees only their departure city. all: every city, unnamed.
     flight_visibility: Literal["own", "all"] = "own"

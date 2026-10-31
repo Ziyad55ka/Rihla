@@ -617,3 +617,138 @@ test('profile name constraints hold in PostgreSQL, and own upsert works', async 
   await db.query('insert into public.profiles(id, display_name) values ($1,$2) on conflict(id) do update set id = excluded.id, display_name = excluded.display_name', [BOB, 'Bob Updated'])
   assert.equal((await db.query('select display_name from public.profiles')).rows[0].display_name, 'Bob Updated')
 })
+
+// --- Sprint 2: group conflicts and generation inputs ---
+const conflicts = (id) => rpc('rihla_get_group_conflicts', [id])
+const generationInputs = (id, admin) => rpc('rihla_trip_generation_inputs', [id, admin])
+const member = (extra = {}) => ({ ...inputs, destinations: { value: '', importance: 'Flexible' }, flights: { value: '', importance: 'Flexible' }, ...extra })
+const essential = (value) => ({ value, importance: 'Essential' })
+
+async function twoMembers(alice = member(), bob = member()) {
+  const { created, invitation } = await invitedTrip()
+  await savePreferences(created.id, alice)
+  await role(BOB)
+  await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, bob)
+  return created.id
+}
+async function asServiceRole() {
+  await db.exec('set local role service_role')
+  await db.query("select set_config('request.jwt.claims', '', true)")
+}
+
+test('a clear group has no conflicts and can generate', async () => {
+  const id = await twoMembers()
+  assert.deepEqual(await conflicts(id), { conflicts: [], own_review: [], can_generate: true })
+})
+
+test('conflicts report readiness and dates by category before other checks', async () => {
+  const created = await trip()
+  assert.deepEqual((await conflicts(created.id)).conflicts, ['readiness', 'dates'])
+  const id = await twoMembers(member(), member({ available_start: '2026-12-01', available_end: '2026-12-05' }))
+  const report = await conflicts(id)
+  assert.deepEqual(report.conflicts, ['dates'])
+  assert.equal(report.can_generate, false)
+})
+
+test('clearly different Essential countries conflict; only members with an Essential get the notice', async () => {
+  const id = await twoMembers(member({ destinations: essential('Turkey') }), member({ destinations: essential('اليابان') }))
+  const bob = await conflicts(id)
+  assert.deepEqual(bob, { conflicts: ['destinations'], own_review: ['destinations'], can_generate: false })
+  const body = JSON.stringify(bob)
+  for (const secret of ['Turkey', 'اليابان', ALICE, BOB, 'Alice', '4500']) assert.ok(!body.includes(secret))
+})
+
+test('a member without an Essential sees the conflict but no review notice', async () => {
+  const { created, invitation } = await invitedTrip()
+  await savePreferences(created.id, member({ destinations: essential('Turkey') }))
+  await role(BOB)
+  await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id, member({ destinations: essential('Japan') }))
+  await role(CAROL)
+  await rpc('rihla_join_trip', [invitation.token])
+  await savePreferences(created.id)
+  await savePreferences(created.id, member())
+  assert.deepEqual(await conflicts(created.id), { conflicts: ['destinations'], own_review: [], can_generate: false })
+})
+
+test('overlapping or doubtful Essential destinations do not stop at this check', async () => {
+  for (const [first, second] of [['Turkey or Egypt', 'مصر'], ['Istanbul', 'Turkey'], ['Somewhere warm', 'Japan'], ['Turkey', 'Türkiye']]) {
+    await db.exec('savepoint pair')
+    const id = await twoMembers(member({ destinations: essential(first) }), member({ destinations: essential(second) }))
+    assert.deepEqual((await conflicts(id)).conflicts, [], `${first} / ${second}`)
+    await root()
+    await db.exec('rollback to savepoint pair; release savepoint pair')
+  }
+})
+
+test('budget conflict uses the fixed daily floor and gives no review notice', async () => {
+  const six = { available_start: '2026-11-10', available_end: '2026-11-15' }
+  const atFloor = await twoMembers(member({ ...six, max_budget_sar: '1500' }), member(six))
+  assert.deepEqual((await conflicts(atFloor)).conflicts, [])
+  await root()
+  const below = await twoMembers(member({ ...six, max_budget_sar: '1499.99' }), member(six))
+  await role(ALICE)
+  assert.deepEqual(await conflicts(below), { conflicts: ['budget'], own_review: [], can_generate: false })
+})
+
+test('non-members cannot read group conflicts, and it needs no outside input', async () => {
+  const id = await twoMembers()
+  await role(CAROL)
+  await denied(() => conflicts(id))
+  const definition = (await db.query("select pg_get_function_identity_arguments('public.rihla_get_group_conflicts(uuid)'::regprocedure) as args")).rows[0]
+  assert.equal(definition.args, 'p_trip_id uuid')
+})
+
+test('browser roles can never call the generation inputs function', async () => {
+  const id = await twoMembers()
+  await root()
+  const privileges = (await db.query(`select
+    has_function_privilege('authenticated', 'public.rihla_trip_generation_inputs(uuid,uuid)', 'execute') as signed_in,
+    has_function_privilege('anon', 'public.rihla_trip_generation_inputs(uuid,uuid)', 'execute') as anonymous,
+    has_function_privilege('service_role', 'public.rihla_trip_generation_inputs(uuid,uuid)', 'execute') as backend`)).rows[0]
+  assert.deepEqual(privileges, { signed_in: false, anonymous: false, backend: true })
+
+  await role(ALICE)
+  await denied(() => generationInputs(id, ALICE))
+  await role(BOB)
+  await denied(() => generationInputs(id, ALICE))
+  await db.exec('reset role; set local role anon')
+  await denied(() => generationInputs(id, ALICE))
+})
+
+test('the backend role gets anonymous inputs for the administrator only', async () => {
+  const id = await twoMembers(member({ destinations: essential('Egypt') }), member({ departure_city: 'Jeddah', max_budget_sar: '3000' }))
+  await root()
+  await asServiceRole()
+  const result = await generationInputs(id, ALICE)
+
+  assert.equal(result.trip_id, id)
+  assert.equal(result.shared_start, '2026-11-10')
+  assert.deepEqual(result.members.map((item) => item.label), ['Member 1', 'Member 2'])
+  assert.deepEqual(result.members.map((item) => item.departure_city).sort(), ['Jeddah', 'Riyadh'])
+  const body = JSON.stringify(result)
+  for (const identity of [ALICE, BOB, 'Alice', 'Bob', 'user_id', 'alice@example.test']) assert.ok(!body.includes(identity))
+  assert.deepEqual(Object.keys(result.members[0]).sort(), ['accommodation', 'departure_city', 'destinations', 'flights', 'interests', 'label', 'max_budget_sar'])
+
+  await denied(() => generationInputs(id, BOB))
+  await denied(() => generationInputs(id, CAROL))
+  await denied(() => generationInputs(id, null))
+})
+
+test('generation inputs refuse an unready group or unavailable dates', async () => {
+  const created = await trip()
+  await savePreferences(created.id, member())
+  const invitation = await rpc('rihla_issue_invitation', [created.id])
+  await role(BOB)
+  await rpc('rihla_join_trip', [invitation.token])
+  await root()
+  await asServiceRole()
+  await denied(() => generationInputs(created.id, ALICE), 'P0001')
+  await root()
+  await role(BOB)
+  await savePreferences(created.id, member({ available_start: '2026-12-01', available_end: '2026-12-05' }))
+  await root()
+  await asServiceRole()
+  await denied(() => generationInputs(created.id, ALICE), 'P0001')
+})

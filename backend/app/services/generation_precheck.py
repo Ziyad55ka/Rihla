@@ -15,8 +15,7 @@ from typing import Protocol
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
-from app.schemas.planning import ConflictCategory, GroupConflicts, PlanningStatus
-from app.schemas.preferences import MemberPreferences
+from app.schemas.planning import ConflictCategory, PlanningStatus
 from app.services.proposal_generation import (
     GenerationBlocked,
     GenerationResult,
@@ -26,6 +25,7 @@ from app.services.proposal_generation import (
 from app.services.trip_research import ResearchCost
 
 STOP_WORDS = {"or", "and", "the", "to", "in", "أو", "و", "في", "إلى"}
+# Mirrored in SQL by rihla_private.destination_countries; a test keeps them equal.
 # Stage 1 stops only when every word is a country from this list. Anything else,
 # such as a city, is left for Gemini to judge in stage 2.
 COUNTRY_WORDS = {
@@ -205,40 +205,6 @@ def check_input(generation: GenerationInput, settings: Settings) -> None:
     conflicts = find_input_conflicts(generation, settings)
     if conflicts:
         raise GenerationBlocked(*conflicts)
-
-
-def build_group_conflicts(
-    planning: PlanningStatus,
-    generation: GenerationInput | None,
-    own_preferences: MemberPreferences | None,
-    settings: Settings,
-) -> GroupConflicts:
-    """What one member may see. Holds categories only, never who or which value.
-
-    The generation input is None until every member is ready. Generation stays
-    blocked in that case, even if the planning status shows nothing wrong.
-    """
-    conflicts = find_planning_conflicts(planning)
-    if generation is not None:
-        conflicts += find_input_conflicts(generation, settings)
-    elif not conflicts:
-        conflicts.append("readiness")
-
-    # Only the member's own Essential choice decides the extra review notice.
-    own_review: list[ConflictCategory] = []
-    own_destinations = own_preferences.destinations if own_preferences else None
-    if (
-        "destinations" in conflicts
-        and own_destinations is not None
-        and own_destinations.importance == "Essential"
-        and own_destinations.value
-    ):
-        own_review.append("destinations")
-    return GroupConflicts(
-        conflicts=conflicts,
-        own_review=own_review,
-        can_generate=not conflicts,
-    )
 
 
 async def generate_checked(

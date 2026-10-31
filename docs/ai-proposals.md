@@ -108,4 +108,12 @@ Source of truth: `backend/app/schemas/proposals.py`, mirrored in `frontend/src/t
 
 ## Showing conflicts before generation
 
-`build_group_conflicts` in `generation_precheck.py` uses the same stage 1 rules as generation. It returns `conflicts` by category, `own_review` when the member has an Essential in a conflicting category, and `can_generate`. It holds no member or value. A budget conflict gives no review notice, because that would tell a member their budget is the lowest. The logic is ready and tested, but no route, database function or page uses it yet.
+`rihla_get_group_conflicts(trip_id)` runs inside PostgreSQL, so no private data reaches the backend or the browser for this check. Any trip member can call it. It returns `conflicts` by category, `own_review` when the caller has an Essential destination in a conflict, and `can_generate`. It holds no member or value. A budget conflict gives no review notice, because that would tell a member their budget is the lowest. No route or page uses it yet.
+
+The SQL repeats the stage 1 rules used by `generation_precheck.py`. A backend test keeps the country list and the default budget floor equal. The SQL floor is fixed at 250, so a changed `MIN_BUDGET_SAR_PER_DAY` also needs a migration.
+
+A member can still learn something by experiment: changing their own Essential destination and watching whether the conflict clears shows whether another member's destination matches. Date conflicts have the same property.
+
+## Private generation inputs
+
+`rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It is granted only to `service_role`, and `authenticated` cannot call it. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](sprint-1-decisions.md).

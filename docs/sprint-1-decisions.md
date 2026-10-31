@@ -73,3 +73,12 @@ No remote migration application, deployment or push is authorized by this docume
 - The stored proposal holds flights for all cities. The backend filters each browser response, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
 - Stored proposals must not be readable directly by members through the Data API, because that would bypass this filter. The upcoming proposals migration must enforce this.
 - Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change is `FLIGHT_VISIBILITY=all`, plus updating this rule.
+
+## Sprint 2 update: reading private inputs for generation (2 November 2026)
+
+- **Decision:** Group conflicts are calculated inside SQL and return categories only. Generation inputs are read with a Supabase secret key kept in `backend/.env`. The key is used in one function, `fetch_generation_inputs`, and `rihla_trip_generation_inputs` is never granted to `authenticated`.
+- **Why:** This narrows the earlier decision against using `service_role`. A function granted to `authenticated` can be called directly from a browser with a member's token, bypassing FastAPI. A generation function open to that role would let a trip administrator read every member's budget and preferences, which breaks the privacy rules above.
+- **What stays the same:** All other requests keep the publishable key plus the user's token, under Row Level Security.
+- **Risk accepted:** The secret key bypasses Row Level Security, so it must never reach a browser, a log or Git. Automated tests check that only one module uses it and that the browser role cannot call the function.
+- This update authorizes no remote migration, deployment or push.
+- **Condition for the upcoming endpoint:** Before generating or regenerating, it must verify the signed-in account through Supabase Auth and confirm that account is the trip administrator. It must pass only that verified id to `fetch_generation_inputs`, never an id from the request.
