@@ -288,16 +288,39 @@ def test_invented_hotel_name_is_rejected() -> None:
     assert result.unavailable_reason == "rejected_value_not_in_quote"
 
 
-def test_usd_price_stays_internal_and_is_not_available_in_sar() -> None:
+def test_usd_price_is_converted_as_estimated_and_keeps_the_original() -> None:
     fact = extracted(
-        amount=320, currency="USD", quote="Average flight fares start at $320."
+        amount=320,
+        currency="USD",
+        status="Unconfirmed",
+        quote="Average flight fares start at $320.",
     )
 
     result = verify_field(PRICE, fact, [SOURCE])
 
+    assert (result.source_amount, result.source_currency) == (Decimal("320.0"), "USD")
+    public = to_sar_price(result)
+    assert (public.amount_sar, public.status) == (Decimal("1200.00"), "Estimated")
+    assert "source_amount" not in public.model_dump()
+    assert public.evidence[0].quote == "Average flight fares start at $320."
+
+
+def test_every_table_currency_has_a_marker_and_usd_is_the_peg() -> None:
+    assert set(trip_research.SAR_PER_UNIT) <= set(trip_research.CURRENCY_MARKERS)
+    assert trip_research.SAR_PER_UNIT["USD"] == Decimal("3.75")
+
+
+def test_currency_outside_the_table_is_not_available() -> None:
+    source = SOURCE.model_copy(update={"content": "Flight fares start at JPY 9000."})
+    fact = extracted(
+        amount=9000, currency="JPY", quote="Flight fares start at JPY 9000."
+    )
+
+    result = verify_field(PRICE, fact, [source])
+
     assert result.unavailable_reason == "no_sar_conversion"
-    assert (result.source_amount, result.source_currency) == (Decimal("320"), "USD")
-    assert result.source_evidence[0].quote == "Average flight fares start at $320."
+    assert (result.source_amount, result.source_currency) == (Decimal("9000.0"), "JPY")
+    assert result.source_evidence[0].quote == "Flight fares start at JPY 9000."
     public = to_sar_price(result)
     assert (public.amount_sar, public.status) == (None, "Not available")
 

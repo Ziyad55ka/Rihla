@@ -55,12 +55,25 @@ CURRENCY_MARKERS = {
     "SAR": r"\bSAR\b|\bSR\b|ر\.س|ريال",
     "USD": r"\$|\bUSD\b",
     "EUR": r"€|\bEUR\b",
-    "GBP": r"£|\bGBP\b",
+    "GBP": r"(?<!E)£|\bGBP\b",
     "TRY": r"₺|\bTRY\b",
+    "AED": r"\bAED\b|درهم",
+    "EGP": r"\bEGP\b|E£|جنيه",
+}
+# Approximate SAR for one unit, fixed in code. USD is the official peg.
+# Last updated 2026-11-01; the others come from rates published 2026-10-31.
+SAR_RATES_UPDATED = "2026-11-01"
+SAR_PER_UNIT = {
+    "USD": Decimal("3.75"),
+    "EUR": Decimal("4.19"),
+    "GBP": Decimal("5.02"),
+    "TRY": Decimal("0.075"),
+    "AED": Decimal("1.02"),
+    "EGP": Decimal("0.067"),
 }
 ANY_PRICE = (
-    r"(\$|€|£|₺|\bSAR\b|\bSR\b|\bUSD\b|\bEUR\b|ريال)\s*[\d,]+"
-    r"|[\d,]+\s*(SAR|USD|EUR|ريال)"
+    r"(\$|€|£|₺|\bSAR\b|\bSR\b|\bUSD\b|\bEUR\b|\bAED\b|\bEGP\b|ريال)\s*[\d,]+"
+    r"|[\d,]+\s*(SAR|USD|EUR|AED|EGP|ريال)"
 )
 ANY_DURATION = r"\d+\s*(h\b|hr|hour|ساعة|ساعات)"
 FLIGHT_TOPIC = r"flight|fare|airfare|ticket|طيران|رحلة"
@@ -528,24 +541,31 @@ def _verify_price(
         return _unavailable(spec, "rejected_value_not_in_quote")
     currency = fact.currency.strip().upper()
     marker = CURRENCY_MARKERS.get(currency)
-    if marker is None or not re.search(marker, quote, re.IGNORECASE):
+    if marker is not None and not re.search(marker, quote, re.IGNORECASE):
         return _unavailable(spec, "rejected_currency_unverified")
 
-    # A web price is never a booking offer, so it cannot be Sourced.
-    price_status = "Estimated" if status == "Sourced" else status
     if currency == "SAR":
+        # A web price is never a booking offer, so it cannot be Sourced.
+        price_status = "Estimated" if status == "Sourced" else status
+        amount_sar = amount
+    elif currency in SAR_PER_UNIT:
+        price_status = "Estimated"
+        amount_sar = (amount * SAR_PER_UNIT[currency]).quantize(Decimal("0.01"))
+    else:
+        amount_sar = None
+    if amount_sar is not None:
         return VerifiedField(
             field_id=spec.id,
             category=spec.category,
-            value=str(amount),
+            value=str(amount_sar),
             status=price_status,
             evidence=evidence,
             shared_quote=shared_quote,
             source_amount=amount,
             source_currency=currency,
-            amount_sar=amount,
+            amount_sar=amount_sar,
         )
-    # No trusted conversion exists: keep the original internally, show no SAR price.
+    # The currency is not in the table: keep the original internally, show no price.
     unavailable = _unavailable(spec, "no_sar_conversion")
     return unavailable.model_copy(
         update={
