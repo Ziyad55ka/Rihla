@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { BookResultView, BookSteps, RefreshView, TimerRing } from '../components/proposal-details/FlightActions'
+import { BookResultView, BookSteps, RefreshView, SplitBooking, TimerRing } from '../components/proposal-details/FlightActions'
 import { PlacePhoto } from '../components/proposal-details/PlacePhoto'
 import { airlineName } from '../lib/airlines'
 import { ActivitiesSection } from '../components/proposal-details/ActivitiesSection'
@@ -109,13 +109,10 @@ describe('ProposalDetailView', () => {
   })
   it('shows a round trip with one total and one button', () => {
     const html = page()
-    expect(html).toContain('Round trip · One booking')
     expect(html).toContain('Round trip, per person')
     expect(html).toContain('Outbound')
     expect(html).toContain('Return')
-    expect(count(html, 'Book the trip')).toBe(1)
-    expect(html).not.toContain('Book this flight')
-    expect(html).toContain('We check the flight when you press')
+    expect(count(html, '>Book<')).toBe(1)
   })
   it('shows each leg in full when the details are known', () => {
     const html = page(proposal({ flights: [flights({ legs: [{ ...leg('outbound', null), flight_number: 'SV 1020', departure_time: '2026-12-13T08:30', arrival_time: '2026-12-13T11:50', stops: 0 }, { ...leg('return', null), stops: 1 }] })] }))
@@ -127,22 +124,21 @@ describe('ProposalDetailView', () => {
   })
   it('shows split flights with a price and button for each direction', () => {
     const html = page(proposal({ flights: [flights({ trip_type: 'split', price_per_person: price('2150'), legs: [leg('outbound', 'https://air.example/out', price('1138')), leg('return', 'https://air.example/back', price('1012'))] })] }))
-    expect(html).toContain('Two separate bookings. Book both.')
-    expect(count(html, 'Book this flight')).toBe(2)
-    expect(html).toContain('From 1,138 SAR')
-    expect(html).toContain('From 1,012 SAR')
+    expect(count(html, 'Two separate bookings')).toBe(1)
+    expect(count(html, '>Book<')).toBe(1)
+    expect(html).toContain('Outbound 1,138 SAR + return 1,012 SAR')
   })
   it('warns that a one way trip leaves out the return', () => {
     const html = page(proposal({ budget_status: 'includes_unconfirmed', flights: [flights({ trip_type: 'one_way', legs: [leg('outbound', 'https://air.example/out', price('500'))] })] }))
     expect(html).toContain('One way only')
     expect(html).toContain('The return price is not counted.')
     expect(html).not.toContain('>Return<')
-    expect(count(html, 'Book this flight')).toBe(1)
+    expect(count(html, '>Book<')).toBe(1)
   })
   it('never opens a saved flight link: pressing the button asks for a fresh one', () => {
     const html = page(proposal({ flights: [flights({ legs: [leg('outbound', 'https://old.example/expired'), leg('return', 'https://old.example/expired')] })] }))
     expect(html).not.toContain('old.example')
-    expect(html).toContain('Book the trip')
+    expect(html).toContain('>Book<')
   })
   it('says the flight fits everyone from the city, or that none does, with no count', () => {
     const fits = page(proposal({ flights: [flights({ group_availability: 'available' })] }))
@@ -169,7 +165,7 @@ describe('ProposalDetailView', () => {
   })
   it('shows the old and new price with the difference, and opens in a new tab', () => {
     const html = pure(<BookResultView result={checked({ previous_price_sar: '900' })} />)
-    expect(html).toContain('Was 900 SAR → now 998.5 SAR (+98.5 SAR)')
+    expect(html).toContain('Was 900 SAR, now 998.5 SAR (+98.5 SAR)')
     expect(html).toContain('href="https://air.example/new"')
     expect(html).toContain('target="_blank" rel="noopener noreferrer"')
   })
@@ -213,10 +209,10 @@ describe('ProposalDetailView', () => {
     expect(pure(<BookResultView result={both} leg="inbound" />)).toContain('Choose flight GF 163 at 09:35, and check the price is close to 615 SAR.')
   })
   it('shows the fare and bag, or says the bag may not be included', () => {
-    const unknown = pure(<BookResultView result={checked()} />)
+    const unknown = page(proposal({ flights: [flights({ cabin_class: 'economy' })] }))
     expect(unknown).toContain('Economy')
     expect(unknown).toContain('may not include a bag')
-    expect(pure(<BookResultView result={checked({ checked_bags: 0 })} />)).toContain('No checked bag')
+    expect(page(proposal({ flights: [flights({ checked_bags: 0 })] }))).toContain('No checked bag')
   })
   it('names the source plainly and never the internal one', () => {
     const html = pure(<BookResultView result={checked()} />)
@@ -227,22 +223,21 @@ describe('ProposalDetailView', () => {
   it('shows a replacement with its flight, time and price', () => {
     const found = { ...checked(), reason: 'gone' as const, within_budget: false, seller: 'Saudia', price_sar: '1000.00', flights: [{ direction: 'outbound' as const, airline: 'Saudia', flight_number: 'SV 1', departure_time: '2026-11-20T09:00:00', arrival_time: '2026-11-20T10:30:00' }] }
     const html = pure(<BookResultView result={checked({ alternative: found })} />)
-    expect(html).toContain('The original flight is gone. We found a replacement.')
+    expect(html).toContain('The original flight is gone. Replacement: Saudia · 1,000 SAR')
     expect(html).toContain('SV 1')
     expect(html).toContain('09:00')
-    expect(html).toContain('From 1,000 SAR')
     expect(html).toContain('over the group budget')
   })
   it('offers a cheaper flight or one that opens directly, with its own link', () => {
     const found = { ...checked(), url: 'https://www.flynas.com/b', reason: 'cheaper' as const, within_budget: true, price_sar: '1000.00' }
     const html = pure(<BookResultView result={checked({ alternative: found })} />)
-    expect(html).toContain('A cheaper option you can book directly')
+    expect(html).toContain('Cheaper option available')
     expect(html).toContain('https://www.flynas.com/b')
   })
   it('says plainly when the cheaper option is an agent', () => {
     const found = { ...checked(), url: 'https://agent.example/x', reason: 'agent' as const, within_budget: true, seller: 'Mock Agent', price_sar: '900.00' }
     const html = pure(<BookResultView result={checked({ alternative: found })} />)
-    expect(html).toContain('Cheaper through a travel agent, for the same flight')
+    expect(html).toContain('Cheaper through a travel agent: Mock Agent')
     expect(html).toContain('This is an agent, not the airline')
     expect(html).toContain('Mock Agent')
   })
@@ -258,13 +253,6 @@ describe('ProposalDetailView', () => {
   it('never makes a link from an unsafe address', () => {
     expect(pure(<BookResultView result={checked({ url: 'javascript:alert(1)', fallback: 'limit', checked_at: null, price_sar: null })} />)).not.toContain('javascript:')
   })
-  it('shows the booking steps', () => {
-    expect(pure(<BookSteps busy={false} result={null} />)).toBe('')
-    const busy = pure(<BookSteps busy result={null} />)
-    expect(busy).toContain('Checking the price and seats now…')
-    expect(busy).toContain('aria-current="step"')
-    expect(pure(<BookSteps busy={false} result={checked()} />)).toContain('Open the booking page')
-  })
   it('turns off the refresh button for a while, and says how long', () => {
     const props = { busy: false, result: null, error: '', onRefresh: () => undefined }
     const waiting = pure(<RefreshView {...props} waitMinutes={2} />)
@@ -275,7 +263,7 @@ describe('ProposalDetailView', () => {
   it('says a new price passed the budget without any figure', () => {
     const html = pure(<RefreshView busy={false} error="" waitMinutes={0} onRefresh={() => undefined} result={checked({ now_over_budget: true, price_sar: null, checked_at: null })} />)
     expect(html).toContain('over the group budget')
-    expect(html).not.toMatch(/\d/)
+    expect(html.replace(/<[^>]+>/g, ' ')).not.toMatch(/\d/)
   })
   it('reloads after a check that saved, so the page shows the new price', async () => {
     const reload = vi.fn()
@@ -309,9 +297,74 @@ describe('ProposalDetailView', () => {
     localStorage.setItem('rihla-language', 'ar')
     expect(page(proposal({ flights: [flights({ airline_fares: [note] })] }))).toContain('السياحية الخفيفة')
   })
+  const lined = () => flights({
+    origin_airport: 'RUH', destination_airport: 'CDG',
+    legs: [{ ...leg('outbound', null), flight_number: 'A3 953', departure_time: '2026-12-13T06:50:00', arrival_time: '2026-12-13T20:35:00', stops: 1, stop_airports: ['ATH'] }, { ...leg('return', null), flight_number: 'VF 10', departure_time: '2026-12-17T01:25:00', arrival_time: '2026-12-17T09:00:00', stops: 0 }],
+  })
+  it('draws each direction as a flight line with times, airports and stops', () => {
+    const html = page(proposal({ flights: [lined()] }))
+    expect(html).toContain('details-line-track')
+    expect(html).toContain('06:50')
+    expect(html).toContain('20:35')
+    expect(html).toContain('RUH')
+    expect(html).toContain('CDG')
+    expect(html).toContain('A3 953')
+    expect(html).toContain('Stop at ATH')
+    expect(html).toContain('One stop')
+    expect(html).toContain('Nonstop')
+    expect(count(html, 'details-line-stop')).toBe(1)
+  })
+  it('shows one price and one Book button, with each message only once', () => {
+    const html = page(proposal({ flights: [lined()] }))
+    expect(count(html, '>Book<')).toBe(1)
+    expect(count(html, 'Refresh the price')).toBe(1)
+    expect(count(html, 'From 900 SAR')).toBe(1)
+    expect(count(html, 'Prices and seats change from time to time.')).toBe(1)
+  })
+  it('opens split flights as two steps from one button, with one label', () => {
+    const route = flights({ trip_type: 'split', price_per_person: price('2150'), legs: [leg('outbound', 'https://a.example/o', price('1138')), leg('return', 'https://a.example/b', price('1012'))] })
+    const closed = page(proposal({ flights: [route] }))
+    expect(count(closed, '>Book<')).toBe(1)
+    expect(count(closed, 'Two separate bookings')).toBe(1)
+    expect(closed).not.toContain('Check this flight')
+    expect(closed).toContain('Outbound 1,138 SAR + return 1,012 SAR = 2,150 SAR per person')
+    const open = pure(<SplitBooking tripId="t" proposalId="p" cooldownMinutes={2} onChanged={() => undefined} initiallyOpen />)
+    expect(count(open, 'role="tab"')).toBe(2)
+    expect(count(open, 'Check this flight')).toBe(2)
+    expect(open).toContain('Next: the return')
+    expect(open).toContain('aria-selected="true"')
+  })
+  it('folds the alternative behind one line, and opens a replacement', () => {
+    const found = { ...checked(), url: 'https://www.lufthansa.com/d', reason: 'cheaper' as const, within_budget: true, seller: 'Lufthansa', price_sar: '1950.00' }
+    const html = pure(<BookResultView result={checked({ alternative: found })} />)
+    expect(html).toContain('<details')
+    expect(html).toContain('Cheaper option available: Lufthansa · 1,950 SAR')
+    expect(html).not.toContain('<details class="details-alternative details-reveal" open')
+    expect(pure(<BookResultView result={checked({ alternative: { ...found, reason: 'gone' } })} />)).toContain('open=""')
+  })
+  it('writes a smart summary from the proposal alone, with no private details', () => {
+    const html = page(proposal({ cities: [{ ...stay, labels_en: ['Near the museums'] }] }))
+    expect(html).toContain('smart summary')
+    expect(html).toContain('Suggested by AI')
+    expect(html).toContain('Fits the group budget')
+    expect(html).toContain('in one city')
+    expect(html).toContain('Near the museums')
+    const two = page(proposal({ budget_status: 'over_group_budget', flights: [flights({ legs: [{ ...leg('outbound', null), stops: 0 }, { ...leg('return', null), stops: 0 }] })], cities: [{ ...stay, nights: 2 }, { ...stay, order: 2, city: 'Luxor', nights: 2 }], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
+    expect(two).toContain('Over the group budget')
+    expect(two).toContain('across 2 cities')
+    expect(two).toContain('Direct flights from your city')
+  })
+  it('uses only SVG icons, with no symbol that could show as a box, in both languages', () => {
+    const symbols = /[\u2190-\u21FF\u2460-\u24FF\u25A0-\u27BF\u2900-\u2BFF\u{1F000}-\u{1FAFF}]/u
+    const found = { ...checked(), url: 'https://a.example/', reason: 'no_link' as const, within_budget: true, price_sar: '100.00' }
+    const views = () => [page(twoCities()), page(proposal({ flights: [lined()] })), pure(<BookResultView result={checked({ previous_price_sar: '900', alternative: found })} />)]
+    for (const html of views()) { expect(html).not.toMatch(symbols); expect(html).toContain('<svg') }
+    localStorage.setItem('rihla-language', 'ar')
+    for (const html of views()) expect(html).not.toMatch(symbols)
+  })
   it('shows the notice beside flights and stays, and a from price on every flight', () => {
     const html = page()
-    expect(count(html, 'Prices and seats change from time to time.')).toBe(2)
+    expect(count(html, 'Prices and seats change from time to time.')).toBe(1)
     expect(html).toContain('From 900 SAR')
     expect(html).toContain('may show the outbound price first')
   })
@@ -328,7 +381,7 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('Compare on Booking')
     expect(html).toContain('Trip.com')
     expect(page()).not.toContain('Book this hotel')
-    expect(page()).toContain('See photos of this hotel')
+    expect(page()).toContain('Search on Booking.com')
   })
   it('names the site behind a hotel price', () => {
     expect(staySource(stay, [{ id: 1, title: 'T', url: 'https://www.kayak.com/h' }])).toBe('kayak.com')
@@ -403,7 +456,7 @@ describe('ProposalDetailView', () => {
     localStorage.setItem('rihla-language', 'ar')
     const gulf = flights({ legs: [{ ...leg('outbound', null), airline: info('Gulf Air'), flight_number: 'GF 162', departure_time: '2026-12-13T06:50:00', arrival_time: '2026-12-13T08:10:00', stops: 0, duration: info('1h 25m') }, { ...leg('return', null), airline: info('Gulf Air'), duration: info('1h 25m') }], duration: info('1h 25m') })
     const html = page({ ...twoCities({ from_station: "Paris Gare de l'Est", to_station: 'Strasbourg' }), title: 'رحلة', destination: 'France', flights: [gulf], sources: [] })
-    const visible = html.replace(/<(style|script)[^>]*>.*?<\/\1>/gs, '').replace(/<[^>]+>/g, ' ').replace(/GF \d+/g, ' ').replace(/Booking(\.com)?/g, ' ').replace(/Mock Hotel/g, ' ')
+    const visible = html.replace(/<(style|script)[^>]*>.*?<\/\1>/gs, '').replace(/<[^>]+>/g, ' ').replace(/GF \d+/g, ' ').replace(/Booking(\.com)?/g, ' ').replace(/Mock Hotel/g, ' ').replace(/Rihla/g, ' ')
     expect(visible.match(/[A-Za-z]{2,}/g) ?? []).toEqual([])
     expect(html).toContain('الرياض')
     expect(html).toContain('٠٦:٥٠')
@@ -436,7 +489,8 @@ describe('ProposalDetailView', () => {
   it('shows a working status with changing words in both languages', () => {
     const html = pure(<AiStatus messages={checkMessages} />)
     expect(html).toContain('role="status"')
-    expect(html).toContain('ai-status-dot')
+    expect(html).toContain('ai-status-spark')
+    expect(html).toContain('<svg')
     expect(html).toContain('Reviewing the trip…')
     expect(nextStatusIndex(0, 4)).toBe(1)
     expect(nextStatusIndex(3, 4)).toBe(3)
