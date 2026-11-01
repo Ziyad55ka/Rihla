@@ -122,12 +122,36 @@
         {
           "id": 1,
           "title": "Mock hotel guide",
-          "url": "https://example.com/mock-hotels"
+          "url": "https://example.com/mock-hotels",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 2,
           "title": "Mock flight guide",
-          "url": "https://example.com/mock-flights"
+          "url": "https://example.com/mock-flights",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Essential",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "met"
         }
       ]
     },
@@ -294,17 +318,47 @@
         {
           "id": 1,
           "title": "Mock Tbilisi guide",
-          "url": "https://example.com/mock-tbilisi"
+          "url": "https://example.com/mock-tbilisi",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 2,
           "title": "Mock route page",
-          "url": "https://example.com/mock-route"
+          "url": "https://example.com/mock-route",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 3,
           "title": "Mock rail guide",
-          "url": "https://example.com/mock-rail"
+          "url": "https://example.com/mock-rail",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Essential",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "accommodation",
+          "importance": "Flexible",
+          "status": "unmet"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     },
@@ -415,7 +469,30 @@
         {
           "id": 1,
           "title": "Mock Baku guide",
-          "url": "https://example.com/mock-baku"
+          "url": "https://example.com/mock-baku",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Flexible",
+          "status": "met"
+        },
+        {
+          "topic": "accommodation",
+          "importance": "Essential",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     }

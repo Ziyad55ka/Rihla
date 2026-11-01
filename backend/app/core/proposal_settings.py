@@ -94,6 +94,9 @@ class ProposalSettings(BaseSettings):
     # Price age: fresh below the first, old above the second.
     price_fresh_hours: int = Field(default=3, ge=1)
     price_stale_hours: int = Field(default=24, ge=1)
+    # US-13: a general daily allowance per person for meals and small expenses.
+    # It is not from a source, so the page always marks it Unconfirmed.
+    meals_per_day_sar: Decimal = Field(default=Decimal(150), ge=0, decimal_places=2)
 
     # Free city photos from Wikimedia, kept locally with their licence.
     place_images_enabled: bool = True

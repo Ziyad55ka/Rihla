@@ -122,7 +122,30 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Flexible",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     },
@@ -258,12 +281,36 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 4,
           "title": "Where To Stay In Istanbul in 2026 - Best Areas & Hotels - GlobeTrove",
-          "url": "https://www.globetrove.com/where-to-stay-in-istanbul-turkey"
+          "url": "https://www.globetrove.com/where-to-stay-in-istanbul-turkey",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Flexible",
+          "status": "met"
+        },
+        {
+          "topic": "accommodation",
+          "importance": "Essential",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "met"
         }
       ]
     },
@@ -455,22 +502,48 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 2,
           "title": "The 7 Best Luxury Hotels in Amman – 5-Star Hotels (2026)",
-          "url": "https://suitespot.com/en-US/luxury-hotels/jordan/amman"
+          "url": "https://suitespot.com/en-US/luxury-hotels/jordan/amman",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 10,
           "title": "Dead Sea Travel Guide: Places to Visit, Things to Do & Hotels | Destina Holidays",
-          "url": "https://www.destinaholidays.com/destinations/jordan/dead-sea"
+          "url": "https://www.destinaholidays.com/destinations/jordan/dead-sea",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 12,
           "title": "Getting to the Dead Sea: Routes from Amman, Petra & Aqaba - Travel Tour Shop",
-          "url": "https://traveltourshop.com/blog/dead-sea-jordan-transport-guide"
+          "url": "https://traveltourshop.com/blog/dead-sea-jordan-transport-guide",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Flexible",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     }

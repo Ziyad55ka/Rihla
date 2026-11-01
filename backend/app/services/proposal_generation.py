@@ -24,6 +24,8 @@ from app.schemas.generation import GenerationInput
 from app.schemas.proposals import (
     BudgetStatus,
     CityStay,
+    CompatibilityCheck,
+    CompatibilityStatus,
     Evidence,
     FlexibleAdjustment,
     FlightLeg,
@@ -264,6 +266,81 @@ def check_requirements(
     return adjustments, reasons
 
 
+# Splits "France, Bahrain" or "France or Bahrain" into alternatives.
+ALTERNATIVES = re.compile(
+    # Commas and slashes, "or" and "and", and Arabic "أو" and a joined "و".
+    r"\s*(?:[,/;\u060c]|\bor\b|\band\b|\s\u0623\u0648\s|\s\u0648(?=\S))\s*",
+    re.IGNORECASE,
+)
+# Worst first, so a topic shows its weakest requirement.
+STATUS_ORDER: tuple[CompatibilityStatus, ...] = ("unmet", "unverified", "met")
+
+
+def destination_matches(text: str, places: list[str]) -> bool:
+    """True when one alternative in a destination requirement names a place shown.
+
+    Only exact place names count, so "Paris" matches the city Paris but "warm
+    beach" never matches anything and stays unverified.
+    """
+    shown = {place.strip().casefold() for place in places if place and place.strip()}
+    for part in ALTERNATIVES.split(text):
+        name = part.strip().casefold()
+        if len(name) >= 2 and name in shown:
+            return True
+    return False
+
+
+def compatibility_checks(
+    option: PlannedOption,
+    requirements: list[Requirement],
+    status: BudgetStatus,
+) -> list[CompatibilityCheck]:
+    """US-15: one result per topic and importance, with no requirement text.
+
+    Destinations are checked in code against the planned places. Interests, flights
+    and accommodation are free text, so a met result there rests on the AI's report
+    and is shown as unverified. Dates are always checked before research, and the
+    budget is met only when every counted price has evidence.
+    """
+    reported = {item.requirement_id: item.met for item in option.requirement_checks}
+    # Arabic names too, so "مصر" can match a trip whose Arabic destination is مصر.
+    places = [
+        option.destination,
+        option.country,
+        option.destination_ar or "",
+        *(city.city for city in option.cities),
+        *(option.cities_ar or []),
+    ]
+    found: dict[tuple[str, str], CompatibilityStatus] = {}
+    for requirement in requirements:
+        if not reported.get(requirement.id, False):
+            result: CompatibilityStatus = "unmet"
+        elif requirement.category == "destinations" and destination_matches(
+            requirement.text, places
+        ):
+            result = "met"
+        else:
+            result = "unverified"
+        key = (requirement.category, requirement.importance)
+        current = found.get(key, "met")
+        found[key] = min(current, result, key=STATUS_ORDER.index)
+    checks = [
+        CompatibilityCheck(topic=topic, importance=importance, status=result)
+        for (topic, importance), result in sorted(found.items())
+    ]
+    checks.append(
+        CompatibilityCheck(topic="dates", importance="Required", status="met")
+    )
+    checks.append(
+        CompatibilityCheck(
+            topic="budget",
+            importance="Required",
+            status="met" if status == "within_group_budget" else "unverified",
+        )
+    )
+    return checks
+
+
 def contains_private_detail(text: str, generation: GenerationInput) -> bool:
     """Reject any member's budget figure or departure city in shared text."""
     numbers = trip_research.numbers_in(text)
@@ -484,6 +561,7 @@ def build_proposal(
     research: ResearchResult,
     adjustments: list[FlexibleAdjustment],
     version: int,
+    requirements: list[Requirement] | None = None,
 ) -> Proposal:
     by_id: dict[str, VerifiedField] = {item.field_id: item for item in research.fields}
     flights = [
@@ -534,6 +612,7 @@ def build_proposal(
     ]
     ceiling = min(member.max_budget_sar for member in generation.members)
     status = budget_status(cities, flights, transfers, ceiling)
+    retrieved_at = datetime.now(UTC)
     proposal = Proposal(
         id=uuid4(),
         trip_id=generation.trip_id,
@@ -559,9 +638,11 @@ def build_proposal(
                 kind=classify_source(
                     source.url, source.title, DEFAULT_BOOKING_DOMAINS_LIST
                 ),
+                retrieved_at=retrieved_at,
             )
             for source in research.sources
         ],
+        compatibility=compatibility_checks(option, requirements or [], status),
     )
     return proposal.without_uncited_sources()
 
@@ -680,6 +761,7 @@ async def _complete_option(
             result,
             adjustments,
             version,
+            requirements,
         )
     except ValidationError as error:
         raise OptionRejected("invalid_itinerary") from error

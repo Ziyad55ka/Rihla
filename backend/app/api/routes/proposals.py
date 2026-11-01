@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.core.auth import CurrentIdentity
 from app.schemas.conflicts import GroupConflicts
+from app.schemas.costs import ProposalCosts
 from app.schemas.proposals import AirlineFareNote, Proposal
 from app.services.airline_fares import fare_notes
 from app.services.flight_refresh import (
@@ -20,12 +21,14 @@ from app.services.flight_refresh import (
 from app.services.generation_inputs import (
     FlightContext,
     GenerationInputsError,
+    fetch_cost_context,
     fetch_flight_context,
     fetch_generation_inputs,
     save_flight_refresh,
 )
 from app.services.generation_precheck import generate_checked
 from app.services.place_images import with_place_images
+from app.services.proposal_costs import CostContext, proposal_costs
 from app.services.proposal_generation import GenerationBlocked
 from app.services.proposal_store import SupabaseProposalStore
 from app.services.source_policy import apply_source_policy
@@ -77,6 +80,9 @@ class StoredProposals(BaseModel):
     price_fresh_hours: int = 3
     price_stale_hours: int = 24
     refresh_cooldown_minutes: int = 5
+    # US-13: the caller's own cost breakdown for each proposal. Worked out on
+    # reading and never saved. Empty when there are no proposals.
+    costs: list[ProposalCosts] = []
 
 
 class GeneratedProposals(StoredProposals):
@@ -229,10 +235,21 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
         StoredProposals,
     )
     proposals = await with_place_images(stored.proposals, settings)
+    context: CostContext | None = None
+    if proposals:
+        # Without the group context the page still gets this member's own costs.
+        try:
+            context = await fetch_cost_context(trip_id, identity.account.id, settings)
+        except GenerationInputsError:
+            context = None
     return stored.model_copy(
         update={
             "proposals": [
                 _with_fare_notes(apply_source_policy(item, settings.booking_domains))
+                for item in proposals
+            ],
+            "costs": [
+                proposal_costs(item, settings.meals_per_day_sar, context)
                 for item in proposals
             ],
             "price_fresh_hours": settings.price_fresh_hours,
