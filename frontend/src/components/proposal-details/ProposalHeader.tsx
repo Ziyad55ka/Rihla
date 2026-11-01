@@ -3,6 +3,7 @@ import { calendarDate } from '../../lib/planning'
 import { placeName } from '../../lib/places'
 import { budgetStatusLabels, proposalTitle } from '../../lib/proposals'
 import type { Proposal } from '../../types/proposal'
+import { SparkleIcon } from './icons'
 import { nightsLabel } from './nights'
 import { PlacePhoto } from './PlacePhoto'
 
@@ -24,6 +25,7 @@ export function ProposalHeader({ proposal, total }: { proposal: Proposal; total:
   const place = placeName(proposal.destination, language, proposal.destination_ar)
   return <header className={`details-hero${proposal.image ? ' details-hero--photo' : ''}`}>
     {proposal.image && <PlacePhoto image={proposal.image} place={place} variant="hero" />}
+    <span className="details-ai-badge"><SparkleIcon /> {t('Suggested by AI')}</span>
     <p className="trip-eyebrow">{t('Option {number} of {total}', { number: proposal.option_number.toLocaleString(locale), total: total.toLocaleString(locale) })}</p>
     <h1 aria-label={title}><bdi aria-hidden="true">{title.split(' ').map((word, index) => <span className="details-word" key={index} style={{ animationDelay: `${index * 90 + 150}ms` }}>{word} </span>)}</bdi></h1>
     <p className="details-hero-summary"><bdi>{place}</bdi> · {summary.join(' · ')}</p>

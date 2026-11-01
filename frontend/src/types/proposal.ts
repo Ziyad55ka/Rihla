@@ -98,6 +98,8 @@ export interface FlightLeg {
   stops?: number | null
   /** Who sells this leg, or null. It can differ from the airline. */
   seller?: string | null
+  /** Where the stops are, or empty on older proposals. Example: ["ATH"]. */
+  stop_airports?: string[]
 }
 
 /** The flights from one departure city. */

@@ -79,6 +79,7 @@ class FareLeg:
     arrival_time: str | None = None
     stops: int | None = None
     seller: str | None = None
+    stop_airports: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -303,7 +304,10 @@ class IgnavProvider:
         if cached and time.time() - cached[0].get("cached_at", 0) < self.cache_seconds:
             saved = dict(cached[0])
             saved.pop("cached_at")
-            saved["legs"] = tuple(FareLeg(**leg) for leg in saved["legs"])
+            saved["legs"] = tuple(
+                FareLeg(**{**leg, "stop_airports": tuple(leg.get("stop_airports", ()))})
+                for leg in saved["legs"]
+            )
             return FlightFare(**saved)
         try:
             body = await self.search(query)
@@ -618,6 +622,11 @@ def _leg(
         # A nonstop leg has one segment; a connection has two or more.
         stops=len(segments) - 1 if segments else None,
         seller=(link or {}).get("provider_name"),
+        stop_airports=tuple(
+            str(item["arrival_airport"])
+            for item in segments[:-1]
+            if item.get("arrival_airport")
+        ),
     )
 
 

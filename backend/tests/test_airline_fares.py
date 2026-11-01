@@ -112,3 +112,29 @@ def test_only_confirmed_bags_have_a_value() -> None:
 
     assert notes["FZ"].checked_kg == 0
     assert notes["SV"].checked_kg is None
+
+
+def test_stop_airports_come_from_the_segments() -> None:
+    connecting = {
+        "carrier": "Gulf Air",
+        "duration_minutes": 300,
+        "segments": [
+            {
+                "marketing_carrier_code": "GF",
+                "flight_number": "1",
+                "arrival_airport": "BAH",
+            },
+            {
+                "marketing_carrier_code": "GF",
+                "flight_number": "2",
+                "arrival_airport": "CDG",
+            },
+        ],
+    }
+    fare = fare_from_itinerary(
+        {**CHOICE, "outbound": connecting}, {"booking_options": [WHOLE]}, QUERY
+    )
+
+    assert fare.legs[0].stop_airports == ("BAH",)
+    assert fare.legs[0].stops == 1
+    assert fare.legs[1].stop_airports == ()

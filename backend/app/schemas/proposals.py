@@ -147,6 +147,8 @@ class FlightLeg(StrictModel):
     arrival_time: str | None = None
     # 0 is nonstop. Null on older proposals.
     stops: int | None = Field(default=None, ge=0)
+    # Where those stops are, or empty on older proposals. Example: ["ATH"].
+    stop_airports: list[str] = []
     # Who sells this leg, or null. It can differ from the airline. Example: "Saudia".
     seller: str | None = None
 

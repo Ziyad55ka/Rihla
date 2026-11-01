@@ -377,6 +377,7 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
         departure_time=leg.departure_time,
         arrival_time=leg.arrival_time,
         stops=leg.stops,
+        stop_airports=list(leg.stop_airports),
         seller=leg.seller,
     )
 
