@@ -935,6 +935,44 @@ test('a member whose departure city changed is told proposals need regenerating'
   assert.equal(changed.needs_regeneration, true)
   assert.deepEqual(changed.proposals[0].flights, [])
   await role(ALICE)
+  assert.equal((await proposals(id)).needs_regeneration, true)
+})
+
+test('needs_regeneration turns true when any member changes a preference or joins', async () => {
+  const id = await savedTrip()
+  await role(BOB)
+  await savePreferences(id, member({ departure_city: 'Jeddah', max_budget_sar: '9000' }))
+  assert.equal((await proposals(id)).needs_regeneration, true)
+  await role(ALICE)
+  const answer = await proposals(id)
+  assert.equal(answer.needs_regeneration, true)
+  assert.ok(!JSON.stringify(answer).includes('fingerprint'))
+
+  await role(ALICE)
+  await begin(id)
+  await saveAll(id, 2)
+  assert.equal((await proposals(id)).needs_regeneration, false)
+
+  const invitation = await rpc('rihla_issue_invitation', [id])
+  await role(CAROL)
+  await rpc('rihla_join_trip', [invitation.token])
+  await role(ALICE)
+  assert.equal((await proposals(id)).needs_regeneration, true)
+})
+
+test('needs_regeneration stays false when a member saves the same preferences', async () => {
+  const id = await savedTrip()
+  await role(BOB)
+  await savePreferences(id, member({ departure_city: 'Jeddah' }))
+  assert.equal((await proposals(id)).needs_regeneration, false)
+})
+
+test('proposals saved before fingerprints keep the departure city check only', async () => {
+  const id = await savedTrip()
+  await root()
+  await db.query('update public.proposal_generations set input_fingerprint = null where trip_id = $1', [id])
+  await role(BOB)
+  await savePreferences(id, member({ departure_city: 'Jeddah', max_budget_sar: '9000' }))
   assert.equal((await proposals(id)).needs_regeneration, false)
 })
 

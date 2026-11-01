@@ -32,8 +32,8 @@ describe('ProposalsView', () => {
   it('tells a member and the administrator when proposals need regenerating', () => {
     const stored = { ...empty, needs_regeneration: true }
     expect(view({ isAdmin: false, stored })).toContain('The administrator needs to generate them again')
-    expect(view({ stored })).toContain('Generate them again to include it')
-    expect(view({ isAdmin: false })).not.toContain('no flights from your departure city')
+    expect(view({ stored })).toContain('Generate them again to include the changes')
+    expect(view({ isAdmin: false })).not.toContain('details changed')
   })
   it('shows members no button', () => {
     expect(view({ isAdmin: false })).not.toContain('<button')

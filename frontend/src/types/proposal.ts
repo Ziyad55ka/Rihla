@@ -197,7 +197,7 @@ export interface StoredProposals {
   generated_at: string | null
   /** True while a generation is running for this trip. */
   generating: boolean
-  /** True when proposals exist but none has flights from this member's city. */
+  /** True when members or preferences changed after generation, or none has this member's city. */
   needs_regeneration: boolean
   /** Up to three proposals, by option number. Can be empty. */
   proposals: Proposal[]
