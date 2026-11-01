@@ -1,12 +1,13 @@
 import { useLanguage } from '../../lib/language'
+import { useCountUp } from '../../lib/motion'
 import { priceAge, type PriceAgeLimits, safeLink, statusLabels } from '../../lib/proposals'
 import type { InfoField, InfoStatus, SarPrice } from '../../types/proposal'
 import { InfoIcon } from './icons'
 import { useSar } from './useSar'
 
-export function StatusBadge({ status, short = false }: { status: InfoStatus; short?: boolean }) {
+export function StatusBadge({ status }: { status: InfoStatus }) {
   const { t } = useLanguage()
-  return <span className={`planning-badge${status === 'Sourced' ? ' planning-badge--ready' : status === 'Unconfirmed' ? ' planning-badge--conflict' : ' details-badge--neutral'}`}>{t(short && status === 'Unconfirmed' ? 'Unconfirmed' : statusLabels[status])}</span>
+  return <span className={`planning-badge${status === 'Sourced' ? ' planning-badge--ready' : status === 'Unconfirmed' ? ' planning-badge--conflict' : ' details-badge--neutral'}`}>{t(statusLabels[status])}</span>
 }
 
 /** A label only when the value is doubtful or missing, so pages do not repeat badges. */
@@ -29,7 +30,10 @@ export function PriceValue({ price, unit, startsFrom = false }: { price: SarPric
   const { t } = useLanguage()
   const sar = useSar()
   const known = price.status !== 'Not available' && price.amount_sar !== null
-  const amount = known ? sar(price.amount_sar as string) : '—'
+  const target = Number(price.amount_sar ?? 0)
+  const moving = useCountUp(target)
+  // Whole riyals while it glides, then the exact price.
+  const amount = known ? sar(moving === target ? target : Math.round(moving)) : '—'
   return <span className="details-value">
     <span>
       {known && startsFrom ? t('From {amount}', { amount }) : known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}

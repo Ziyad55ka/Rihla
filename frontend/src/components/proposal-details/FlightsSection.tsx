@@ -2,7 +2,7 @@ import { airlineName } from '../../lib/airlines'
 import { useLanguage } from '../../lib/language'
 import { calendarDate } from '../../lib/planning'
 import { placeName } from '../../lib/places'
-import { type PriceAgeLimits, sourceLabel } from '../../lib/proposals'
+import { durationLabel, localTime, type PriceAgeLimits, sourceLabel } from '../../lib/proposals'
 import type { FlightLeg, Flights, Proposal, TripType } from '../../types/proposal'
 import { BookFlight, FareLine, RefreshFlights } from './FlightActions'
 import { InfoIcon } from './icons'
@@ -19,6 +19,7 @@ const clock = (value?: string | null) => /[T ](\d{2}:\d{2})/.exec(value ?? '')?.
 
 function Leg({ leg, proposal, separate, cooldownMinutes, onChanged }: { leg: FlightLeg; proposal: Proposal; separate: boolean; cooldownMinutes: number; onChanged: () => void }) {
   const { t, locale, language } = useLanguage()
+  const duration = durationLabel(leg.duration.value, language, locale)
   const departs = clock(leg.departure_time)
   const arrives = clock(leg.arrival_time)
   const stops = leg.stops
@@ -28,8 +29,8 @@ function Leg({ leg, proposal, separate, cooldownMinutes, onChanged }: { leg: Fli
       <span>{calendarDate(leg.date, locale)}</span>
       <InfoValue field={leg.airline} display={(name) => airlineName(name, language)} />
       {leg.flight_number && <span className="details-flight-number"><bdi>{leg.flight_number}</bdi></span>}
-      {departs && arrives && <span className="details-times"><bdi>{departs}</bdi> – <bdi>{arrives}</bdi></span>}
-      <InfoValue field={leg.duration} />
+      {departs && arrives && <span className="details-times"><bdi>{localTime(departs, locale)}</bdi> – <bdi>{localTime(arrives, locale)}</bdi></span>}
+      {duration && <span><bdi>{duration}</bdi></span>}
       {stops !== undefined && stops !== null && <span>{stops === 0 ? t('Nonstop') : stops === 1 ? t('One stop') : stops === 2 ? t('Two stops') : t('{count} stops', { count: stops.toLocaleString(locale) })}</span>}
     </div>
     {separate && <>
