@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { checkMessages } from '../../lib/aiStatus'
 import { airlineName } from '../../lib/airlines'
 import { useLanguage } from '../../lib/language'
 import { bookFlight, checkAndReload, type BookLeg, type FlightCheckResult, type FlightFacts, type FlightFallback, linkFractionLeft, linkMinutesLeft, localTime, priceChange, refreshFlights, safeLink, sourceLabel } from '../../lib/proposals'
 import type { AirlineFareNote } from '../../types/proposal'
+import { AiStatus } from '../AiStatus'
 import { BagIcon, CheckIcon, ClockIcon, InfoIcon, SwapIcon } from './icons'
 import { useSar } from './useSar'
 
@@ -165,10 +167,6 @@ export function BookSteps({ busy, result }: { busy: boolean; result: FlightCheck
   </div>
 }
 
-function Spinner() {
-  return <span className="details-spinner" aria-hidden="true" />
-}
-
 export function BookFlight({ tripId, proposalId, leg, label, cooldownMinutes, onChanged }: { tripId: string; proposalId: string; leg: BookLeg; label: string; cooldownMinutes: number; onChanged: () => void }) {
   const { t, locale } = useLanguage()
   const [busy, setBusy] = useState(false)
@@ -182,7 +180,7 @@ export function BookFlight({ tripId, proposalId, leg, label, cooldownMinutes, on
     finally { setBusy(false) }
   }
   return <div className="details-booking">
-    {!result && <button type="button" className="trip-primary" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={() => { void check() }}>{busy ? <><Spinner /> {t('Checking…')}</> : label}</button>}
+    {!result && <button type="button" className="trip-primary" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={() => { void check() }}>{busy ? <AiStatus messages={checkMessages} /> : label}</button>}
     {!result && !busy && waitMinutes > 0 && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
     <BookSteps busy={busy} result={result} />
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
@@ -195,7 +193,7 @@ export function RefreshView({ waitMinutes, busy, result, error, onRefresh }: { w
   const { t, locale } = useLanguage()
   const link = result?.fallback ? safeLink(result.url) : null
   return <div className="details-refresh">
-    <button type="button" className="trip-secondary" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={onRefresh}>{busy ? <><Spinner /> {t('Checking…')}</> : t('Refresh the price')}</button>
+    <button type="button" className="trip-secondary" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={onRefresh}>{busy ? <AiStatus messages={checkMessages} /> : t('Refresh the price')}</button>
     {waitMinutes > 0 && !busy && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {result && <PriceChange result={result} />}

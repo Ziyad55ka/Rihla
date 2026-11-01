@@ -1,13 +1,16 @@
 import { useEffect, useState, type MouseEvent } from 'react'
+import { GENERATE_STEP_MS, generateMessages } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
 import { navigate } from '../lib/navigation'
 import { calendarDate } from '../lib/planning'
 import { placeName } from '../lib/places'
 import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, proposalTitle, reviewMessages } from '../lib/proposals'
 import type { GroupConflicts, Proposal, StoredProposals } from '../types/proposal'
+import { AiStatus } from './AiStatus'
 import { PlacePhoto } from './proposal-details/PlacePhoto'
 import '../proposals.css'
 import '../proposal-details.css'
+import '../proposal-fonts'
 
 const proposalPath = (proposal: Proposal) => `/trips/${proposal.trip_id}/proposals/${proposal.id}`
 
@@ -38,7 +41,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
       <div><p className="trip-eyebrow">{t('TRIP PROPOSALS')}</p><h2 id="proposals-title">{t('Three ways to go.')}</h2></div>
       {isAdmin && <div className="proposals-actions">
         <button type="button" className="trip-primary" disabled={!enabled} onClick={() => onGenerate(proposals.length > 0)}>
-          {generating ? t('Generating proposals…') : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
+          {generating ? <AiStatus messages={generateMessages} stepMs={GENERATE_STEP_MS} /> : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
         </button>
       </div>}
     </div>
