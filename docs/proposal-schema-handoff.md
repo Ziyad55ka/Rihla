@@ -243,6 +243,8 @@ class Proposal(StrictModel):
 | `group_total_sar` | `Flights` | سعر المجموعة، ويوصل بس إذا كل الرحلة من مدينة وحدة |
 | `provider`, `seller_type`, `price_source` | `Flights` | مصدر السعر، ونوع البائع، وهل السعر من البائع أو من البحث |
 | `cabin_class`, `fare_name`, `checked_bags`, `carry_on_bags` | `Flights` | الفئة والشنط إذا المصدر رجعها |
+| `airline_fares` | `Flights` | معلومة عامة عن أرخص فئة لكل شركة: `fare_en` و`fare_ar` و`checked_kg`. تنضاف عند القراءة وما تنحفظ، وتنعدل في `app/data/airline_fares.json` |
+| `price` | `FlightLeg` | على round_trip موجود بس إذا البائع ذكر سعر كل اتجاه. لا تقسموا الإجمالي أبدًا |
 | `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
 | `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
 | `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
@@ -279,20 +281,4 @@ class Proposal(StrictModel):
 
 ### الأنشطة وTrip.com (لـ Developer 2)
 
-`searchAttractionAndActivity` موجود في ملف Trip.com المؤرشف بتاريخ 1 مايو 2026، **لكنه غير مجرب**، لأن مسارات Trip.com ترجع 404 منذ 1 نوفمبر 2026. فما عندنا مثال حقيقي من التجربة، وتأكدوا إنه يشتغل قبل الاعتماد عليه.
-
-الطلب حسب الملف: `POST https://www.trip.com/ai-resource/searchAttractionAndActivity` بدون مفتاح.
-
-```json
-{
-  "locale": "en-XX",
-  "destination": "Manama",
-  "beginDate": "2026-11-20",
-  "endDate": "2026-11-30",
-  "limit": 5,
-  "originalInput": "Things to do in Manama",
-  "originalInputInEnglish": "Things to do in Manama"
-}
-```
-
-الرد حسب الملف: `results`، وكل عنصر فيه `title` و`summary` و`url` و`categories` و`attributes`. لا تولدوا الرابط بأنفسكم، واذكروا Trip.com جنب أي شيء يجي منه، وخلوه تحت `TRIPCOM_ENABLED`. والشروط في `docs/ai-proposals.md`.
+Trip.com **تم تقييمه واستبعاده**: مساراته ترجع 404 منذ 1 نوفمبر 2026، وشروطه تمنع الروابط لغير الصفحة الرئيسية. فلا تعتمدوا على `searchAttractionAndActivity` في US-11، ودوروا مصدرًا ثانيًا. التفاصيل في `docs/ai-proposals.md`.

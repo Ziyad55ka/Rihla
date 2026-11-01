@@ -103,11 +103,13 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Evidence reaches the browser.** The page no longer shows `evidence`, but it stays in the API response, so it can be read in the browser's network tools. Removing it from the response is planned if time allows after the trial.
 - **The final price is only confirmed at checkout.** Every price is the last one a source reported.
 - **Sources reuse results.** Ignav may return a fare fetched up to 30 minutes earlier, with no documented way to force a new one. `priced_at` holds the time the source fetched it, so a price just refreshed can still say 25 minutes.
-- **Search and seller can disagree badly.** On 1 November 2026, Gulf Air RUH to BAH showed 900 SAR in the search, sold by flynas, and 1,614 SAR on Gulf Air's own page, while the person trying it saw "From 998.50 SAR" on Gulf Air's site. The 5% accuracy goal is not met for that flight, and has not been measured by a person after the change.
+- **A search's price can belong to another seller.** On Gulf Air RUH to BAH the search showed 900, which was flynas's, on the same flights. Gulf Air's own price was 1,614, and that matched its site. Rihla shows the seller it links to, but only a person checking the site can confirm a price: see [the accuracy results](price-accuracy.md).
+- **Airline sites show the outbound price first.** Ignav gave one total on every route measured, so the page explains this rather than inventing a split.
 - **The cheapest fare may leave out bags.** In the trial Ignav returned no `bags` and no `fare_name`, so the page usually says the bag may not be included. A search with `checked_bags=1` returned the same price with baggage status `unknown`.
 - **Not every airline has a direct link.** Gulf Air and flynas gave results pages, and Aegean gave a posted form that cannot open from a link. Lufthansa's link held the flight numbers. `exact` is worked out from those numbers when the source does not say.
-- **Trip.com is academic only, and not working today.** It stays off unless `TRIPCOM_ENABLED=true`, and its terms need review or an agreement before any commercial use. Its routes return 404, and its code is written from an archived file and has never run against a real reply. See [Trip.com](#tripcom).
-- **No hotel photos.** The archived Trip.com file has no image field, and no photo is taken from any site without permission, so hotels link to Booking.com for photos. City photos are from Wikimedia, by exact page title, so an unclear name gives the designed panel instead.
+- **Trip.com was evaluated and excluded.** Its routes return 404, and its terms forbid links to anything but its home page. It stays off, and its terms need review or an agreement before any commercial use.
+- **The fare table is general.** `app/data/airline_fares.json` describes each airline's cheapest fare, not the ticket. Only Gulf Air (a manual check) and flydubai (its own site) have a bag value; the rest say to check the airline's site.
+- **No hotel photos.** No photo is taken from any site without permission, so hotels link to Booking.com for photos. City photos are from Wikimedia, by exact page title, so an unclear name gives the designed panel instead.
 - **Limits are local.** Requests are counted in a local file, so several backend servers would not share them. The 2 minute button wait is only in the browser.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
@@ -132,17 +134,21 @@ When more than one person flies from a city, the same flight is also searched wi
 | Source | Used for | Cost | State |
 | --- | --- | --- | --- |
 | Ignav | Flight search, seller links and seller prices | First 1,000 requests free once, then paid | On when `IGNAV_API_KEY` is set |
-| Trip.com AI plugin | Flights and hotels, with links | No key, no stated price | Off: `TRIPCOM_ENABLED=false` |
+| Trip.com AI plugin | Evaluated and excluded | No key, no stated price | Off: `TRIPCOM_ENABLED=false` |
 | Tavily and Gemini | Hotels from approved booking sites, ideas for an area | Free plans | On |
 | Wikimedia | City and destination photos, with credit | Free, no key | On: `PLACE_IMAGES_ENABLED=true` |
 
 `FLIGHT_PROVIDERS` and `HOTEL_PROVIDERS` set the order, and `app/services/travel_providers.py` holds the shared shape and how to add a source.
 
-**How the best price is chosen.** All sources are asked at once for the same route, dates and party. If the same flight is in more than one, the winner is a link to the flight itself, then the airline's own price, then the newest. Above `PRICE_CONFLICT_PERCENT` (10) between sources, the price closest to the airline's wins and the gap is logged. A source that fails or reaches its limit is skipped, and when none is left the person gets a search link.
+**How the best price is chosen.** All sources are asked at once for the same route, dates and party. If the same flight is in more than one, the winner is the airline's own price, then a link to the flight itself, then the newest. Above `PRICE_CONFLICT_PERCENT` (10) between sources, the price closest to the airline's wins and the gap is logged. A source that fails or reaches its limit is skipped, and when none is left the person gets a search link.
 
-**The seller's price comes first.** A search shows one price, but each seller on the booking link has its own. Rihla shows the price of the seller it links to, with `price_source` set to `seller`. If that is above the search's by more than the limit, generation tries another airline, and a check suggests one.
+**The seller's price comes first.** A search shows one price, but each seller on the booking link has its own. Rihla shows the price of the seller it links to, with `price_source` set to `seller`, preferring the airline itself. If that is above the search's by more than `PRICE_CONFLICT_PERCENT`, generation tries another airline, and a check suggests one. An agent cheaper than the airline by `AGENT_CHEAPER_PERCENT` (5) is offered as an option and marked as an agent. Every comparison is recorded: see [the accuracy results](price-accuracy.md).
 
-### Trip.com
+**Each direction's price.** Ignav's booking links gave one total for the trip on all 8 flights measured, so the page shows the total and says the airline's site may show the outbound price first. If a seller ever states both directions and they add up, the page shows "outbound + return = total". A total is never divided.
+
+### Trip.com: evaluated and excluded
+
+Excluded because its routes return 404 and its terms forbid links to anything but its home page. It stays off, and its adapter remains in case that changes.
 
 Trip.com is used for an academic, non-commercial purpose according to its terms. Its terms must be reviewed, or an agreement reached with Trip.com, before any commercial use.
 
@@ -195,6 +201,12 @@ A book or a refresh costs 2 requests with Ignav. Add 1 when refreshing for more 
 
 Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: members appear only as a hash. See it with `uv run python -m app.services.flight_usage`.
 
+## The real measurement
+
+On 1 November 2026, a person compared Gulf Air's site with Rihla, RUH to BAH, 20 to 30 November, Economy Light: outbound GF 162 at 06:50 was 999.00, and the return at 01:25 was 615.00. **The total was 1,614.00, exactly Rihla's price, a 0% gap.** The 998.50 seen before was only the outbound price, because the site shows that first and adds the return afterwards. The fare included a 25 kg bag.
+
+Other airlines are in [the accuracy results](price-accuracy.md), waiting for the same check.
+
 ## Why a refresh once showed no change
 
 Diagnosed with real requests on 1 November 2026, RUH to BAH, 20 to 30 November, one adult.
@@ -203,7 +215,7 @@ Diagnosed with real requests on 1 November 2026, RUH to BAH, 20 to 30 November, 
 | --- | --- |
 | Our 15 minute cache | The trial's refresh was served from it: logged as `cached=1`, 63 seconds after the search |
 | Ignav's own reuse | Up to 30 minutes, with `observed_at` keeping the first time. Seen on the CDG search, 20 minutes old. No documented way to force a new one |
-| Which price was read | The search's 900. The link it opened was Gulf Air's at 1,614, so the page and the link disagreed. This was the main fault, and also why booking showed 900 |
+| Which price was read | The search's 900, which was another seller's. The link it opened was Gulf Air's at 1,614, so the page and the link disagreed. This was the main fault, and also why booking showed 900 |
 | Saving | The secret key cannot read `proposals` directly, by design, so the saved row was not inspected |
 | France's "no longer available" | Wrong message. The flight existed, but Aegean's only link was a posted form that Rihla rejects, and that was reported as gone |
 
