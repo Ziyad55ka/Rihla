@@ -429,6 +429,7 @@ export const arabic: Record<string, string> = {
   "Proposals are already being generated for this trip.": "يجري توليد العروض لهذه الرحلة بالفعل.",
   "Today's search allowance has run out. Try again later.": "انتهت حصة البحث لهذا اليوم. حاول لاحقًا.",
   "Today's AI allowance has run out. Try again later.": "انتهت حصة الذكاء الاصطناعي لهذا اليوم. حاول لاحقًا.",
+  "The AI request limit was reached. Try again later.": "تم الوصول إلى حد طلبات الذكاء الاصطناعي. حاول لاحقًا.",
   "Proposal generation is not set up on the backend.": "توليد العروض غير مُعدّ في الخادم.",
   "Proposal generation is temporarily unavailable.": "توليد العروض غير متاح مؤقتًا.",
   "Proposals are unavailable. Check that the proposals migrations are applied.": "العروض غير متاحة. تحقق من تطبيق ترحيلات العروض."

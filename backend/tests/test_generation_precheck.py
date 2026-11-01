@@ -409,14 +409,15 @@ def test_all_options_over_budget_gives_a_clear_message_without_the_figure(
     names = iter(range(100))
 
     async def plan(*args, **kwargs):
+        place = f"Place {next(names)}"
         option = proposal_generation.PlannedOption(
             title="Trip",
-            destination=f"Place {next(names)}",
+            destination=place,
             country="X",
             arrival_airport=None,
             start_date=date(2026, 12, 13),
             end_date=date(2026, 12, 17),
-            cities=[proposal_generation.PlannedCity(city="X", nights=4)],
+            cities=[proposal_generation.PlannedCity(city=place, nights=4)],
             requirement_checks=[],
         )
         return proposal_generation.TripPlan(

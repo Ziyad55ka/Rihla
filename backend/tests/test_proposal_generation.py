@@ -1,6 +1,7 @@
 """Generation tests. Gemini and Tavily are fake, so these spend no quota."""
 
 import asyncio
+import json
 import logging
 import re
 from datetime import date
@@ -727,3 +728,131 @@ def test_web_search_flight_has_null_booking_links(
 
     assert route.trip_type == "round_trip"
     assert [leg.booking_url for leg in route.legs] == [None, None]
+
+
+def counted_research(**kwargs):
+    good = fake_research(**kwargs)
+
+    async def research(request, config):
+        result = await good(request, config)
+        result.cost.gemini_requests = 1
+        return result
+
+    return research
+
+
+def test_planner_is_told_to_offer_cities_in_the_same_country() -> None:
+    prompt = proposal_generation.PLANNER_PROMPT
+    assert "different cities in the same country" in prompt
+    assert "Only when destinations are Flexible" in prompt
+
+
+def test_duplicate_gets_one_explicit_retry_then_stops(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = fake_planner(
+        monkeypatch,
+        [option("Baku"), option("Baku"), option("Tbilisi")],
+        [option("Baku")],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert len(payloads) == 2
+    retry = json.loads(payloads[1])
+    assert retry["previous_problem"] == "duplicate_route"
+    assert "baku" in [route["destination"] for route in retry["avoid_routes"]]
+    assert result.failures[0].reasons == ["duplicate_route"]
+    assert len(result.proposals) == 2
+
+
+def test_same_cities_under_another_name_are_a_duplicate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    renamed = option("Baku")
+    renamed.destination = "Azerbaijan break"
+    fake_planner(
+        monkeypatch, [option("Baku"), renamed, option("Tbilisi")], [option("Muscat")]
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert {p.destination for p in result.proposals} == {"Baku", "Muscat", "Tbilisi"}
+
+
+def test_over_budget_retry_asks_for_something_cheaper_without_showing_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payloads = fake_planner(monkeypatch, THREE, [option("Muscat")])
+    fares = iter(["9000", "1000", "1000", "1000"])
+
+    async def research(request, config):
+        return await fake_research(fare=next(fares))(request, config)
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert json.loads(payloads[1])["previous_problem"] == "over_group_budget"
+    assert json.loads(payloads[0])["previous_problem"] is None
+    assert result.complete
+    assert "3000" not in result.model_dump_json()
+
+
+def test_gemini_call_limit_stops_and_returns_what_succeeded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    names = [f"Place {number}" for number in range(10)]
+    payloads = fake_planner(
+        monkeypatch,
+        [option("Baku"), option("Tbilisi"), option(names[0])],
+        *[[option(name)] for name in names[1:]],
+    )
+    fares = iter(["1000", "1000", *["9000"] * 10])
+
+    async def research(request, config):
+        return await counted_research(fare=next(fares))(request, config)
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    result = run(group(), tmp_path)
+
+    assert len(result.proposals) == 2
+    assert len(payloads) == 2
+    assert result.cost.gemini_requests == 6
+    assert "request limit" in result.message
+
+
+def test_gemini_call_limit_comes_from_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", counted_research())
+    config = settings(tmp_path).model_copy(
+        update={"max_gemini_calls_per_generation": 2}
+    )
+
+    result = asyncio.run(generate_proposals(group(), config))
+
+    assert len(result.proposals) == 1
+    assert Settings(_env_file=None).max_gemini_calls_per_generation == 7
+
+
+def test_new_links_have_no_tracking_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE)
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        result.sources[0].url = "https://example.com/a?gclid=1&gclsrc=gf&keep=2"
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+
+    body = run(group(), tmp_path).proposals[0].model_dump_json()
+
+    assert "gclid" not in body and "gclsrc" not in body
+    assert "keep=2" in body

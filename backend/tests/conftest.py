@@ -20,6 +20,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "IGNAV_API_KEY",
         "FLIGHT_PRICE_PROVIDER",
         "MIN_BUDGET_SAR_PER_DAY",
+        "MAX_GEMINI_CALLS_PER_GENERATION",
         "GENERATION_STORE_DB",
         "SAVED_PROPOSALS_TTL_HOURS",
         "GEMINI_API_KEY",

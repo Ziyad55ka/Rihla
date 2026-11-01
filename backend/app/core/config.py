@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     min_budget_sar_per_day: Decimal = Field(default=Decimal(250), gt=0)
     generation_store_db: Path = BACKEND_DIR / ".local" / "generations.sqlite3"
     saved_proposals_ttl_hours: int = Field(default=24, ge=1)
+    # Generation stops here and returns the proposals that already passed.
+    max_gemini_calls_per_generation: int = Field(default=7, ge=1)
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)

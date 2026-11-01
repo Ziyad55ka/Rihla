@@ -79,17 +79,36 @@ One generation for one departure city uses at least 4 Gemini requests including 
 ## Known limitations
 
 - **Essential requirements rely on Gemini's own report.** Preferences are free text, so code checks the report, not the truth.
-- **Hotel prices are estimates.** A quote may describe a different hotel, room or date. Availability on the trip dates is not checked.
+- **Fewer than three proposals can appear.** Options that fail the checks or reach the request limit are left out, and the page says so.
+- **Prices are estimates.** A hotel quote may describe a different hotel, room or date, and availability on the trip dates is not checked. A price with no source is Gemini's general estimate.
 - **`Sourced` means a source said it,** not that the fact was independently confirmed.
-- **Booking links.** Ignav links are rejected when their own parameters contradict their direction or dates, which can only be checked when the link includes them. A flight from the web search has no links and is reported as `round_trip`.
+- **Booking links.** Ignav links are rejected when their own parameters contradict their direction or dates, which can only be checked when the link includes them. A link can come from a different seller than the airline shown, and some may not open the exact flight. A flight from the web search has no links and is reported as `round_trip`.
 - **Ignav fares can change.** Ignav says a search price is not a reserved fare or a guarantee of one combined ticket. The round-trip cost may need separate bookings.
 - **Multi-city trips** price a round trip to the first city only, which may not match the actual route home.
 - **Airports.** Departure cities use a fixed Saudi table; an unlisted city falls back to web search. Arrival airports come from Gemini.
 - **The budget check is incomplete** when a price is `Not available`, and excludes food and activities.
 - **Currency rates are fixed and approximate.** `$` is assumed to be US dollars.
 - **Conflicts Gemini finds are not shown early.** A doubtful destination conflict passes stage 1, so the trip page shows no conflict until someone generates.
-- **Quota.** At 20 Gemini requests a day, only a few generations fit, and regeneration uses more.
+- **Departure cities can be learned by experiment.** A member who changes their city to another member's city receives that city's flights, which shows someone departs from there, but not who. The team accepted this.
+- **Quota.** At 20 Gemini requests a day, few generations fit. `MAX_GEMINI_CALLS_PER_GENERATION` (default 7) limits the requests a generation starts; one provider retry can pass it by one.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
+
+## Real trial, 2 November 2026
+
+One real generation for a one-member trial trip on the real Supabase project, with destinations `France, Bahrain`:
+
+| Result | Detail |
+| --- | --- |
+| Proposals | Two: Paris and Strasbourg (`includes_unconfirmed`), and Manama (`within_group_budget`) |
+| Third proposal | Failed: `duplicate_route` and `over_group_budget` |
+| Use | 11 Gemini requests, 102,179 tokens, 12 Tavily credits, 4 Ignav requests, 4 cached searches |
+
+Changes made afterwards, not yet tried in a real generation:
+
+- The planner is told to offer different cities in one country when few countries are allowed, or, for Flexible destinations, a nearby country with an explanation.
+- A repeated route gets one explicit retry, then that option stops. The same cities under another name count as a repeat.
+- A retry after `over_group_budget` asks for something cheaper, and the figure stays out of shown text.
+- `MAX_GEMINI_CALLS_PER_GENERATION` stops a generation at its limit and returns what passed.
 
 ## Proposal JSON changes for Developers 2 and 3
 

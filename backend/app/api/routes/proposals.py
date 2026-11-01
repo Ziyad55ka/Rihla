@@ -23,6 +23,7 @@ router = APIRouter(prefix="/api/trips", tags=["proposals"])
 RESEARCH_FAILURES = {
     "search_quota": (503, "Today's search allowance has run out. Try again later."),
     "model_quota": (503, "Today's AI allowance has run out. Try again later."),
+    "generation_limit": (503, "The AI request limit was reached. Try again later."),
 }
 INPUT_FAILURES = {
     "access_denied": (403, "You do not have permission for this trip action."),

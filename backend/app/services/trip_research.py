@@ -47,6 +47,7 @@ ResearchErrorCode = Literal[
     "model_quota",
     "model_unavailable",
     "model_invalid_output",
+    "generation_limit",
 ]
 UnavailableReason = Literal[
     "absent_from_search",
