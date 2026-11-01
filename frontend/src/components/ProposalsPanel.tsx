@@ -4,8 +4,11 @@ import { calendarDate } from '../lib/planning'
 import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, reviewMessages } from '../lib/proposals'
 import type { GroupConflicts, StoredProposals } from '../types/proposal'
 import '../proposals.css'
+import type { SelectionStore } from '../lib/activities'
+import { ActivitiesPanel } from './ActivitiesPanel'
 
 type ViewProps = {
+  selectionStore?: SelectionStore
   isAdmin: boolean
   conflicts: GroupConflicts | null
   stored: StoredProposals | null
@@ -15,11 +18,13 @@ type ViewProps = {
   onGenerate: (regenerate: boolean) => void
 }
 
-export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate }: ViewProps) {
+export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate, selectionStore }: ViewProps) {
   const { t, locale } = useLanguage()
+  const [activeId, setActiveId] = useState<string | null>(null)
   const generating = busy || stored?.generating === true
   const enabled = canPressGenerate(conflicts, generating)
   const proposals = stored?.proposals ?? []
+  const active = proposals.find(proposal => proposal.id === activeId) ?? proposals[0]
   return <section className="proposals-panel" aria-labelledby="proposals-title">
     <div className="proposals-heading">
       <div><p className="trip-eyebrow">{t('TRIP PROPOSALS')}</p><h2 id="proposals-title">{t('Three ways to go.')}</h2></div>
@@ -39,14 +44,19 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
     {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'These proposals have no flights from your departure city. Generate them again to include it.' : 'These proposals have no flights from your departure city. The administrator needs to generate them again.')}</p>}
     {stored && stored.version !== null && !stored.complete && <p className="proposals-note">{t('Some proposals could not pass the checks, so fewer than three are shown.')}</p>}
     {proposals.length > 0 ? <ol className="proposals-list">
-      {proposals.map((proposal) => <li className="proposals-card" key={proposal.id}>
+      {proposals.map((proposal) => <li className={`proposals-card${active?.id === proposal.id ? ' proposals-card--active' : ''}`} key={proposal.id}>
         <p className="trip-eyebrow">{t('Option {number}', { number: proposal.option_number.toLocaleString(locale) })}</p>
         <h3>{proposal.title}</h3>
         <p className="proposals-destination">{proposal.destination}</p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
+        <button className="trip-secondary proposal-activities-button" type="button" aria-pressed={active?.id === proposal.id} onClick={() => setActiveId(proposal.id)}>{t('View activities')}</button>
       </li>)}
     </ol> : !generating && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}
+    {active && <div className="proposal-activity-detail">
+      <p className="trip-eyebrow">{active.destination}</p>
+      <ActivitiesPanel key={`${active.id}:${active.version}`} proposal={active} store={selectionStore} />
+    </div>}
   </section>
 }
 

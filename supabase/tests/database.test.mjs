@@ -965,3 +965,60 @@ test('one member listing several Essential destinations has no conflict alone', 
   const id = await twoMembers(member({ destinations: essential('فرنسا، البحرين') }), member())
   assert.deepEqual((await conflicts(id)).conflicts, [])
 })
+
+// --- US-11/12: per-member selections ---
+async function tripWithActivities() {
+  const id = await twoMembers(member(), member({ departure_city: 'Jeddah' }))
+  await role(ALICE)
+  await begin(id)
+  const data = storedProposal(id)
+  data.id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  data.cities = [{ activities: [{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }] }]
+  await saveAll(id, 1, 'hash-a', true, [data])
+  return { trip: id, proposal: data.id, activity: data.cities[0].activities[0].id }
+}
+const getSelection = (p) => rpc('rihla_get_activity_selection', [p.trip, p.proposal])
+const putSelection = (p, ids, version = 1) => rpc('rihla_set_activity_selection', [p.trip, p.proposal, version, ids])
+
+test('activity choices persist and are private even from the trip administrator', async () => {
+  const p = await tripWithActivities()
+  await role(BOB)
+  assert.deepEqual((await getSelection(p)).activity_ids, [])
+  await putSelection(p, [p.activity])
+  assert.deepEqual((await getSelection(p)).activity_ids, [p.activity])
+  await role(ALICE)
+  assert.deepEqual((await getSelection(p)).activity_ids, [])
+  await putSelection(p, [])
+  await role(BOB)
+  assert.deepEqual((await getSelection(p)).activity_ids, [p.activity])
+  await putSelection(p, [])
+  assert.deepEqual((await getSelection(p)).activity_ids, [])
+})
+
+test('activity RPCs reject outsiders, forged ids, duplicates and old versions', async () => {
+  const p = await tripWithActivities()
+  await denied(() => putSelection(p, [ALICE]), '23514')
+  await denied(() => putSelection(p, [p.activity, p.activity]), '23514')
+  await denied(() => putSelection(p, [p.activity], 2), 'P0001')
+  await denied(() => putSelection(p, null), '23514')
+  const other = await trip()
+  await denied(() => getSelection({ ...p, trip: other.id }), 'P0001')
+  await role(CAROL)
+  await denied(() => getSelection(p))
+  await denied(() => putSelection(p, []))
+  await db.exec('reset role; set local role anon')
+  await denied(() => getSelection(p))
+})
+
+test('selections cannot be written directly and regeneration removes stale choices', async () => {
+  const p = await tripWithActivities()
+  await putSelection(p, [p.activity])
+  await denied(() => db.query('select * from public.activity_selections'))
+  await begin(p.trip)
+  await saveAll(p.trip, 2)
+  await denied(() => getSelection(p), 'P0001')
+  await denied(() => putSelection(p, [p.activity]), 'P0001')
+  await root()
+  assert.equal((await db.query('select count(*)::int as n from public.activity_selections')).rows[0].n, 0)
+})
+

@@ -187,9 +187,15 @@ https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt&check
 
 ```python
 class Activity(StrictModel):
+    id: UUID
     name: InfoField
-    price_per_person: SarPrice
+    description: InfoField
+    location: InfoField
+    duration: InfoField
+    scheduled_date: InfoField
+    price_per_person: ActivityPrice  # SarPrice status rules; zero is allowed
     booking_url: BookingUrl
+    image_url: BookingUrl
 
 class CityStay(StrictModel):
     activities: list[Activity] = Field(default_factory=list)
@@ -234,3 +240,6 @@ class Proposal(StrictModel):
 - [frontend/src/types/proposal.ts](../frontend/src/types/proposal.ts): تعريف TypeScript
 - [docs/examples/proposals.mock.json](examples/proposals.mock.json): ٣ عروض وهمية للتطوير
 - [docs/ai-proposals.md](ai-proposals.md): كيف يشتغل التوليد، والخصوصية، وسياسة الأسعار
+
+
+US-11/12 implementation and local mock demo: [activities.md](activities.md).

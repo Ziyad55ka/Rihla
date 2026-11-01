@@ -104,8 +104,30 @@ export interface Flights {
   price_per_person: SarPrice
 }
 
+/** Stable within a saved proposal; selections are scoped to its version. */
+export interface Activity {
+  id: string
+  name: InfoField
+  description: InfoField
+  location: InfoField
+  duration: InfoField
+  scheduled_date: InfoField
+  /** Same status rules as hotel prices, with zero allowed for free activities. */
+  price_per_person: SarPrice
+  booking_url: string | null
+  image_url: string | null
+}
+
+export interface ActivitySelections {
+  proposal_id: string
+  version: number
+  activity_ids: string[]
+}
+
 /** A stay in one city. */
 export interface CityStay {
+  /** Absent on legacy saved data. Treat it as an empty list. */
+  activities?: Activity[]
   /** The position in the route, counting up from 1. Example: `1`. */
   order: number
   /** The city name. Example: `"Cairo"`. */
