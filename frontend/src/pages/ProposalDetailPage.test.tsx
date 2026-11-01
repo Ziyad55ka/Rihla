@@ -8,7 +8,9 @@ import { PlacePhoto } from '../components/proposal-details/PlacePhoto'
 import { airlineName } from '../lib/airlines'
 import { ActivitiesSection } from '../components/proposal-details/ActivitiesSection'
 import { checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, staySource, transferSearchUrl } from '../lib/proposals'
-import { countUpValue, prefersReducedMotion } from '../lib/motion'
+import { AiStatus } from '../components/AiStatus'
+import { checkMessages, generateMessages, nextStatusIndex } from '../lib/aiStatus'
+import { countUpValue } from '../lib/motion'
 import { adultsInLink, defaultRoomChoice, roomsFor, sharePerPerson } from '../lib/rooms'
 import { placeName } from '../lib/places'
 import { LanguageProvider } from '../lib/language'
@@ -413,21 +415,42 @@ describe('ProposalDetailView', () => {
     expect(durationLabel('2h 5m', 'ar', 'ar-SA-u-ca-gregory')).toContain('س')
     expect(durationLabel('about five hours', 'ar', 'ar-SA-u-ca-gregory')).toBe('about five hours')
   })
-  it('honours reduced motion, and keeps motion short', () => {
-    vi.stubGlobal('matchMedia', undefined)
-    expect(prefersReducedMotion()).toBe(false)
-    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) })
-    expect(prefersReducedMotion()).toBe(true)
-    vi.unstubAllGlobals()
-    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined })
+  it('honours reduced motion in the styles, and eases numbers', () => {
     expect(countUpValue(900, 1000, 0)).toBe(900)
     expect(countUpValue(900, 1000, 1)).toBe(1000)
     expect(countUpValue(900, 1000, 0.5)).toBeGreaterThan(950)
     expect(detailsCss).toContain('@media (prefers-reduced-motion: reduce)')
-    const once = detailsCss.split('\n').filter((line) => !line.includes('infinite'))
-    const times = once.join('\n').match(/\b\d+ms\b/g)?.map((time) => Number(time.replace('ms', ''))) ?? []
-    expect(times.length).toBeGreaterThan(5)
-    expect(times.every((time) => time === 0 || (time >= 150 && time <= 400))).toBe(true)
+    expect(detailsCss).toMatch(/prefers-reduced-motion: reduce\) \{\s*:is\(\.proposal-details,\.proposals-panel\)/)
+  })
+  it('keeps every style and the font under its own pages', () => {
+    const rules = detailsCss.split('\n').map((line) => line.trim()).filter((line) => /^[^@/}].*\{/.test(line) && !/^(from|to|\d+%)/.test(line) && !line.startsWith('@'))
+    expect(rules.length).toBeGreaterThan(50)
+    expect(rules.filter((line) => !/details-|proposal|ai-status/.test(line.split('{')[0]))).toEqual([])
+    expect(detailsCss).toContain(".proposal-details, .proposals-panel { font-family:'IBM Plex Sans Arabic'")
+  })
+  it('makes cards rise and photos zoom on hover, inside a hover-only rule', () => {
+    expect(detailsCss).toMatch(/@media \(hover:hover\) \{[\s\S]*translateY\(-4px\) scale\(1\.03\)/)
+    expect(detailsCss).toMatch(/\.details-photo img \{ transform:scale\(1\.08\)/)
+    expect(detailsCss).toMatch(/\.details-city:active/)
+  })
+  it('shows a working status with changing words in both languages', () => {
+    const html = pure(<AiStatus messages={checkMessages} />)
+    expect(html).toContain('role="status"')
+    expect(html).toContain('ai-status-dot')
+    expect(html).toContain('Reviewing the trip…')
+    expect(nextStatusIndex(0, 4)).toBe(1)
+    expect(nextStatusIndex(3, 4)).toBe(3)
+    expect(pure(<RefreshView busy result={null} error="" waitMinutes={0} onRefresh={() => undefined} />)).toContain('ai-status')
+    expect(pure(<RefreshView busy result={null} error="" waitMinutes={0} onRefresh={() => undefined} />)).not.toContain('details-spinner')
+    localStorage.setItem('rihla-language', 'ar')
+    expect(pure(<AiStatus messages={checkMessages} />)).toContain('يحلل الرحلة…')
+    expect(pure(<AiStatus messages={generateMessages} />)).toContain('يقرأ تفضيلات المجموعة…')
+  })
+  it('brings the heading in word by word, and reads it as one title', () => {
+    const html = page(proposal({ title: 'Three word title' }))
+    expect(count(html, 'details-word')).toBe(3)
+    expect(html).toContain('aria-label="Three word title"')
+    expect(detailsCss).toContain('details-zoom-out')
   })
   it('empties the timer ring as the link runs out', () => {
     const at = '2026-11-01T10:00:00Z'
@@ -447,13 +470,14 @@ describe('ProposalDetailView', () => {
   it('reserves room for the activities with nothing shown', () => {
     expect(pure(<ActivitiesSection proposal={proposal()} />)).toBe('')
   })
-  it('makes the photo open its page, with the credit in the corner and no text below', () => {
+  it('makes the photo open nothing, with its credit in a tooltip on the corner icon', () => {
     const image = { url: 'https://upload.wikimedia.org/a.jpg', source_url: 'https://commons.wikimedia.org/a', artist: 'A. Person', license: 'CC BY-SA 4.0' }
     const html = pure(<PlacePhoto image={image} place="Cairo" />)
-    expect(html).toContain('href="https://commons.wikimedia.org/a"')
-    expect(html).toContain('target="_blank"')
+    expect(html).not.toContain('<a ')
+    expect(html).not.toContain('commons.wikimedia.org')
     expect(html).toContain('aria-label="Photo source and licence"')
-    expect(html).toContain('details-photo-credit')
+    expect(html).toContain('role="tooltip"')
+    expect(html).toContain('A. Person')
     expect(detailsCss).toMatch(/\.details-photo-credit \{[^}]*visibility:hidden/)
     expect(html).toContain('is-loading')
   })
