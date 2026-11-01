@@ -225,7 +225,7 @@ class Proposal(StrictModel):
 
 - **Developer 2 (الأنشطة):** عدّلوا `CityActivities.tsx` فقط. يظهر داخل بطاقة كل مدينة، ويستقبل `stay`، فاقرؤوا `stay.activities`.
 - **Developer 3 (التكاليف والتوافق):** عدّلوا `CostsAndCompatibility.tsx` فقط. يظهر قبل المصادر، ويستقبل `proposal`.
-- **المصادر:** في `SourcesSection.tsx`، مقسمة: مصادر الحجز ومصادر الأفكار. طوروها في نفس الملف بدل قسم ثانٍ.
+- **المصادر:** قسم المصادر انحذف من الصفحة، والبيانات باقية في `sources` في الـ API. فأي مصدر تحتاجون تذكرونه، اذكروه جنب قيمته.
 - **القيم:** استخدموا `InfoValue` و`PriceValue` و`PriceAgeBadge` من `values.tsx`.
 - **النصوص:** كل نص جديد في `frontend/src/lib/translations.ts`، والأنماط في `frontend/src/proposal-details.css`.
 
@@ -247,6 +247,8 @@ class Proposal(StrictModel):
 | `price` | `FlightLeg` | على round_trip موجود بس إذا البائع ذكر سعر كل اتجاه. لا تقسموا الإجمالي أبدًا |
 | `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
 | `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
+| `labels_en`, `labels_ar` | `CityStay` | ملصقات عامة توضح ليش الإقامة مناسبة، حد أقصى 3، وبدون تفاصيل أي عضو |
+| `from_station`, `to_station` | `IntercityTransfer` | أسماء المحطات. جاهزة في العرض، وما فيه شي يعبّيها حاليًا |
 | `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
 
 ### تغييرات لازم تنتبهون لها
@@ -279,6 +281,6 @@ class Proposal(StrictModel):
 - **التكاليف (Developer 3):** استخدموا `price_per_person`، فهو نفس الرقم اللي يدخل في `budget_status`.
 - **الحجز:** `book-flight` صار `POST`، لأنه يحفظ السعر الجديد.
 
-### الأنشطة وTrip.com (لـ Developer 2)
+### الأنشطة (لـ Developer 2)
 
-Trip.com **تم تقييمه واستبعاده**: مساراته ترجع 404 منذ 1 نوفمبر 2026، وشروطه تمنع الروابط لغير الصفحة الرئيسية. فلا تعتمدوا على `searchAttractionAndActivity` في US-11، ودوروا مصدرًا ثانيًا. التفاصيل في `docs/ai-proposals.md`.
+التفاصيل كاملة في [developer-2-handoff.md](developer-2-handoff.md)، ومنها اقتراح قسم "وش يصير في [المدينة] خلال أيام رحلتكم": فعاليات وأماكن مشهورة في تواريخ الرحلة، بحقوله ووين ينعرض. وTrip.com تم تقييمه واستبعاده، فلا تعتمدوا على `searchAttractionAndActivity`.

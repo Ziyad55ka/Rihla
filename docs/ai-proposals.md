@@ -110,6 +110,8 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Trip.com was evaluated and excluded.** Its routes return 404, and its terms forbid links to anything but its home page. It stays off, and its terms need review or an agreement before any commercial use.
 - **The fare table is general.** `app/data/airline_fares.json` describes each airline's cheapest fare, not the ticket. Only Gulf Air (a manual check) and flydubai (its own site) have a bag value; the rest say to check the airline's site.
 - **No hotel photos.** No photo is taken from any site without permission, so hotels link to Booking.com for photos. City photos are from Wikimedia, by exact page title, so an unclear name gives the designed panel instead.
+- **No stations on transfers yet.** The route line shows cities until generation fills `from_station` and `to_station`.
+- **Room prices are a guess at sharing.** A person's share assumes the listed price is per room, and that rooms hold two. The real price depends on the room chosen on the booking site.
 - **Limits are local.** Requests are counted in a local file, so several backend servers would not share them. The 2 minute button wait is only in the browser.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
@@ -245,6 +247,14 @@ Sources are classified by domain with `BOOKING_DOMAINS`.
 When a hotel source is switched on, its hotel replaces the web search's, with `hotel_url` for its own page and `hotel_source` for its name. Booking.com stays as the comparison. Gemini never chooses a hotel or a price.
 
 The rule also runs when reading, so older proposals follow it: a hotel from any other site is hidden and replaced by a search of its city. Generation runs one ideas search per proposal and one search limited to booking sites per city, which adds one Tavily search per proposal. Preferences are not put in these searches, because queries leave the system.
+
+## Room choice on the page
+
+Each member can view a stay as shared rooms (two to a room) or a room for each person. It changes that member's price per person and the Booking.com link's `no_rooms`, and it is not saved. It starts from the member's own accommodation preference when the wording is clear, and otherwise from shared rooms. A room's price is assumed to be the price in `hotel_price_per_night`. `budget_status` does not change with this choice: it still assumes unshared rooms, so it errs high.
+
+The planner also returns up to three general labels for each stay, such as "Near the museums". This has not been tried in a real generation, and older proposals have none. A label that names anything private is dropped.
+
+Transfers have `from_station` and `to_station`, which the page shows when present. **Nothing fills them yet.** To fill them, generation needs one more field per transfer in `build_search_plan` for each station, with `verify_field` requiring the name in the source's own words, then these fields set in `build_proposal`.
 
 ## Regeneration signal
 
