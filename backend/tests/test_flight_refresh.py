@@ -394,18 +394,123 @@ def test_sources_are_asked_together_and_the_airline_price_wins_a_conflict(
     assert result.seller_type == "airline"
 
 
-def test_a_link_to_the_flight_itself_beats_a_results_page(tmp_path) -> None:
+def test_the_airline_beats_an_agent_even_with_a_direct_link(tmp_path) -> None:
     results = _priced_links("https://www.gulfair.com/list", 950)
     results["booking_options"][0]["links"][0]["specificity"] = "search_results"
     exact = _priced_links("https://agent.example/exact", 950, "third_party")
     exact["booking_options"][0]["links"][0]["specificity"] = "exact_flight"
-    first, second = FakeIgnav(link_body=results), FakeIgnav(link_body=exact)
+    first, second = FakeIgnav(link_body=exact), FakeIgnav(link_body=results)
     first.name, second.name = "first", "second"
 
     result = book(FlightChecker(make_settings(tmp_path), providers=[first, second]))
 
     assert result.provider == "second"
-    assert result.exact_flight
+    assert not result.exact_flight
+
+
+def _airline_and_agent(airline: float, agent: float) -> dict:
+    return {
+        "booking_options": [
+            {
+                "legs": ["outbound", "inbound"],
+                "links": [
+                    {
+                        "provider_name": "Gulf Air",
+                        "provider_type": "airline",
+                        "url": "https://www.gulfair.com/x",
+                        "price": {
+                            "amount": airline,
+                            "currency": "SAR",
+                            "status": status,
+                        },
+                    },
+                    {
+                        "provider_name": "Mock Agent",
+                        "provider_type": "third_party",
+                        "url": "https://agent.example/x",
+                        "price": {"amount": agent, "currency": "SAR"},
+                    },
+                ],
+            }
+        ]
+    }
+
+
+def test_clearly_cheaper_agent_is_offered_and_the_airline_is_kept(tmp_path) -> None:
+    fake = FakeIgnav(link_body=_airline_and_agent(1000, 900))
+
+    result = book(checker(tmp_path, fake))
+
+    assert result.seller == "Gulf Air" or result.seller_type == "airline"
+    assert result.url == "https://www.gulfair.com/x"
+    assert result.price_sar == Decimal("1000.00")
+    assert result.alternative.reason == "agent"
+    assert result.alternative.url == "https://agent.example/x"
+    assert result.alternative.price_sar == Decimal("900.00")
+    assert result.alternative.seller == "Mock Agent"
+    assert fake.link_requests == 1
+
+
+def test_agent_only_a_little_cheaper_or_dearer_is_not_offered(tmp_path) -> None:
+    close = FakeIgnav(link_body=_airline_and_agent(1000, 980))
+    assert book(checker(tmp_path, close)).alternative is None
+
+    dearer = FakeIgnav(link_body=_airline_and_agent(1000, 1100))
+    assert book(checker(tmp_path / "x", dearer)).alternative is None
+
+
+def _gap_report(check):
+    return check.accuracy.report()
+
+
+def test_gap_under_the_limit_is_recorded_and_not_logged(tmp_path, caplog) -> None:
+    fake = FakeIgnav(
+        {"itineraries": [itinerary(amount=1000)]},
+        _airline_and_agent(1030, 1100),
+    )
+    check = checker(tmp_path, fake, price_accuracy_db=tmp_path / "accuracy.sqlite3")
+
+    with caplog.at_level("INFO", logger="app.services.price_accuracy"):
+        result = book(check)
+
+    assert result.price_sar == Decimal("1030.00")
+    report = _gap_report(check)
+    assert report.checks == 1
+    assert report.average_gap_percent == 3.0
+    assert report.under_limit_percent == 100.0
+    assert "price_gap" not in caplog.text
+
+
+def test_gap_over_the_limit_keeps_the_seller_price_and_is_logged(
+    tmp_path, caplog
+) -> None:
+    fake = FakeIgnav(
+        {"itineraries": [itinerary(amount=1000)]},
+        _airline_and_agent(1080, 1200),
+    )
+    check = checker(tmp_path, fake, price_accuracy_db=tmp_path / "accuracy.sqlite3")
+
+    with caplog.at_level("INFO", logger="app.services.price_accuracy"):
+        result = book(check)
+
+    assert result.price_sar == Decimal("1080.00")
+    assert "price_gap route=RUH-BAH percent=8.0" in caplog.text
+    report = _gap_report(check)
+    assert report.under_limit_percent == 0.0
+    assert check.accuracy.worst()[0][1] == "RUH-BAH"
+
+
+def test_no_seller_price_is_counted_apart_and_holds_no_private_data(tmp_path) -> None:
+    path = tmp_path / "accuracy.sqlite3"
+    check = checker(tmp_path, FakeIgnav(), price_accuracy_db=path)
+
+    book(check, member="private-member-id")
+
+    report = _gap_report(check)
+    assert report.checks == 1
+    assert report.no_seller_price == 1
+    assert report.average_gap_percent is None
+    assert b"private-member-id" not in path.read_bytes()
 
 
 def test_link_for_another_airline_is_never_returned(tmp_path) -> None:

@@ -37,6 +37,7 @@ from app.services.flight_prices import (
     usable_itineraries,
 )
 from app.services.flight_usage import FlightUsage
+from app.services.price_accuracy import PriceAccuracy
 from app.services.proposal_generation import OptionRejected, _fare_leg, budget_status
 from app.services.travel_providers import FlightProvider, live_flight_providers
 from app.services.trip_research import sar_amount
@@ -47,7 +48,8 @@ BookLeg = Literal["outbound", "inbound", "round_trip"]
 # not_available: no source has this flight or a replacement. check_failed: no source
 # answered, so nothing is known. no_link: it exists, with no page that can open it.
 Fallback = Literal["not_available", "limit", "demo", "check_failed", "no_link"]
-AlternativeReason = Literal["gone", "no_link", "cheaper"]
+# agent: the same flight, cheaper through a travel agent than the airline.
+AlternativeReason = Literal["gone", "no_link", "cheaper", "agent"]
 
 
 class NoRoute(Exception):
@@ -178,6 +180,9 @@ class FlightChecker:
         else:
             self.providers = live_flight_providers(settings)
         self.total_only = settings.ignav_price_scope == "total"
+        self.accuracy = PriceAccuracy(
+            settings.price_accuracy_db, settings.price_gap_log_percent
+        )
 
     def can_spend(self, provider: FlightProvider, trip: str) -> bool:
         name = _name(provider)
@@ -227,11 +232,16 @@ class FlightChecker:
             fare = fare_from_itinerary(itinerary, links, query, self.total_only)
         except IgnavError:
             return Quote(asked, itinerary, None)
+        self.accuracy.record(
+            fare.airline,
+            f"{query.origin_airport}-{query.destination_airport}",
+            fare.accuracy_gap(),
+        )
         return Quote(asked, itinerary, replace(fare, provider=_name(asked.provider)))
 
 
 def best_quote(quotes: list[Quote], conflict_percent: Decimal) -> Quote:
-    """A link to the flight itself, then the airline's own price, then the newest.
+    """The airline's own price, then a link to the flight itself, then the newest.
 
     When sources disagree by more than the limit, the closest to the airline wins.
     """
@@ -240,8 +250,8 @@ def best_quote(quotes: list[Quote], conflict_percent: Decimal) -> Quote:
         fare = item.fare
         return (
             fare is None,
-            not (fare and fare.exact),
             not (fare and fare.seller_type == "airline"),
+            not (fare and fare.exact),
             -item.asked.at.timestamp(),
         )
 
@@ -446,6 +456,42 @@ class CheckResult:
     checked_at: datetime | None = None
 
 
+def _agent_option(
+    fare: FlightFare,
+    fresh: Flights,
+    proposal: Proposal,
+    route: Flights,
+    ceiling: Decimal | None,
+    settings: Settings,
+) -> Alternative | None:
+    """An agent clearly cheaper than the airline, for the same flight."""
+    shown = fresh.price_per_person.amount_sar
+    amount = sar_amount(fare.agent_amount, fare.currency)
+    if not fare.agent_url or not amount or not shown:
+        return None
+    if amount > shown * (1 - settings.agent_cheaper_percent / 100):
+        return None
+    option = fresh.model_copy(
+        update={
+            "price_per_person": fresh.price_per_person.model_copy(
+                update={"amount_sar": amount}
+            ),
+            "seller_type": "third_party",
+        }
+    )
+    status = _status(proposal, route, option, ceiling)
+    return Alternative(
+        "agent",
+        option,
+        fare.agent_url,
+        fare.agent_name,
+        False,
+        fare.provider,
+        amount,
+        None if status is None else status != "over_group_budget",
+    )
+
+
 def _changed(price: Decimal | None, previous: Decimal | None) -> Decimal | None:
     return previous if price and previous and abs(price - previous) >= 1 else None
 
@@ -622,8 +668,12 @@ async def check_flight(
         any(item.booking_url is None for item in fare.legs) if refreshing else not url
     )
     alternative = None
+    agent = _agent_option(fare, fresh, proposal, route, ceiling, settings)
     if missing:
         alternative = await alternative_for("no_link", _carriers(best.itinerary))
+    elif agent:
+        # The same flight needs no other search, so this costs no request.
+        alternative = agent
     elif fare.price_gap_percent() > settings.price_conflict_percent:
         # The seller asks far above what the search showed, as Gulf Air did.
         cheaper = await alternative_for("cheaper", _carriers(best.itinerary))

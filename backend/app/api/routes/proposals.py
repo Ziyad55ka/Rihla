@@ -111,8 +111,8 @@ class FlightFacts(BaseModel):
 
 
 class AlternativeResponse(FlightFacts):
-    # gone: already saved in place of the old flight. no_link and cheaper: a suggestion.
-    reason: Literal["gone", "no_link", "cheaper"]
+    # gone: already saved in place of the old flight. The others are suggestions.
+    reason: Literal["gone", "no_link", "cheaper", "agent"]
     # Null when not checked. Never says by how much.
     within_budget: bool | None
 

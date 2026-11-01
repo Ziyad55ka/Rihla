@@ -15,6 +15,7 @@ import httpx2 as httpx
 
 from app.core.config import Settings
 from app.services.flight_usage import FlightUsage
+from app.services.price_accuracy import PriceAccuracy
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,14 @@ class FlightFare:
     provider: str = "ignav"
     # When the source fetched this fare, in ISO form, or null when unknown.
     observed_at: str | None = None
+    # The cheapest agent for the whole trip, when the seller chosen is the airline.
+    agent_name: str | None = None
+    agent_url: str | None = None
+    agent_amount: str | None = None
+
+    def accuracy_gap(self) -> Decimal | None:
+        """The gap to record: None when no seller stated a price to compare."""
+        return self.price_gap_percent() if self.price_source == "seller" else None
 
     def price_gap_percent(self) -> Decimal:
         """How far the seller's price is above what the search showed."""
@@ -161,10 +170,12 @@ class IgnavProvider:
         split_min_saving_percent: Decimal = Decimal(15),
         split_max_extra_duration_percent: Decimal = Decimal(30),
         on_request: Callable[[str], None] | None = None,
+        on_fare: Callable[[FlightFare, FlightQuery], None] | None = None,
         price_conflict_percent: Decimal = Decimal(10),
         cache_seconds: float = 900,
     ) -> None:
         self.price_conflict_percent = price_conflict_percent
+        self.on_fare = on_fare
         self.cache_seconds = cache_seconds
         self.api_key = api_key
         self.cache = cache
@@ -218,7 +229,10 @@ class IgnavProvider:
     async def _fare(self, choice: dict, query: FlightQuery) -> FlightFare | None:
         links = await self.booking_links(str(choice["ignav_id"]))
         try:
-            return fare_from_itinerary(choice, links, query, self.price_is_total)
+            fare = fare_from_itinerary(choice, links, query, self.price_is_total)
+            if self.on_fare:
+                self.on_fare(fare, query)
+            return fare
         except IgnavError as error:
             if str(error) != "no_booking_link":
                 raise
@@ -524,7 +538,7 @@ def pick_link(
     codes: set[str] | None = None,
     numbers: list[str] | None = None,
 ) -> dict | None:
-    """A valid link for these directions: this flight, then its airline, then price."""
+    """A valid link for these directions: the airline, then this flight, then price."""
     links = [
         link
         for option in options
@@ -535,12 +549,29 @@ def pick_link(
     ]
     links.sort(
         key=lambda link: (
-            not link_is_exact(link, numbers or []),
             link.get("provider_type") != "airline",
+            not link_is_exact(link, numbers or []),
             _link_amount(link) or Decimal("Infinity"),
         )
     )
     return links[0] if links else None
+
+
+def cheapest_agent(
+    options: list[dict], query: FlightQuery, currency: str
+) -> dict | None:
+    """The cheapest agent's valid link for the whole trip, with a stated price."""
+    both = {"outbound", "inbound"}
+    agents = [
+        link
+        for option in options
+        if set(option.get("legs") or []) == both
+        for link in option.get("links") or []
+        if link.get("provider_type") == "third_party"
+        and link_matches(str(link.get("url") or ""), both, query)
+        and _link_amount(link, currency)
+    ]
+    return min(agents, key=lambda link: _link_amount(link, currency), default=None)
 
 
 def _any_price(options: list[dict], direction: str) -> dict | None:
@@ -706,6 +737,9 @@ def fare_from_itinerary(
             if link
         )
     )
+    agent = cheapest_agent(options, query, currency) if whole else None
+    if provider.get("provider_type") != "airline":
+        agent = None
     bags = choice.get("bags") or {}
     status = provider.get("price", {}).get("status") if source == "seller" else None
     return FlightFare(
@@ -728,6 +762,13 @@ def fare_from_itinerary(
         cabin_class=choice.get("cabin_class"),
         checked_bags=bags.get("checked"),
         carry_on_bags=bags.get("carry_on"),
+        agent_name=str(agent.get("provider_name") or "") or None if agent else None,
+        agent_url=without_tracking(str(agent["url"])) if agent else None,
+        agent_amount=(
+            _party_amount(_link_amount(agent, currency), query.adults, price_is_total)
+            if agent
+            else None
+        ),
     )
 
 
@@ -736,6 +777,9 @@ def get_flight_provider(
 ) -> FlightPriceProvider:
     if settings.flight_price_provider == "ignav" and settings.ignav_api_key:
         usage = FlightUsage(settings.flight_usage_db)
+        accuracy = PriceAccuracy(
+            settings.price_accuracy_db, settings.price_gap_log_percent
+        )
         return IgnavProvider(
             settings.ignav_api_key,
             cache,
@@ -743,6 +787,11 @@ def get_flight_provider(
             split_min_saving_percent=settings.split_min_saving_percent,
             split_max_extra_duration_percent=settings.split_max_extra_duration_percent,
             on_request=lambda kind: usage.record(kind, "generation", False),
+            on_fare=lambda fare, query: accuracy.record(
+                fare.airline,
+                f"{query.origin_airport}-{query.destination_airport}",
+                fare.accuracy_gap(),
+            ),
             price_conflict_percent=settings.price_conflict_percent,
             cache_seconds=settings.flight_cache_minutes * 60,
         )

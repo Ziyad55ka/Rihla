@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     link_valid_minutes: int = Field(default=15, ge=1)
     # Above this gap between prices, the airline's own price decides.
     price_conflict_percent: Decimal = Field(default=Decimal(10), ge=0)
+    # Every search is compared with its seller's price, and a gap above this is logged.
+    price_gap_log_percent: Decimal = Field(default=Decimal(5), ge=0)
+    price_accuracy_db: Path = BACKEND_DIR / ".local" / "price-accuracy.sqlite3"
+    # An agent cheaper than the airline by this much is offered as an option.
+    agent_cheaper_percent: Decimal = Field(default=Decimal(5), ge=0)
     # Free city photos from Wikimedia, kept locally with their licence.
     place_images_enabled: bool = True
     place_images_db: Path = BACKEND_DIR / ".local" / "place-images.sqlite3"

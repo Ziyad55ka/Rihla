@@ -1,4 +1,4 @@
-"""General facts about each airline's cheapest fare, from app/data/airline_fares.json."""
+"""General facts about each airline's cheapest fare, from data/airline_fares.json."""
 
 import json
 from functools import lru_cache
