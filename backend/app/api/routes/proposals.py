@@ -18,8 +18,10 @@ from app.services.flight_refresh import (
 )
 from app.services.generation_inputs import (
     FlightContext,
+    FlightGroup,
     GenerationInputsError,
     fetch_flight_context,
+    fetch_flight_group,
     fetch_generation_inputs,
     save_flight_refresh,
 )
@@ -63,6 +65,8 @@ class StoredProposals(BaseModel):
     generating: bool
     needs_regeneration: bool
     proposals: list[Proposal]
+    # Worked out by the backend. Never a count or a list of cities.
+    all_same_city: bool = False
     # Set from the backend's settings, so the page has no copy of these numbers.
     price_fresh_hours: int = 3
     price_stale_hours: int = 24
@@ -95,6 +99,28 @@ class RefreshFlightsResponse(BaseModel):
     next_refresh_seconds: int
 
 
+def _with_group_totals(proposal: Proposal, group: FlightGroup) -> Proposal:
+    """Only for a whole trip from one city. Other trips get no group figure or count."""
+    if not group.all_same_city or group.members <= 1:
+        return proposal
+    return proposal.model_copy(
+        update={
+            "flights": [
+                route.model_copy(
+                    update={
+                        "group_total_sar": (
+                            route.price_per_person.amount_sar * group.members
+                        ).quantize(Decimal("0.01"))
+                    }
+                )
+                if route.price_per_person.amount_sar
+                else route
+                for route in proposal.flights
+            ]
+        }
+    )
+
+
 async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
     # Filtered by departure city inside the database, for every caller.
     stored = await trip_rpc(
@@ -104,12 +130,22 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
         {"p_trip_id": str(trip_id)},
         StoredProposals,
     )
+    group = FlightGroup()
+    if stored.proposals:
+        # A failed check only hides the group figure, never the proposals.
+        try:
+            group = await fetch_flight_group(trip_id, identity.account.id, settings)
+        except GenerationInputsError:
+            pass
     return stored.model_copy(
         update={
             "proposals": [
-                apply_source_policy(item, settings.booking_domains)
+                _with_group_totals(
+                    apply_source_policy(item, settings.booking_domains), group
+                )
                 for item in stored.proposals
             ],
+            "all_same_city": group.all_same_city,
             "price_fresh_hours": settings.price_fresh_hours,
             "price_stale_hours": settings.price_stale_hours,
             "refresh_cooldown_minutes": settings.refresh_cooldown_minutes,

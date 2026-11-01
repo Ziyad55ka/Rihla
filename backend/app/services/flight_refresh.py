@@ -5,7 +5,7 @@ caller's own departure city's price, timestamp and availability.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
@@ -154,6 +154,16 @@ class FlightChecker:
         self.usage.cache_put(key, body)
         return datetime.now(UTC).timestamp(), body
 
+    async def alone(self, check: LiveCheck, route: Flights, trip: str) -> dict | None:
+        """The same flight for one person. Never searched for a party of one."""
+        if check.query.adults <= 1:
+            return None
+        try:
+            found = await self._search(replace(check.query, adults=1), trip)
+        except IgnavError:
+            return None
+        return matching_itinerary(found[1], route, "round_trip") if found else None
+
     async def links(self, check: LiveCheck, trip: str) -> dict | None:
         ignav_id = str(check.itinerary["ignav_id"])
         key = f"links|{check.query}|{ignav_id}"
@@ -233,7 +243,9 @@ async def book_flight(
     member: str,
 ) -> BookResult:
     route = find_route(proposal, city)
-    check = await checker.check(proposal, route, leg, adults, trip, member)
+    # The shown price was for one person booking alone, so check that same booking.
+    party = 1 if route.fare_basis == "solo" else adults
+    check = await checker.check(proposal, route, leg, party, trip, member)
     if check.fallback:
         return BookResult(check.google_url, check.fallback)
     try:
@@ -323,6 +335,12 @@ async def refresh_flights(
         check.query.adults,
         total_only,
     )
+    basis, saving = "group", None
+    alone = await checker.alone(check, route, trip)
+    if alone is not None and str(alone["price"]["currency"]).upper() == "SAR":
+        solo = sar_amount(str(alone["price"]["amount"]), "SAR")
+        if amount and solo and amount - solo >= 1:
+            basis, saving, amount, price = "solo", amount - solo, solo, alone["price"]
     legs = list(route.legs)
     if route.trip_type != "round_trip":
         # Separate bookings have their own prices, which need the links request.
@@ -379,6 +397,8 @@ async def refresh_flights(
                 ),
                 "priced_at": check.priced_at,
                 "group_availability": "available",
+                "fare_basis": basis,
+                "solo_saving_sar": saving,
             }
         ).model_dump()
     )

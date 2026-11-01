@@ -115,6 +115,10 @@ A trip on one airline both ways is preferred. A different trip replaces it only 
 
 Ignav's documentation does not say whether an amount covers one passenger or the whole party, so we tested it on 1 November 2026: RUH to BAH, 20 to 30 November, with `adults` 1 and 2. All 54 itineraries matched by flight number, and each cost about twice as much for 2 adults (900 and 1,800 SAR on Gulf Air). So an amount covers the whole party, and `IGNAV_PRICE_SCOPE` defaults to `total`, which divides by the party.
 
+When more than one person flies from a city, the same flight is also searched with `adults=1`, which costs one more request, or none from the cache. If booking alone saves at least 1 SAR per person, `price_per_person` becomes that price, `fare_basis` is `solo`, booking checks that one-person fare, and the page warns that people may not share a flight. Otherwise `fare_basis` is `group`. The budget check always uses `price_per_person`.
+
+`rihla_flight_group` tells the backend whether all members share a departure city. Browsers receive only `all_same_city`, and `group_total_sar` when it is true and there is more than one member. Otherwise they get no group figure or count. Without the `20261102000500` migration, the flag is false and the page still works.
+
 ## The light flight update
 
 Both actions check one ticket with Ignav. They never use Gemini or Tavily, and never change the destination, cities or hotels.
@@ -132,7 +136,7 @@ Each works only on the caller's own departure city. Both read and save through t
 | `DAILY_IGNAV_REQUESTS` | 200 | New Ignav requests for the project, protecting the 1,000 free ones |
 | `REFRESH_COOLDOWN_MINUTES` | 5 | How long the refresh button waits after a checked price |
 
-At a limit the person still gets a Google Flights search, with a message. Round-trip refreshes cost 1 request. Booking, and refreshing separate bookings, cost 2.
+At a limit the person still gets a Google Flights search, with a message. Round-trip refreshes cost 1 request. Booking, and refreshing separate bookings, cost 2. Refreshing for more than one person from a city adds 1.
 
 Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: members appear only as a hash. See it with `uv run python -m app.services.flight_usage`.
 

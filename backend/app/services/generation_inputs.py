@@ -74,6 +74,31 @@ class FlightContext(BaseModel):
     proposal: Proposal
 
 
+class FlightGroup(BaseModel):
+    """Private to the backend. A browser gets only the true or false answer."""
+
+    all_same_city: bool = False
+    members: int = 0
+
+
+async def fetch_flight_group(
+    trip_id: UUID,
+    member_id: UUID,
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> FlightGroup:
+    response = await _secret_rpc(
+        "rihla_flight_group",
+        {"p_trip_id": str(trip_id), "p_user_id": str(member_id)},
+        settings,
+        transport,
+    )
+    try:
+        return FlightGroup.model_validate_json(response.content)
+    except ValidationError as error:
+        raise GenerationInputsError("invalid_response") from error
+
+
 async def fetch_flight_context(
     trip_id: UUID,
     proposal_id: UUID,

@@ -508,6 +508,9 @@ export const arabic: Record<string, string> = {
   "Round trip, per person": "ذهاب وعودة، للشخص",
   "Suggested area:": "المنطقة المقترحة:",
   "About {amount} for the whole stay": "حوالي {amount} لكل الإقامة",
+  "{amount} for the whole group": "{amount} لكل المجموعة",
+  "The price shown is for each person booking alone.": "السعر المعروض هو سعر الحجز المنفرد.",
+  "It could be {amount} per person cheaper if each person books alone, but you may not be on the same flight.": "ممكن أرخص بـ {amount} للشخص إذا كل واحد حجز لحاله، بس ممكن ما تكونون على نفس الرحلة.",
   "Booking and price sources": "مصادر الحجز والأسعار",
   "Sources for ideas": "مصادر الأفكار",
 }

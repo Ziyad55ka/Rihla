@@ -422,6 +422,12 @@ def _build_route(
             if index in research.no_group_fare
             else "unknown"
         ),
+        fare_basis=None if fare is None else "solo" if fare.solo_saving else "group",
+        solo_saving_sar=(
+            Decimal(fare.solo_saving).quantize(Decimal("0.01"))
+            if fare is not None and fare.solo_saving
+            else None
+        ),
     )
 
 

@@ -4,7 +4,7 @@ import hashlib
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Literal, Protocol
@@ -90,6 +90,8 @@ class FlightFare:
     provider_name: str
     trip_type: Literal["round_trip", "split", "one_way"]
     legs: tuple[FareLeg, ...]
+    # Per person, set when booking alone beats booking together. `amount` is then alone.
+    solo_saving: str | None = None
 
     @property
     def source_url(self) -> str:
@@ -211,6 +213,40 @@ class IgnavProvider:
             return fare
         return await self._fare(cheapest, query) or fare
 
+    async def _cheaper_alone(self, fare: FlightFare, query: FlightQuery) -> FlightFare:
+        """Compare the same flight booked together and alone. One more request."""
+        if query.adults <= 1:
+            return fare
+        wanted = {leg.direction: leg.flight_number for leg in fare.legs}
+        if not all(wanted.values()):
+            return fare
+        try:
+            body = await self.search(replace(query, adults=1))
+        except IgnavError:
+            return fare
+        same = [
+            item
+            for item in usable_itineraries(body)
+            if ", ".join(flight_numbers(item["outbound"])) == wanted["outbound"]
+            and (
+                "return" not in wanted
+                or ", ".join(flight_numbers(item.get("inbound") or {}))
+                == wanted["return"]
+            )
+        ]
+        alone = min(same, key=_amount, default=None)
+        if alone is None or str(alone["price"]["currency"]).upper() != fare.currency:
+            return fare
+        saving = Decimal(fare.amount) - _amount(alone)
+        if saving < 1:
+            return fare
+        return replace(
+            fare,
+            amount=str(alone["price"]["amount"]),
+            verified=fare.verified and alone["price"].get("status") == "verified",
+            solo_saving=str(saving),
+        )
+
     async def find(self, query: FlightQuery) -> FlightFare | None:
         key = hashlib.sha256(f"ignav-legs|{query}".encode()).hexdigest()
         cached = self.cache.get(key) if self.cache else None
@@ -228,6 +264,7 @@ class IgnavProvider:
             if fare is None:
                 logger.info("flight_provider_fallback reason=no_booking_link")
                 return None
+            fare = await self._cheaper_alone(fare, query)
         except IgnavError as error:
             logger.info("flight_provider_fallback reason=%s", error)
             return None

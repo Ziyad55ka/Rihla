@@ -122,6 +122,12 @@ export interface Flights {
   destination_airport?: string | null
   /** Whether the search for everyone from this city found the flight. Never a count. */
   group_availability?: 'available' | 'not_found' | 'unknown'
+  /** solo: each person booking alone was cheaper, and the price shown is that one. */
+  fare_basis?: 'group' | 'solo' | null
+  /** With solo: how much less per person than one booking together. */
+  solo_saving_sar?: string | null
+  /** Sent only when the whole trip departs from one city. */
+  group_total_sar?: string | null
 }
 
 /** A stay in one city. */
@@ -233,6 +239,8 @@ export interface StoredProposals {
   needs_regeneration: boolean
   /** Up to three proposals, by option number. Can be empty. */
   proposals: Proposal[]
+  /** Whether the whole trip departs from one city. Never a count. */
+  all_same_city?: boolean
   /** A price is fresh below this many hours. Set by the backend. */
   price_fresh_hours?: number
   /** A price is old above this many hours. Set by the backend. */

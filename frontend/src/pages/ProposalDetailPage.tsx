@@ -27,7 +27,7 @@ export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChan
     {stored.needs_regeneration && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
     <CityStaysSection proposal={proposal} limits={limits} />
     <TransfersSection proposal={proposal} />
-    <FlightsSection proposal={proposal} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 5} onChanged={onChanged} />
+    <FlightsSection proposal={proposal} allSameCity={stored.all_same_city === true} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 5} onChanged={onChanged} />
     <CostsAndCompatibility proposal={proposal} />
     <SourcesSection sources={proposal.sources} />
   </article>

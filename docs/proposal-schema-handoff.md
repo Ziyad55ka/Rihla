@@ -239,6 +239,8 @@ class Proposal(StrictModel):
 | `flight_number`, `departure_time`, `arrival_time`, `stops`, `seller` | `FlightLeg` | تفاصيل الرحلة والبائع |
 | `origin_airport`, `destination_airport` | `Flights` | رموز المطارات |
 | `group_availability` | `Flights` | `available` أو `not_found` أو `unknown`. Ignav ما يعطي عدد مقاعد، فما فيه حقل عدد |
+| `fare_basis`, `solo_saving_sar` | `Flights` | هل السعر لحجز جماعي أو منفرد، والفرق للشخص |
+| `group_total_sar` | `Flights` | سعر المجموعة، ويوصل بس إذا كل الرحلة من مدينة وحدة |
 | `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
 
 ### تغييرات لازم تنتبهون لها

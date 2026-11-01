@@ -149,6 +149,17 @@ describe('ProposalDetailView', () => {
     const none = page(proposal({ flights: [flights({ group_availability: 'not_found' })] }))
     expect(none).toContain('You may need different flights.')
   })
+  it('shows a group total only when the whole trip departs from one city', () => {
+    const route = flights({ group_total_sar: '1800.00' })
+    expect(page(proposal({ flights: [route] }), true, 'p1', { all_same_city: true })).toContain('for the whole group')
+    expect(page(proposal({ flights: [route] }), true, 'p1', { all_same_city: false })).not.toContain('for the whole group')
+    expect(page(proposal({ flights: [flights({})] }))).not.toContain('for the whole group')
+  })
+  it('warns when the price shown is for booking alone', () => {
+    const html = page(proposal({ flights: [flights({ fare_basis: 'solo', solo_saving_sar: '50.00' })] }))
+    expect(html).toContain('you may not be on the same flight')
+    expect(page(proposal({ flights: [flights({ fare_basis: 'group' })] }))).not.toContain('you may not be on the same flight')
+  })
   it('asks before continuing at a changed price, and opens in a new tab', () => {
     const html = pure(<BookResultView result={{ url: 'https://air.example/new', fallback: null, seller: 'Saudia', exact_flight: true, price_sar: '950', previous_price_sar: '900' }} />)
     expect(html).toContain('The price is now 950 SAR instead of 900 SAR. Continue?')

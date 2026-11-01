@@ -1021,6 +1021,20 @@ test('the flight context counts same-city members together, ignoring case', asyn
   assert.equal((await flightContext(id, rows[0].id, BOB)).adults, 2)
 })
 
+test('the flight group answers only for members, and closes to browsers', async () => {
+  const same = await twoMembers(member({ departure_city: 'Riyadh' }), member({ departure_city: ' riyadh ' }))
+  const mixed = await twoMembers(member({ departure_city: 'Riyadh' }), member({ departure_city: 'Jeddah' }))
+  await root()
+  const privileges = (await db.query(`select
+    has_function_privilege('authenticated', 'public.rihla_flight_group(uuid,uuid)', 'execute') as browser,
+    has_function_privilege('service_role', 'public.rihla_flight_group(uuid,uuid)', 'execute') as backend`)).rows[0]
+  assert.deepEqual(privileges, { browser: false, backend: true })
+  await asServiceRole()
+  assert.deepEqual(await rpc('rihla_flight_group', [same, BOB]), { all_same_city: true, members: 2 })
+  assert.equal((await rpc('rihla_flight_group', [mixed, BOB])).all_same_city, false)
+  await denied(() => rpc('rihla_flight_group', [same, CAROL]))
+})
+
 test('a refresh replaces only the caller city, and no other proposal data', async () => {
   const { id, proposalId } = await savedWithIds()
   await asServiceRole()

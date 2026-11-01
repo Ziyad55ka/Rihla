@@ -175,6 +175,13 @@ class Flights(StrictModel):
     # not_found: it found none, so they may need different flights.
     # unknown: not checked. Never holds a seat count or a traveller count.
     group_availability: Literal["available", "not_found", "unknown"] = "unknown"
+    # group: priced as one booking for everyone from this city. solo: each person
+    # booking alone was cheaper, so price_per_person is that price. Null when older.
+    fare_basis: Literal["group", "solo"] | None = None
+    # With solo: how much less per person than one booking together.
+    solo_saving_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    # Added on reading, never saved, and only when the whole trip departs from one city.
+    group_total_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
 
     @model_validator(mode="after")
     def legs_match_trip_type(self):

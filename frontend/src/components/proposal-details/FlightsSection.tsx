@@ -4,6 +4,7 @@ import { placeName } from '../../lib/places'
 import type { PriceAgeLimits } from '../../lib/proposals'
 import type { FlightLeg, Flights, Proposal, TripType } from '../../types/proposal'
 import { BookFlight, RefreshFlights } from './FlightActions'
+import { useSar } from './useSar'
 import { InfoValue, PriceAgeBadge, PriceValue } from './values'
 
 const tripTypeLabels: Record<TripType, string> = {
@@ -37,8 +38,9 @@ function Leg({ leg, proposal, separate }: { leg: FlightLeg; proposal: Proposal; 
   </div>
 }
 
-function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
+function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; allSameCity: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t, language } = useLanguage()
+  const sar = useSar()
   const separate = route.trip_type === 'split' || route.trip_type === 'one_way'
   return <div className="details-card">
     <div className="details-route-top">
@@ -53,19 +55,21 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
     <div className="details-route-total">
       <span className="details-total-label">{t(route.trip_type === 'one_way' ? 'One way, per person' : 'Round trip, per person')}</span>
       <div className="details-value"><PriceValue price={route.price_per_person} /><PriceAgeBadge pricedAt={route.priced_at} limits={limits} canRefresh /></div>
+      {allSameCity && route.group_total_sar && <p className="details-hint">{t('{amount} for the whole group', { amount: sar(route.group_total_sar) })}</p>}
+      {route.fare_basis === 'solo' && route.solo_saving_sar && <p className="proposals-review" role="status">{t('The price shown is for each person booking alone.')} {t('It could be {amount} per person cheaper if each person books alone, but you may not be on the same flight.', { amount: sar(route.solo_saving_sar) })}</p>}
       {route.trip_type === 'round_trip' && <BookFlight tripId={proposal.trip_id} proposalId={proposal.id} leg="round_trip" label={t('Book the trip')} />}
       <RefreshFlights tripId={proposal.trip_id} proposalId={proposal.id} pricedAt={route.priced_at} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
     </div>
   </div>
 }
 
-export function FlightsSection({ proposal, isAdmin, limits, cooldownMinutes, onChanged }: { proposal: Proposal; isAdmin: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
+export function FlightsSection({ proposal, allSameCity, isAdmin, limits, cooldownMinutes, onChanged }: { proposal: Proposal; allSameCity: boolean; isAdmin: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t } = useLanguage()
   return <section aria-labelledby="details-flights">
     <h2 id="details-flights">{t('Flights from your city')}</h2>
     <p className="details-section-note">{t('You only see flights from your departure city')}</p>
     {proposal.flights.length > 0
-      ? proposal.flights.map((route) => <Route key={route.origin} route={route} proposal={proposal} limits={limits} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />)
+      ? proposal.flights.map((route) => <Route key={route.origin} route={route} proposal={proposal} allSameCity={allSameCity} limits={limits} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />)
       : <p className="proposals-review" role="status">{t(isAdmin ? 'This proposal has no flights from your city. Generate the proposals again to include it.' : 'This proposal has no flights from your city. Wait for the administrator to generate the proposals again.')}</p>}
   </section>
 }
