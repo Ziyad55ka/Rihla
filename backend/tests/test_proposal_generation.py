@@ -84,6 +84,8 @@ def option(
         title_en=None,
         destination_ar=None,
         cities_ar=None,
+        stay_labels_en=None,
+        stay_labels_ar=None,
         destination=destination,
         country=destination,
         arrival_airport=None,
@@ -890,3 +892,15 @@ def test_new_links_have_no_tracking_ids(
 
     assert "gclid" not in body and "gclsrc" not in body
     assert "keep=2" in body
+
+
+def test_stay_labels_keep_three_general_ones_and_drop_private_ones() -> None:
+    labels = [["Near the museums", "Under 5000 SAR", "Quiet", "Family friendly", "Old"]]
+
+    assert proposal_generation._stay_labels(labels, 0) == [
+        "Near the museums",
+        "Quiet",
+        "Family friendly",
+    ]
+    assert proposal_generation._stay_labels(labels, 3) == []
+    assert proposal_generation._stay_labels(None, 0) == []

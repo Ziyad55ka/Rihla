@@ -265,6 +265,9 @@ class CityStay(StrictModel):
     hotel_source: str | None = Field(default=None, max_length=50)
     # A photo of this city, or null.
     image: PlaceImage | None = None
+    # Short general reasons a stay here suits the group, with no member's details.
+    labels_en: list[str] = []
+    labels_ar: list[str] = []
 
     @field_validator("hotel_price_per_night")
     @classmethod
@@ -284,6 +287,9 @@ class IntercityTransfer(StrictModel):
     duration: InfoField
     # The price for one person. It cannot be Sourced. Example amount: "53.00".
     price_per_person: SarPrice
+    # Station names, or null. Nothing fills these yet. Example: "Paris Gare de l'Est".
+    from_station: str | None = Field(default=None, max_length=100)
+    to_station: str | None = Field(default=None, max_length=100)
 
     @field_validator("price_per_person")
     @classmethod

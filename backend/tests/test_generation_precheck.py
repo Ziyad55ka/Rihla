@@ -416,6 +416,8 @@ def test_all_options_over_budget_gives_a_clear_message_without_the_figure(
             title_en=None,
             destination_ar=None,
             cities_ar=None,
+            stay_labels_en=None,
+            stay_labels_ar=None,
             destination=place,
             country="X",
             arrival_airport=None,

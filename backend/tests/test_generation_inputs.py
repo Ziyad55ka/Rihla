@@ -21,10 +21,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
 TRIP = UUID("00000000-0000-4000-8000-0000000000aa")
 ADMIN = UUID("11111111-1111-4111-8111-111111111111")
-MIGRATION = (
-    ROOT
-    / "supabase/migrations/20261102000100_ai_proposals.sql"
-)
+MIGRATION = ROOT / "supabase/migrations/20261102000100_ai_proposals.sql"
 PAYLOAD = {
     "trip_id": str(TRIP),
     "shared_start": "2026-12-13",

@@ -22,6 +22,7 @@ from app.core.config import DEFAULT_BOOKING_DOMAINS, Settings
 from app.schemas.generation import GenerationInput
 from app.schemas.planning import ConflictCategory
 from app.schemas.proposals import (
+    PRIVATE_DETAIL,
     BudgetStatus,
     CityStay,
     Evidence,
@@ -94,6 +95,9 @@ Give each option's country as its plain English name, such as Egypt.
 Give title_ar as the title in Arabic and title_en as the title in English.
 Give destination_ar as the destination in Arabic, and cities_ar as each city's name in
 Arabic, in the same order as cities.
+Give stay_labels_en and stay_labels_ar: for each city, in order, up to three short
+general reasons a stay there suits this group, such as "Near the museums", in English
+and in Arabic. They must never mention a member, budget, amount or number.
 Give arrival_airport as the three-letter IATA code of the first city's main airport.
 The group's total cost per person must stay within budget_ceiling_sar.
 Several destinations in one requirement, such as "France, Bahrain", are alternatives:
@@ -133,6 +137,8 @@ class PlannedOption(BaseModel):
     title_en: str | None
     destination_ar: str | None
     cities_ar: list[str] | None
+    stay_labels_en: list[list[str]] | None
+    stay_labels_ar: list[list[str]] | None
     destination: str
     country: str
     arrival_airport: str | None
@@ -469,6 +475,13 @@ def _area(field: VerifiedField | None) -> str | None:
     return value[:150] if value else None
 
 
+def _stay_labels(labels: list[list[str]] | None, index: int) -> list[str]:
+    """At most three. A label that names anything private is dropped, not repaired."""
+    found = labels[index] if labels and index < len(labels) else []
+    safe = [item.strip()[:40] for item in found if not PRIVATE_DETAIL.search(item)]
+    return [item for item in safe if item][:3]
+
+
 def _shown_title(title: str | None) -> str | None:
     """A blank or overlong translation falls back to the main title on the page."""
     cleaned = (title or "").strip()
@@ -516,6 +529,8 @@ def build_proposal(
                 priced_at=datetime.now(UTC),
                 hotel_url=research.hotel_links.get(index),
                 hotel_source=research.hotel_sources.get(index),
+                labels_en=_stay_labels(option.stay_labels_en, index),
+                labels_ar=_stay_labels(option.stay_labels_ar, index),
             )
         )
         check_in = check_out
