@@ -60,7 +60,7 @@
                 "status": "Not available",
                 "evidence": []
               },
-              "booking_url": "https://booking.flynas.com/?gclid=AAcRjHLFC9mDFvkAllUO2cRM-k50-IvMvUPwCKarE8hSIBkFjoaQQm8FpJr-L_mlHOc67QZtw1TKtzeLaWNfIjI8N--YYCuBJhYvhYKB-AsE78iQduZg&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
             },
             {
               "direction": "return",
@@ -122,7 +122,7 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/?gclid=AAcRjHLFC9mDFvkAllUO2cRM-k50-IvMvUPwCKarE8hSIBkFjoaQQm8FpJr-L_mlHOc67QZtw1TKtzeLaWNfIjI8N--YYCuBJhYvhYKB-AsE78iQduZg&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
         }
       ]
     },
@@ -196,7 +196,7 @@
                 "status": "Not available",
                 "evidence": []
               },
-              "booking_url": "https://booking.flynas.com/?gclid=AAcRjHJhvTVMGOH55XJlODoFrmIrwP5ohhEE_376IK3CdQrVSoqptQoM6XG0ekmc8F6_MN0-ZmA_vzKLAbVFpoHbzQlqHyaAXKpYNcSNMV7xONFOZjrE&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
             },
             {
               "direction": "return",
@@ -216,7 +216,7 @@
                 "status": "Not available",
                 "evidence": []
               },
-              "booking_url": "https://booking.flynas.com/?gclid=AAcRjHJhvTVMGOH55XJlODoFrmIrwP5ohhEE_376IK3CdQrVSoqptQoM6XG0ekmc8F6_MN0-ZmA_vzKLAbVFpoHbzQlqHyaAXKpYNcSNMV7xONFOZjrE&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
             }
           ],
           "airline": {
@@ -258,7 +258,7 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/?gclid=AAcRjHJhvTVMGOH55XJlODoFrmIrwP5ohhEE_376IK3CdQrVSoqptQoM6XG0ekmc8F6_MN0-ZmA_vzKLAbVFpoHbzQlqHyaAXKpYNcSNMV7xONFOZjrE&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
         },
         {
           "id": 4,
@@ -363,7 +363,7 @@
                 "status": "Not available",
                 "evidence": []
               },
-              "booking_url": "https://booking.flynas.com/?gclid=AAcRjHI8Ittk77VZ9qVRSsjhKaPzWMj62UtBwerIsIMx6uV829rTfpqLbzGKx0gIp3iCWgj3i1OC0VVsOf1c8obRvCyww4qR7sI_DsBWE_DyU3rWh3jZ&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
             },
             {
               "direction": "return",
@@ -383,7 +383,7 @@
                 "status": "Not available",
                 "evidence": []
               },
-              "booking_url": "https://booking.flynas.com/?gclid=AAcRjHI8Ittk77VZ9qVRSsjhKaPzWMj62UtBwerIsIMx6uV829rTfpqLbzGKx0gIp3iCWgj3i1OC0VVsOf1c8obRvCyww4qR7sI_DsBWE_DyU3rWh3jZ&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
             }
           ],
           "airline": {
@@ -455,7 +455,7 @@
         {
           "id": 1,
           "title": "Ignav booking link: طيران ناس",
-          "url": "https://booking.flynas.com/?gclid=AAcRjHI8Ittk77VZ9qVRSsjhKaPzWMj62UtBwerIsIMx6uV829rTfpqLbzGKx0gIp3iCWgj3i1OC0VVsOf1c8obRvCyww4qR7sI_DsBWE_DyU3rWh3jZ&gclsrc=gf#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
         },
         {
           "id": 2,
