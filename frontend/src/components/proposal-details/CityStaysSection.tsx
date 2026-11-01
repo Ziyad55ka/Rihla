@@ -29,9 +29,9 @@ function RoomPicker({ choice, onChange }: { choice: RoomChoice; onChange: (choic
 function PersonShare({ perRoom, rooms, adults, nights }: { perRoom: number; rooms: number; adults: number; nights: number }) {
   const { t } = useLanguage()
   const sar = useSar()
-  const perNight = useCountUp(sharePerPerson(perRoom, rooms, adults))
+  const { value: perNight, ref } = useCountUp<HTMLParagraphElement>(sharePerPerson(perRoom, rooms, adults))
   const shown = Math.round(perNight)
-  return <p className="details-share"><strong>{t('About {amount} per person a night', { amount: sar(shown) })}</strong>{nights > 0 && <> · {t('About {amount} per person for the whole stay', { amount: sar(shown * nights) })}</>}</p>
+  return <p className="details-share" ref={ref}><strong>{t('About {amount} per person a night', { amount: sar(shown) })}</strong>{nights > 0 && <> · {t('About {amount} per person for the whole stay', { amount: sar(shown * nights) })}</>}</p>
 }
 
 function Hotel({ stay, city, proposal, limits, choice }: { stay: CityStay; city: string; proposal: Proposal; limits: PriceAgeLimits; choice: RoomChoice }) {

@@ -15,6 +15,7 @@ import type { StoredProposals } from '../types/proposal'
 import '../planning.css'
 import '../proposals.css'
 import '../proposal-details.css'
+import '../proposal-fonts'
 
 export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChanged = () => undefined, defaultRooms = 'shared' }: { stored: StoredProposals; proposalId: string; isAdmin: boolean; onBack: () => void; onChanged?: () => void; defaultRooms?: RoomChoice }) {
   const { t } = useLanguage()

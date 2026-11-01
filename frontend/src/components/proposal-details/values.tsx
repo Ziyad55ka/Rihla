@@ -31,11 +31,11 @@ export function PriceValue({ price, unit, startsFrom = false }: { price: SarPric
   const sar = useSar()
   const known = price.status !== 'Not available' && price.amount_sar !== null
   const target = Number(price.amount_sar ?? 0)
-  const moving = useCountUp(target)
+  const { value: moving, ref } = useCountUp<HTMLSpanElement>(target)
   // Whole riyals while it glides, then the exact price.
   const amount = known ? sar(moving === target ? target : Math.round(moving)) : '—'
   return <span className="details-value">
-    <span>
+    <span ref={ref}>
       {known && startsFrom ? t('From {amount}', { amount }) : known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}
       {known && unit && ` ${t(unit)}`}
     </span>
