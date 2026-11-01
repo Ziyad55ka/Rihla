@@ -418,11 +418,7 @@ def _airline_and_agent(airline: float, agent: float) -> dict:
                         "provider_name": "Gulf Air",
                         "provider_type": "airline",
                         "url": "https://www.gulfair.com/x",
-                        "price": {
-                            "amount": airline,
-                            "currency": "SAR",
-                            "status": status,
-                        },
+                        "price": {"amount": airline, "currency": "SAR"},
                     },
                     {
                         "provider_name": "Mock Agent",
