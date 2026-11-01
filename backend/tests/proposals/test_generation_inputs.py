@@ -17,7 +17,7 @@ from app.services.generation_inputs import (
 )
 from app.services.generation_precheck import COUNTRY_WORDS, STOP_WORDS
 
-BACKEND = Path(__file__).resolve().parents[1]
+BACKEND = Path(__file__).resolve().parents[2]
 ROOT = BACKEND.parent
 TRIP = UUID("00000000-0000-4000-8000-0000000000aa")
 ADMIN = UUID("11111111-1111-4111-8111-111111111111")
@@ -115,7 +115,10 @@ def test_secret_key_is_used_in_one_place_only() -> None:
         )
     }
 
-    assert users == {"app/core/config.py", "app/services/generation_inputs.py"}
+    assert users == {
+        "app/core/proposal_settings.py",
+        "app/services/generation_inputs.py",
+    }
 
 
 def test_secret_key_never_reaches_the_frontend_or_its_examples() -> None:

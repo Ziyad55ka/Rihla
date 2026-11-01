@@ -128,8 +128,6 @@ export interface Flights {
   fare_basis?: 'group' | 'solo' | null
   /** With solo: how much less per person than one booking together. */
   solo_saving_sar?: string | null
-  /** Sent only when the whole trip departs from one city. */
-  group_total_sar?: string | null
   /** Added when reading. */
   airline_fares?: AirlineFareNote[]
   /** Which source gave this price. Example: "ignav". */
@@ -193,9 +191,6 @@ export interface CityStay {
   hotel_source?: string | null
   /** A photo of this city, or null. */
   image?: PlaceImage | null
-  /** Short general reasons a stay here suits the group. */
-  labels_en?: string[]
-  labels_ar?: string[]
 }
 
 /** Travel between two consecutive cities. */
@@ -290,8 +285,6 @@ export interface StoredProposals {
   needs_regeneration: boolean
   /** Up to three proposals, by option number. Can be empty. */
   proposals: Proposal[]
-  /** Whether the whole trip departs from one city. Never a count. */
-  all_same_city?: boolean
   /** A price is fresh below this many hours. Set by the backend. */
   price_fresh_hours?: number
   /** A price is old above this many hours. Set by the backend. */
@@ -310,8 +303,3 @@ export interface GeneratedProposals extends StoredProposals {
   demo: boolean
 }
 
-/** Exactly three different proposals, as in the mock and demo files. */
-export interface ProposalSet {
-  /** Options 1, 2 and 3. */
-  proposals: Proposal[]
-}

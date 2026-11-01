@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import Protocol
 
 from app.core.config import Settings
+from app.schemas.conflicts import ConflictCategory
 from app.schemas.generation import GenerationInput
-from app.schemas.planning import ConflictCategory, PlanningStatus
+from app.schemas.planning import PlanningStatus
 from app.services.proposal_generation import (
     GenerationBlocked,
     GenerationResult,

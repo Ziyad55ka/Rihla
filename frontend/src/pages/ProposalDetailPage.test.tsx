@@ -7,11 +7,10 @@ import { BookResultView, BookSteps, RefreshView, SplitBooking, TimerRing } from 
 import { PlacePhoto } from '../components/proposal-details/PlacePhoto'
 import { airlineName } from '../lib/airlines'
 import { ActivitiesSection } from '../components/proposal-details/ActivitiesSection'
-import { checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, staySource, transferSearchUrl } from '../lib/proposals'
+import { bookingLink, checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, transferSearchUrl } from '../lib/proposals'
 import { AiStatus } from '../components/AiStatus'
 import { checkMessages, generateMessages, nextStatusIndex } from '../lib/aiStatus'
 import { countUpValue } from '../lib/motion'
-import { adultsInLink, defaultRoomChoice, roomsFor, sharePerPerson } from '../lib/rooms'
 import { placeName } from '../lib/places'
 import { LanguageProvider } from '../lib/language'
 import { readRoute } from '../lib/navigation'
@@ -79,7 +78,6 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('Estimated')
     expect(html).toContain('About 450 SAR')
     expect(html).toContain('per night')
-    expect(html).toContain('About 1,800 SAR for the whole stay')
   })
   it('shows Unconfirmed with its warning and no About', () => {
     const html = page(proposal({ cities: [{ ...stay, hotel_price_per_night: { amount_sar: '750', status: 'Unconfirmed', evidence: [] } }] }))
@@ -145,12 +143,6 @@ describe('ProposalDetailView', () => {
     expect(fits).toContain('Available for all travellers from your city')
     const none = page(proposal({ flights: [flights({ group_availability: 'not_found' })] }))
     expect(none).toContain('You may need different flights.')
-  })
-  it('shows a group total only when the whole trip departs from one city', () => {
-    const route = flights({ group_total_sar: '1800.00' })
-    expect(page(proposal({ flights: [route] }), true, 'p1', { all_same_city: true })).toContain('for the whole group')
-    expect(page(proposal({ flights: [route] }), true, 'p1', { all_same_city: false })).not.toContain('for the whole group')
-    expect(page(proposal({ flights: [flights({})] }))).not.toContain('for the whole group')
   })
   it('warns when the price shown is for booking alone', () => {
     const html = page(proposal({ flights: [flights({ fare_basis: 'solo', solo_saving_sar: '50.00' })] }))
@@ -319,7 +311,7 @@ describe('ProposalDetailView', () => {
     expect(count(html, '>Book<')).toBe(1)
     expect(count(html, 'Refresh the price')).toBe(1)
     expect(count(html, 'From 900 SAR')).toBe(1)
-    expect(count(html, 'Prices and seats change from time to time.')).toBe(1)
+    expect(count(html, 'Approximate price. This is the base fare')).toBe(1)
   })
   it('opens split flights as two steps from one button, with one label', () => {
     const route = flights({ trip_type: 'split', price_per_person: price('2150'), legs: [leg('outbound', 'https://a.example/o', price('1138')), leg('return', 'https://a.example/b', price('1012'))] })
@@ -335,24 +327,45 @@ describe('ProposalDetailView', () => {
     expect(open).toContain('aria-selected="true"')
   })
   it('folds the alternative behind one line, and opens a replacement', () => {
-    const found = { ...checked(), url: 'https://www.lufthansa.com/d', reason: 'cheaper' as const, within_budget: true, seller: 'Lufthansa', price_sar: '1950.00' }
+    const found = { ...checked(), url: 'https://air.example/alt', reason: 'cheaper' as const, within_budget: true, seller: 'Mock Air', price_sar: '2000.00' }
     const html = pure(<BookResultView result={checked({ alternative: found })} />)
     expect(html).toContain('<details')
-    expect(html).toContain('Cheaper option available: Lufthansa · 1,950 SAR')
+    expect(html).toContain('Cheaper option available: Mock Air · 2,000 SAR')
     expect(html).not.toContain('<details class="details-alternative details-reveal" open')
     expect(pure(<BookResultView result={checked({ alternative: { ...found, reason: 'gone' } })} />)).toContain('open=""')
   })
-  it('writes a smart summary from the proposal alone, with no private details', () => {
-    const html = page(proposal({ cities: [{ ...stay, labels_en: ['Near the museums'] }] }))
+  it('states only facts in the summary, with no judgement of fit', () => {
+    const html = page(proposal())
     expect(html).toContain('smart summary')
     expect(html).toContain('Suggested by AI')
     expect(html).toContain('Fits the group budget')
-    expect(html).toContain('in one city')
-    expect(html).toContain('Near the museums')
-    const two = page(proposal({ budget_status: 'over_group_budget', flights: [flights({ legs: [{ ...leg('outbound', null), stops: 0 }, { ...leg('return', null), stops: 0 }] })], cities: [{ ...stay, nights: 2 }, { ...stay, order: 2, city: 'Luxor', nights: 2 }], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
+    expect(html).toContain('One city')
+    const two = page(proposal({ budget_status: 'over_group_budget', cities: [{ ...stay, nights: 2 }, { ...stay, order: 2, city: 'Luxor', nights: 2 }], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
     expect(two).toContain('Over the group budget')
-    expect(two).toContain('across 2 cities')
-    expect(two).toContain('Direct flights from your city')
+    expect(two).toContain('Two cities')
+  })
+  it('says once that a price is approximate, above flights and above hotels', () => {
+    const html = page()
+    expect(count(html, 'Approximate price. This is the base fare')).toBe(1)
+    expect(count(html, 'Approximate nightly price.')).toBe(1)
+    expect(pure(<BookResultView result={checked()} />)).toContain('Skip optional extras')
+    localStorage.setItem('rihla-language', 'ar')
+    const arabic = page()
+    expect(arabic).toContain('سعر تقريبي لليلة')
+    expect(pure(<BookResultView result={checked()} />)).toContain('تخطّى الإضافات الاختيارية')
+  })
+  it('shows only the hotel basics, with one room for each person in the link', () => {
+    const fourPeople = 'https://www.booking.com/searchresults.html?ss=Cairo&group_adults=4&no_rooms=2'
+    const html = page(proposal({ cities: [{ ...stay, booking_url: fourPeople, priced_at: agoIso(30) }] }))
+    expect(html).toContain('Mock Hotel')
+    expect(html).toContain('About 450 SAR')
+    expect(html).toContain('details-age--fresh')
+    expect(html).toContain('no_rooms=4')
+    expect(html).not.toContain('for the whole stay')
+    expect(html).not.toContain('share rooms')
+    expect(bookingLink(fourPeople)).toContain('no_rooms=4')
+    expect(bookingLink(null)).toBeNull()
+    expect(bookingLink('javascript:x')).toBeNull()
   })
   it('uses only SVG icons, with no symbol that could show as a box, in both languages', () => {
     const symbols = /[\u2190-\u21FF\u2460-\u24FF\u25A0-\u27BF\u2900-\u2BFF\u{1F000}-\u{1FAFF}]/u
@@ -364,7 +377,7 @@ describe('ProposalDetailView', () => {
   })
   it('shows the notice beside flights and stays, and a from price on every flight', () => {
     const html = page()
-    expect(count(html, 'Prices and seats change from time to time.')).toBe(1)
+    expect(count(html, 'Approximate price. This is the base fare')).toBe(1)
     expect(html).toContain('From 900 SAR')
     expect(html).toContain('may show the outbound price first')
   })
@@ -383,10 +396,6 @@ describe('ProposalDetailView', () => {
     expect(page()).not.toContain('Book this hotel')
     expect(page()).toContain('Search on Booking.com')
   })
-  it('names the site behind a hotel price', () => {
-    expect(staySource(stay, [{ id: 1, title: 'T', url: 'https://www.kayak.com/h' }])).toBe('kayak.com')
-    expect(staySource({ ...stay, hotel_source: 'Trip.com' }, [])).toBe('Trip.com')
-  })
   it('shows the parts of the page in the agreed order, with no sources section', () => {
     const second = { ...stay, order: 2, city: 'Luxor', nights: 2 }
     const html = page(proposal({ cities: [{ ...stay, nights: 2 }, second], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
@@ -397,41 +406,6 @@ describe('ProposalDetailView', () => {
     expect(html).not.toContain('details-sources')
     expect(html).not.toContain('Mock source')
     expect(html).not.toContain('Sources')
-  })
-  const fourPeople = 'https://www.booking.com/searchresults.html?ss=Cairo&group_adults=4&no_rooms=2'
-  it('changes the price and the Booking link with the room choice', () => {
-    const shared = page(proposal({ cities: [{ ...stay, booking_url: fourPeople }] }))
-    expect(shared).toContain('How will you share rooms?')
-    expect(shared).toContain('About 225 SAR per person a night')
-    expect(shared).toContain('About 900 SAR per person for the whole stay')
-    expect(shared).toContain('no_rooms=2')
-    const own = renderToStaticMarkup(<LanguageProvider><ProposalDetailView stored={stored(proposal({ cities: [{ ...stay, booking_url: fourPeople }] }))} proposalId="p1" isAdmin onBack={() => undefined} defaultRooms="own" /></LanguageProvider>)
-    expect(own).toContain('About 450 SAR per person a night')
-    expect(own).toContain('no_rooms=4')
-    expect(roomsFor('shared', 5)).toBe(3)
-    expect(roomsFor('own', 5)).toBe(5)
-    expect(sharePerPerson(450, 3, 5)).toBe(270)
-    expect(adultsInLink(fourPeople)).toBe(4)
-    expect(adultsInLink('not a link')).toBeNull()
-    expect(defaultRoomChoice('غرفة خاصة لوحدي')).toBe('own')
-    expect(defaultRoomChoice('Private room')).toBe('own')
-    expect(defaultRoomChoice('')).toBe('shared')
-    expect(defaultRoomChoice(null)).toBe('shared')
-  })
-  it('hides the room choice for one traveller, and keeps it for a city with no hotel', () => {
-    const one = 'https://www.booking.com/searchresults.html?ss=Cairo&group_adults=1'
-    expect(page(proposal({ cities: [{ ...stay, booking_url: one }] }))).not.toContain('How will you share rooms?')
-    const empty = page(proposal({ cities: [{ ...stay, booking_url: fourPeople, hotel_name: { value: null, status: 'Not available', evidence: [] }, hotel_price_per_night: none }] }))
-    expect(empty).toContain('How will you share rooms?')
-    expect(empty).toContain('Search for hotels in Cairo')
-  })
-  it('shows labels in the page language', () => {
-    const labelled = { ...stay, labels_en: ['Near the museums'], labels_ar: ['قريب من المتاحف'] }
-    expect(page(proposal({ cities: [labelled] }))).toContain('Near the museums')
-    localStorage.setItem('rihla-language', 'ar')
-    const arabic = page(proposal({ cities: [labelled] }))
-    expect(arabic).toContain('قريب من المتاحف')
-    expect(arabic).not.toContain('Near the museums')
   })
   const twoCities = (extra = {}) => proposal({
     cities: [{ ...stay, city: 'Paris', nights: 2 }, { ...stay, order: 2, city: 'Strasbourg', nights: 2 }],
@@ -557,7 +531,7 @@ describe('ProposalDetailView', () => {
     localStorage.setItem('rihla-language', 'ar')
     const arabic = page(proposal({ flights: [flights({ legs: [{ ...leg('outbound', null), airline: info('Gulf Air') }, leg('return', null)] })] }))
     expect(arabic).toContain('طيران الخليج')
-    expect(arabic).toContain('الأسعار والمقاعد تتغير')
+    expect(arabic).toContain('سعر تقريبي. هذا سعر التذكرة الأساسي')
     expect(arabic).toContain('يبدأ من')
   })
   it('hides travel between cities for one city and shows it for two', () => {
@@ -582,7 +556,7 @@ describe('ProposalDetailView', () => {
   })
   it('shows the Flexible adjustment and a general note after changes', () => {
     const html = page(proposal({ flexible_adjustments: [{ category: 'flights', explanation: 'A stop was added.' }] }), false, 'p1', { needs_regeneration: true })
-    expect(html).toContain('A stop was added.')
+    expect(html).not.toContain('A stop was added.')
     expect(html).toContain('details changed after these proposals')
   })
   it('picks the title by language and falls back to the main title', () => {

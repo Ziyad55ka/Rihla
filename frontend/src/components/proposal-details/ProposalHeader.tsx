@@ -30,6 +30,5 @@ export function ProposalHeader({ proposal, total }: { proposal: Proposal; total:
     <h1 aria-label={title}><bdi aria-hidden="true">{title.split(' ').map((word, index) => <span className="details-word" key={index} style={{ animationDelay: `${index * 90 + 150}ms` }}>{word} </span>)}</bdi></h1>
     <p className="details-hero-summary"><bdi>{place}</bdi> · {summary.join(' · ')}</p>
     <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ' planning-badge--conflict'}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
-    {proposal.flexible_adjustments.map((item, index) => <p className="details-adjustment" key={index}><strong>{t('Adjustment:')}</strong> <bdi>{item.explanation}</bdi></p>)}
   </header>
 }

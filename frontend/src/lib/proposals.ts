@@ -1,6 +1,7 @@
 import { authenticatedRequest } from './http'
+import { longRequest } from './proposalsHttp'
 import type { Language } from './language'
-import type { AirlineFareNote, BudgetStatus, CityStay, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
+import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -14,9 +15,7 @@ export const getProposals = (tripId: string, signal?: AbortSignal) =>
   authenticatedRequest<StoredProposals>(path(tripId, 'proposals'), { signal })
 
 export const generateProposals = (tripId: string, regenerate: boolean) =>
-  authenticatedRequest<GeneratedProposals>(path(tripId, 'proposals'), {
-    method: 'POST', body: { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS,
-  })
+  longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
 
 // Category messages only. The API never says which member or value caused a conflict.
 export const conflictMessages: Record<ConflictCategory, string> = {
@@ -74,7 +73,7 @@ export function stayDates(proposal: Proposal): { start: string; end: string }[] 
 export type BookLeg = 'outbound' | 'inbound' | 'round_trip'
 export type FlightFallback = 'not_available' | 'limit' | 'demo' | 'check_failed' | 'no_link'
 
-export interface FlightSummary {
+interface FlightSummary {
   direction: 'outbound' | 'return'
   airline: string | null
   flight_number: string | null
@@ -99,7 +98,7 @@ export interface FlightFacts {
   airline_fares: AirlineFareNote[]
 }
 
-export interface FlightAlternative extends FlightFacts {
+interface FlightAlternative extends FlightFacts {
   /** gone: already saved in place of the old flight. The others are suggestions. */
   reason: 'gone' | 'no_link' | 'cheaper' | 'agent'
   within_budget: boolean | null
@@ -117,10 +116,10 @@ export interface FlightCheckResult extends FlightFacts {
 }
 
 export const bookFlight = (tripId: string, proposalId: string, leg: BookLeg) =>
-  authenticatedRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/book-flight?leg=${leg}`, { method: 'POST', timeoutMs: 60000 })
+  longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/book-flight?leg=${leg}`, { timeoutMs: 60000 })
 
 export const refreshFlights = (tripId: string, proposalId: string) =>
-  authenticatedRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { method: 'POST', timeoutMs: 60000 })
+  longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { timeoutMs: 60000 })
 
 export interface PriceAgeLimits {
   freshHours: number
@@ -196,6 +195,18 @@ export function linkMinutesLeft(checkedAt: string | null, validMinutes: number, 
 }
 
 /** How much of the link's time is left, from 1 down to 0, for the ring. */
+/** One room for each person, as the budget check assumes, even on older saved links. */
+export function bookingLink(url: string | null): string | null {
+  const safe = safeLink(url)
+  if (!safe) return null
+  try {
+    const link = new URL(safe)
+    const adults = link.searchParams.get('group_adults')
+    if (adults) link.searchParams.set('no_rooms', adults)
+    return link.toString()
+  } catch { return safe }
+}
+
 export function linkFractionLeft(checkedAt: string | null, validMinutes: number, now: number): number {
   if (!checkedAt) return 0
   const left = new Date(checkedAt).getTime() + validMinutes * 60000 - now
@@ -208,14 +219,6 @@ export function priceChange(price: string | null, previous: string | null): { pr
   return difference === 0 ? null : { price: Number(price), previous: Number(previous), difference }
 }
 
-/** Who gave a stay's name and price: a live source, or the booking site it was read from. */
-export function staySource(stay: CityStay, sources: ProposalSource[]): string | null {
-  if (stay.hotel_source) return stay.hotel_source
-  const cited = [...stay.hotel_price_per_night.evidence, ...stay.hotel_name.evidence][0]
-  const source = cited && sources.find((item) => item.id === cited.source_id)
-  if (!source) return null
-  try { return new URL(source.url).hostname.replace(/^www\./, '') } catch { return null }
-}
 
 export function canPressGenerate(conflicts: GroupConflicts | null, generating: boolean): boolean {
   return conflicts?.can_generate === true && !generating

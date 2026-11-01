@@ -1,8 +1,8 @@
 import { useLanguage } from '../../lib/language'
 import { useCountUp } from '../../lib/motion'
 import { priceAge, type PriceAgeLimits, statusLabels } from '../../lib/proposals'
-import type { InfoField, InfoStatus, SarPrice } from '../../types/proposal'
-import { ClockIcon } from './icons'
+import type { InfoStatus, SarPrice } from '../../types/proposal'
+import { ClockIcon, InfoIcon } from './icons'
 import { useSar } from './useSar'
 
 export function StatusBadge({ status }: { status: InfoStatus }) {
@@ -10,19 +10,16 @@ export function StatusBadge({ status }: { status: InfoStatus }) {
   return <span className={`planning-badge${status === 'Sourced' ? ' planning-badge--ready' : status === 'Unconfirmed' ? ' planning-badge--conflict' : ' details-badge--neutral'}`}>{t(statusLabels[status])}</span>
 }
 
-/** A label only when the value is doubtful or missing, so pages do not repeat badges. */
-export function InfoValue({ field, display }: { field: InfoField; display?: (value: string) => string }) {
-  const missing = field.status === 'Not available' || field.value === null
-  return <span className="details-value">
-    <span><bdi>{missing ? '—' : display ? display(field.value as string) : field.value}</bdi></span>
-    {(missing || field.status === 'Unconfirmed') && <StatusBadge status={field.status} />}
-  </span>
-}
-
-/** The same note wherever a price is shown, so nobody takes one as final. */
+/** Said once, above the flights. */
 export function PriceNotice() {
   const { t } = useLanguage()
-  return <p className="details-notice">{t('Prices and seats change from time to time. The price shown is from the last check, and the final price is confirmed on the booking page.')}</p>
+  return <p className="details-notice"><InfoIcon /> <span>{t("Approximate price. This is the base fare at the last check. The final price on the airline's site may be higher depending on your choices, such as seat selection, extra baggage, meals, or payment fees, or if the fare changes before you book.")}</span></p>
+}
+
+/** Said once, above the hotels. */
+export function StayNotice() {
+  const { t } = useLanguage()
+  return <p className="details-notice"><InfoIcon /> <span>{t('Approximate nightly price. The final price may be higher depending on room type, taxes, and city fees.')}</span></p>
 }
 
 /** `startsFrom` is for flights: the cheapest fare is rarely the only one. */

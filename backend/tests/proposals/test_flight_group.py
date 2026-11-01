@@ -1,11 +1,9 @@
-"""Booking together or alone, and who may see a group figure. All fakes."""
+"""Booking together or alone. All fakes."""
 
 import asyncio
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
-from types import SimpleNamespace
-from uuid import UUID
 
 from test_flight_refresh import (
     TRIP,
@@ -17,7 +15,6 @@ from test_flight_refresh import (
     route,
 )
 
-from app.api.routes import proposals as routes
 from app.services.flight_prices import (
     FareLeg,
     FlightFare,
@@ -26,7 +23,6 @@ from app.services.flight_prices import (
     IgnavProvider,
 )
 from app.services.flight_refresh import refresh_flights
-from app.services.generation_inputs import FlightGroup, GenerationInputsError
 
 
 class ByParty(FakeIgnav):
@@ -169,43 +165,3 @@ def test_generation_ignores_another_flight_and_skips_one_person() -> None:
     fare, calls = _generation_check(1, {"itineraries": [_numbered(900)]})
     assert calls == []
     assert fare.solo_saving is None
-
-
-def test_a_group_total_needs_one_city_and_more_than_one_member() -> None:
-    def total(group: FlightGroup) -> Decimal | None:
-        return routes._with_group_totals(proposal(), group).flights[0].group_total_sar
-
-    assert total(FlightGroup(all_same_city=True, members=3)) == Decimal("2700.00")
-    assert total(FlightGroup(all_same_city=False, members=3)) is None
-    assert total(FlightGroup(all_same_city=True, members=1)) is None
-
-
-def test_reading_still_works_without_the_group_check(monkeypatch) -> None:
-    async def fetch(*args):
-        raise GenerationInputsError("unavailable")
-
-    async def rpc(*args):
-        return routes.StoredProposals(
-            version=1,
-            complete=True,
-            generated_at=None,
-            generating=False,
-            needs_regeneration=False,
-            proposals=[proposal()],
-        )
-
-    monkeypatch.setattr(routes, "fetch_flight_group", fetch)
-    monkeypatch.setattr(routes, "trip_rpc", rpc)
-    identity = SimpleNamespace(account=SimpleNamespace(id=UUID(int=1)))
-    settings = SimpleNamespace(
-        place_images_enabled=False,
-        booking_domains=[],
-        price_fresh_hours=3,
-        price_stale_hours=24,
-        refresh_cooldown_minutes=5,
-    )
-
-    stored = asyncio.run(routes._read(UUID(TRIP), identity, None, settings))
-
-    assert stored.all_same_city is False
-    assert stored.proposals[0].flights[0].group_total_sar is None

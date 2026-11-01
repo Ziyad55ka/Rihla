@@ -25,7 +25,7 @@ function PriceParts({ route }: { route: Flights }) {
   return <p className="details-parts">{t('Outbound {outbound} + return {back} = {total} per person', { outbound: sar(outbound.price.amount_sar), back: sar(back.price.amount_sar), total: sar(total) })}</p>
 }
 
-function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; allSameCity: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
+function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t, language } = useLanguage()
   const sar = useSar()
   const typeLabel = tripTypeLabels[route.trip_type]
@@ -47,7 +47,6 @@ function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChange
       <div className="details-price-main" key={route.price_per_person.amount_sar ?? 'none'}>
         <span className="details-total-label">{t(route.trip_type === 'one_way' ? 'One way, per person' : 'Round trip, per person')}{route.provider && <Hint text={t(sourceLabel(route))} />}</span>
         <div className="details-value details-price-row"><PriceValue price={route.price_per_person} startsFrom /><PriceAgeBadge pricedAt={route.priced_at} limits={limits} canRefresh /></div>
-        {allSameCity && route.group_total_sar && <p className="details-hint">{t('{amount} for the whole group', { amount: sar(route.group_total_sar) })}</p>}
       </div>
       <RefreshFlights tripId={proposal.trip_id} proposalId={proposal.id} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
     </div>
@@ -64,13 +63,13 @@ function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChange
   </div>
 }
 
-export function FlightsSection({ proposal, allSameCity, isAdmin, limits, cooldownMinutes, onChanged }: { proposal: Proposal; allSameCity: boolean; isAdmin: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
+export function FlightsSection({ proposal, isAdmin, limits, cooldownMinutes, onChanged }: { proposal: Proposal; isAdmin: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t } = useLanguage()
   return <section aria-labelledby="details-flights">
     <SectionTitle id="details-flights" icon={<FlightsTitleIcon />} title={t('Flights from your city')} hint={<Hint text={t('You only see flights from your departure city')} />} />
     <PriceNotice />
     {proposal.flights.length > 0
-      ? proposal.flights.map((route) => <Route key={route.origin} route={route} proposal={proposal} allSameCity={allSameCity} limits={limits} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />)
+      ? proposal.flights.map((route) => <Route key={route.origin} route={route} proposal={proposal} limits={limits} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />)
       : <p className="details-note" role="status">{t(isAdmin ? 'This proposal has no flights from your city. Generate the proposals again to include it.' : 'This proposal has no flights from your city. Wait for the administrator to generate the proposals again.')}</p>}
   </section>
 }

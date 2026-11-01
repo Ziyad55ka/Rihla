@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from app.core.config import DEFAULT_BOOKING_DOMAINS
+from app.core.proposal_settings import DEFAULT_BOOKING_DOMAINS
 from app.schemas.proposals import (
     CityStay,
     Evidence,

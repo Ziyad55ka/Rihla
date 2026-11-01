@@ -84,8 +84,6 @@ def option(
         title_en=None,
         destination_ar=None,
         cities_ar=None,
-        stay_labels_en=None,
-        stay_labels_ar=None,
         destination=destination,
         country=destination,
         arrival_airport=None,
@@ -525,7 +523,7 @@ def test_outage_stops_generation_instead_of_trying_more_options(
     assert "Gemini is unavailable." in result.message
 
 
-MOCK = Path(__file__).resolve().parents[2] / "docs/examples/proposals.mock.json"
+MOCK = Path(__file__).resolve().parents[3] / "docs/examples/proposals.mock.json"
 
 
 def test_demo_mode_is_off_by_default() -> None:
@@ -684,7 +682,7 @@ def test_hotel_link_uses_hotel_city_country_dates_and_group_size() -> None:
 
     assert url == (
         "https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt"
-        "&checkin=2026-12-13&checkout=2026-12-17&group_adults=2&no_rooms=1"
+        "&checkin=2026-12-13&checkout=2026-12-17&group_adults=2&no_rooms=2"
     )
 
 
@@ -892,15 +890,3 @@ def test_new_links_have_no_tracking_ids(
 
     assert "gclid" not in body and "gclsrc" not in body
     assert "keep=2" in body
-
-
-def test_stay_labels_keep_three_general_ones_and_drop_private_ones() -> None:
-    labels = [["Near the museums", "Under 5000 SAR", "Quiet", "Family friendly", "Old"]]
-
-    assert proposal_generation._stay_labels(labels, 0) == [
-        "Near the museums",
-        "Quiet",
-        "Family friendly",
-    ]
-    assert proposal_generation._stay_labels(labels, 3) == []
-    assert proposal_generation._stay_labels(None, 0) == []

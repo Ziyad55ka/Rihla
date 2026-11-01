@@ -7,6 +7,15 @@
 -- can be called directly with a member's token.
 begin;
 
+-- Supabase always has this role. Only a bare test database needs it created.
+do $$
+begin
+    if not exists (select 1 from pg_roles where rolname = 'service_role') then
+        create role service_role nologin;
+    end if;
+end
+$$;
+
 -- The countries named, or null if any word is unknown. Doubtful text is not a
 -- clear conflict, so generation's first planning request judges it instead.
 -- Mirrors COUNTRY_WORDS in backend/app/services/generation_precheck.py.

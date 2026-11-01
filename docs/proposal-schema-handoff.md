@@ -240,7 +240,6 @@ class Proposal(StrictModel):
 | `origin_airport`, `destination_airport` | `Flights` | رموز المطارات |
 | `group_availability` | `Flights` | `available` أو `not_found` أو `unknown`. Ignav ما يعطي عدد مقاعد، فما فيه حقل عدد |
 | `fare_basis`, `solo_saving_sar` | `Flights` | هل السعر لحجز جماعي أو منفرد، والفرق للشخص |
-| `group_total_sar` | `Flights` | سعر المجموعة، ويوصل بس إذا كل الرحلة من مدينة وحدة |
 | `provider`, `seller_type`, `price_source` | `Flights` | مصدر السعر، ونوع البائع، وهل السعر من البائع أو من البحث |
 | `cabin_class`, `fare_name`, `checked_bags`, `carry_on_bags` | `Flights` | الفئة والشنط إذا المصدر رجعها |
 | `airline_fares` | `Flights` | معلومة عامة عن أرخص فئة لكل شركة: `fare_en` و`fare_ar` و`checked_kg`. تنضاف عند القراءة وما تنحفظ، وتنعدل في `app/data/airline_fares.json` |
@@ -248,7 +247,6 @@ class Proposal(StrictModel):
 | `stop_airports` | `FlightLeg` | مطارات التوقف، مثل `["ATH"]`. فاضية في العروض القديمة |
 | `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
 | `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
-| `labels_en`, `labels_ar` | `CityStay` | ملصقات عامة توضح ليش الإقامة مناسبة، حد أقصى 3، وبدون تفاصيل أي عضو |
 | `from_station`, `to_station` | `IntercityTransfer` | أسماء المحطات. جاهزة في العرض، وما فيه شي يعبّيها حاليًا |
 | `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
 

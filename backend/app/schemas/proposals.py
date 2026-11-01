@@ -210,8 +210,6 @@ class Flights(StrictModel):
     carry_on_bags: int | None = Field(default=None, ge=0)
     # Added on reading, never saved: what is generally known of these airlines' fares.
     airline_fares: list[AirlineFareNote] = []
-    # Added on reading, never saved, and only when the whole trip departs from one city.
-    group_total_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
 
     @model_validator(mode="after")
     def legs_match_trip_type(self):
@@ -267,9 +265,6 @@ class CityStay(StrictModel):
     hotel_source: str | None = Field(default=None, max_length=50)
     # A photo of this city, or null.
     image: PlaceImage | None = None
-    # Short general reasons a stay here suits the group, with no member's details.
-    labels_en: list[str] = []
-    labels_ar: list[str] = []
 
     @field_validator("hotel_price_per_night")
     @classmethod

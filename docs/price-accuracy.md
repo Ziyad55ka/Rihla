@@ -12,6 +12,12 @@ RUH to BAH, 20 to 30 November 2026, one adult, Economy Light, on Gulf Air's own 
 
 The 998.50 seen earlier was only the outbound price, because the site shows that first and adds the return afterwards.
 
+## Base fare and the checkout price
+
+Rihla shows the base fare. The checkout page can be higher because of choices made there, which does not make the base fare wrong.
+
+Example on Lufthansa's site: the total was 2,729 SAR, of which 474 SAR was optional seat selection. That leaves 2,255 SAR for the ticket, the fare Ignav reported for the same route. Skip optional extras such as seat selection when comparing.
+
 ## How to measure a flight
 
 1. In Rihla, open the proposal and press **Refresh the price**. Note the flight numbers, times and price.

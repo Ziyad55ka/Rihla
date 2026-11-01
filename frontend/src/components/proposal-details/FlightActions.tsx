@@ -134,6 +134,7 @@ export function BookResultView({ result, leg = 'round_trip', onRecheck, now }: {
       ? <><p className="details-note" role="status"><ClockIcon /> {t('This link may have expired. Check again.')}</p>{onRecheck && <button type="button" className="trip-secondary" onClick={onRecheck}>{t('Check again')}</button>}</>
       : <>
         {link && <a className={result.fallback ? 'trip-secondary' : 'trip-primary'} href={link} target="_blank" rel="noopener noreferrer">{t(result.fallback ? 'Open the search results' : 'Open the booking page')} <ExternalIcon /></a>}
+        {!result.fallback && <p className="details-hint">{t('Skip optional extras (like seat selection) to get the closest price.')}</p>}
         {!result.fallback && left !== null && <p className="details-timer" role="timer"><TimerRing fraction={linkFractionLeft(result.checked_at, result.link_valid_minutes, time)} /> {left === 1 ? t('The link should work for about a minute more. Finish booking now.') : t('The link should work for about {count} more minutes. Finish booking now.', { count: left.toLocaleString(locale) })}</p>}
       </>}
     <Alternative result={result} />

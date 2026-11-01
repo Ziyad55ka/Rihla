@@ -11,7 +11,7 @@ from app.schemas.proposals import (
     ProposalSet,
 )
 
-MOCK = Path(__file__).resolve().parents[2] / "docs/examples/proposals.mock.json"
+MOCK = Path(__file__).resolve().parents[3] / "docs/examples/proposals.mock.json"
 
 
 def mock_data() -> dict:

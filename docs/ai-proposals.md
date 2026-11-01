@@ -42,7 +42,7 @@ Code: `backend/app/services/proposal_generation.py`, `trip_research.py`, `flight
 - The planner receives no member labels or departure cities. It does receive the lowest budget and the preference text.
 - Departure cities are sent to Ignav or Tavily, and to Gemini during extraction, without member identity.
 - Titles and explanations are rejected if they contain a member's budget figure or departure city. Explanations also reject any digit.
-- A stored proposal holds flights from every departure city. `rihla_get_proposals` returns only the caller's city and the sources still cited, inside the database. See [the flight visibility decision](sprint-1-decisions.md).
+- A stored proposal holds flights from every departure city. `rihla_get_proposals` returns only the caller's city and the sources still cited, inside the database. See [the flight visibility decision](#decisions).
 - Logs hold only categories and reasons, never values, queries or cities.
 
 ## Price policy
@@ -86,7 +86,7 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Seller pages can expire, or may not open the exact flight.** A link is checked against its own parameters and an airline's own site, which cannot catch every wrong page. An outside agent's link cannot be checked for its airline.
 - **Limits lead to Google Flights.** Above a limit, or when a flight is gone, people get a search instead of a checked link. Google may ignore the passenger count.
 - **The city hint.** "Available for all travellers from your city" can suggest that someone else departs from the same city.
-- **Rooms for the group cannot be fully confirmed.** A search link asks for the group's size and assumes two people per room. The page asks people to check.
+- **Rooms for the group cannot be fully confirmed.** A search link asks for the group's size and one room for each person. Availability is checked only on the booking site.
 - **Limits are counted on one server,** in a local file. Several servers would each count alone.
 - **Older proposals** have no flight numbers, so the same flight is matched by airline name alone. Airline names follow Ignav's SA market and can stay in Arabic on the English page. City names outside a fixed table stay as written, until a new generation stores Arabic names.
 - **A flight from the web search** has no links and is reported as `round_trip`. Its Book button needs airports, so it goes to Google Flights.
@@ -111,7 +111,6 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **The fare table is general.** `app/data/airline_fares.json` describes each airline's cheapest fare, not the ticket. Only Gulf Air (a manual check) and flydubai (its own site) have a bag value; the rest say to check the airline's site.
 - **No hotel photos.** No photo is taken from any site without permission, so hotels link to Booking.com for photos. City photos are from Wikimedia, by exact page title, so an unclear name gives the designed panel instead.
 - **No stations on transfers yet.** The route line shows cities until generation fills `from_station` and `to_station`.
-- **Room prices are a guess at sharing.** A person's share assumes the listed price is per room, and that rooms hold two. The real price depends on the room chosen on the booking site.
 - **Limits are local.** Requests are counted in a local file, so several backend servers would not share them. The 2 minute button wait is only in the browser.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
@@ -129,7 +128,7 @@ Flight sources are asked at the same time. See [Sources](#sources). Ignav's docu
 
 When more than one person flies from a city, the same flight is also searched with `adults=1`, which costs one more request, or none from the cache. If booking alone saves at least 1 SAR per person, `price_per_person` becomes that price, `fare_basis` is `solo`, booking checks that one-person fare, and the page warns that people may not share a flight. Otherwise `fare_basis` is `group`. The budget check always uses `price_per_person`.
 
-`rihla_flight_group` tells the backend whether all members share a departure city. Browsers receive only `all_same_city`, and `group_total_sar` when it is true and there is more than one member. Otherwise they get no group figure or count. If that check fails, the flag is false and the page still works.
+`rihla_flight_group` is in the migration for Developer 3's group total, and no code in this branch calls it. It stays there so the file matches the applied database.
 
 ## Sources
 
@@ -248,11 +247,7 @@ When a hotel source is switched on, its hotel replaces the web search's, with `h
 
 The rule also runs when reading, so older proposals follow it: a hotel from any other site is hidden and replaced by a search of its city. Generation runs one ideas search per proposal and one search limited to booking sites per city, which adds one Tavily search per proposal. Preferences are not put in these searches, because queries leave the system.
 
-## Room choice on the page
-
-Each member can view a stay as shared rooms (two to a room) or a room for each person. It changes that member's price per person and the Booking.com link's `no_rooms`, and it is not saved. It starts from the member's own accommodation preference when the wording is clear, and otherwise from shared rooms. A room's price is assumed to be the price in `hotel_price_per_night`. `budget_status` does not change with this choice: it still assumes unshared rooms, so it errs high.
-
-The planner also returns up to three general labels for each stay, such as "Near the museums". This has not been tried in a real generation, and older proposals have none. A label that names anything private is dropped.
+## Stations on transfers
 
 Transfers have `from_station` and `to_station`, which the page shows when present. **Nothing fills them yet.** To fill them, generation needs one more field per transfer in `build_search_plan` for each station, with `verify_field` requiring the name in the source's own words, then these fields set in `build_proposal`.
 
@@ -302,7 +297,7 @@ A member can still learn something by experiment: changing their own Essential d
 
 ## Private generation inputs
 
-`rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It and `rihla_save_proposals` are granted only to `service_role`, and `authenticated` cannot call them. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](sprint-1-decisions.md).
+`rihla_trip_generation_inputs(trip_id, admin_id)` returns members' private inputs under anonymous labels. It and `rihla_save_proposals` are granted only to `service_role`, and `authenticated` cannot call them. Only `backend/app/services/generation_inputs.py` uses `SUPABASE_SECRET_KEY`. Because the key has no signed-in user, the backend must verify the account first and pass its id. See [the decision](#decisions).
 
 ## API
 
@@ -322,4 +317,32 @@ Saving goes through the secret key, and `rihla_save_proposals` is closed to brow
 
 ## Trying it locally
 
-The preview server in `supabase/tests/` also covers these routes, with no outside services. Besides the steps in [the trip guide](trips-and-invitations.md), start the backend with `SUPABASE_SECRET_KEY=sb_secret_local_preview` and `PROPOSALS_DEMO_MODE=true`. The saved demo proposals depart from Riyadh, so a member from another city sees no flights.
+With `PROPOSALS_DEMO_MODE=true`, generation serves `app/data/demo_proposals.json` with no Gemini, Tavily or Ignav requests, and booking gives a search link. It still needs Supabase.
+
+```powershell
+# Backend tests, including tests/proposals
+cd backend; uv run pytest
+# Database tests: Sprint 1, then proposals
+cd supabase; npm test; node --test tests/proposals.test.mjs
+# Frontend
+cd frontend; npm test; npm run lint
+```
+
+## Decisions
+
+### Flight visibility (31 October 2026)
+
+- Sprint 2 searches flights from every departure city in the group. Those cities are sent to the search provider without member names.
+- The stored proposal holds flights for all cities. `rihla_get_proposals` filters inside the database, so a member receives only flights from their own departure city, and no sources cited only by other cities' flights.
+- Browser roles have no direct access to the proposal tables. The filter is in SQL because a function granted to `authenticated` can be called directly, bypassing the backend.
+- If a member's departure city changes after generation, the page asks the administrator to generate again. Until then, changing to another member's city shows that city's flights, which reveals that someone departs from there but not who. The team accepted this as a known limitation on 2 November, because trips are among friends.
+- Reviewable: the team may later show every city's flights to everyone without names, as was done for dates on 21 October. That change needs a migration to `rihla_private.proposal_for_member`, plus updating this rule.
+
+### Sprint 2 update: reading private inputs for generation (2 November 2026)
+
+- **Decision:** Group conflicts are calculated inside SQL and return categories only. Generation inputs are read with a Supabase secret key kept in `backend/.env`. The key is used in one module, `generation_inputs.py`, for two calls: reading generation inputs and saving generated proposals. `rihla_trip_generation_inputs` and `rihla_save_proposals` are never granted to `authenticated`.
+- **Why:** This narrows the earlier decision against using `service_role`. A function granted to `authenticated` can be called directly from a browser with a member's token, bypassing FastAPI. A generation function open to that role would let a trip administrator read every member's budget and preferences, which breaks the privacy rules above. Saving was added on 2 November because an administrator with a save function could otherwise store invented proposals or booking links for their group.
+- **What stays the same:** All other requests keep the publishable key plus the user's token, under Row Level Security.
+- **Risk accepted:** The secret key bypasses Row Level Security, so it must never reach a browser, a log or Git. Automated tests check that only one module uses it and that the browser role cannot call the function.
+- This update authorizes no remote migration, deployment or push.
+- **Condition for the upcoming endpoint:** Before generating or regenerating, it must verify the signed-in account through Supabase Auth and confirm that account is the trip administrator. It must pass only that verified id to the functions in `generation_inputs.py`, never an id from the request.
