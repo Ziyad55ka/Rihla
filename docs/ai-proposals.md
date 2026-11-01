@@ -89,7 +89,7 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Currency rates are fixed and approximate.** `$` is assumed to be US dollars.
 - **Conflicts Gemini finds are not shown early.** A doubtful destination conflict passes stage 1, so the trip page shows no conflict until someone generates.
 - **Quota.** At 20 Gemini requests a day, only a few generations fit, and regeneration uses more.
-- **Free-plan privacy.** Check Google's current Gemini API terms before sending real members' preferences on the free plan.
+- **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
 ## Proposal JSON changes for Developers 2 and 3
 
