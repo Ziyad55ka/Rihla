@@ -188,6 +188,7 @@ https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt&check
 ```python
 class Activity(StrictModel):
     id: UUID
+    category: Literal["activity", "attraction", "restaurant"] = "activity"
     name: InfoField
     description: InfoField
     location: InfoField

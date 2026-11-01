@@ -69,7 +69,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "attraction"
             },
             {
               "id": "10000000-0000-4000-8000-000000000002",
@@ -104,7 +105,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
             },
             {
               "id": "10000000-0000-4000-8000-000000000003",
@@ -129,8 +131,8 @@
                 "evidence": []
               },
               "scheduled_date": {
-                "value": null,
-                "status": "Not available",
+                "value": "2026-11-21",
+                "status": "Unconfirmed",
                 "evidence": []
               },
               "price_per_person": {
@@ -139,7 +141,44 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
+            },
+            {
+              "id": "10000000-0000-4000-8000-000000000101",
+              "name": {
+                "value": "MOCK: Local restaurant — Istanbul",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "description": {
+                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "location": {
+                "value": "Istanbul",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "duration": {
+                "value": "1 hour",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "scheduled_date": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price_per_person": {
+                "amount_sar": "65.00",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "booking_url": null,
+              "image_url": null,
+              "category": "restaurant"
             }
           ]
         }
@@ -302,7 +341,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "attraction"
             },
             {
               "id": "10000000-0000-4000-8000-000000000005",
@@ -337,7 +377,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
             },
             {
               "id": "10000000-0000-4000-8000-000000000006",
@@ -362,8 +403,8 @@
                 "evidence": []
               },
               "scheduled_date": {
-                "value": null,
-                "status": "Not available",
+                "value": "2026-11-21",
+                "status": "Unconfirmed",
                 "evidence": []
               },
               "price_per_person": {
@@ -372,7 +413,44 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
+            },
+            {
+              "id": "10000000-0000-4000-8000-000000000102",
+              "name": {
+                "value": "MOCK: Local restaurant — Tbilisi",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "description": {
+                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "location": {
+                "value": "Tbilisi",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "duration": {
+                "value": "1 hour",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "scheduled_date": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price_per_person": {
+                "amount_sar": "65.00",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "booking_url": null,
+              "image_url": null,
+              "category": "restaurant"
             }
           ]
         },
@@ -425,7 +503,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "attraction"
             },
             {
               "id": "10000000-0000-4000-8000-000000000008",
@@ -460,7 +539,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
             },
             {
               "id": "10000000-0000-4000-8000-000000000009",
@@ -485,8 +565,8 @@
                 "evidence": []
               },
               "scheduled_date": {
-                "value": null,
-                "status": "Not available",
+                "value": "2026-11-24",
+                "status": "Unconfirmed",
                 "evidence": []
               },
               "price_per_person": {
@@ -495,7 +575,44 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
+            },
+            {
+              "id": "10000000-0000-4000-8000-000000000103",
+              "name": {
+                "value": "MOCK: Local restaurant — Batumi",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "description": {
+                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "location": {
+                "value": "Batumi",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "duration": {
+                "value": "1 hour",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "scheduled_date": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price_per_person": {
+                "amount_sar": "65.00",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "booking_url": null,
+              "image_url": null,
+              "category": "restaurant"
             }
           ]
         }
@@ -698,7 +815,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "attraction"
             },
             {
               "id": "10000000-0000-4000-8000-000000000011",
@@ -733,7 +851,8 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
             },
             {
               "id": "10000000-0000-4000-8000-000000000012",
@@ -758,8 +877,8 @@
                 "evidence": []
               },
               "scheduled_date": {
-                "value": null,
-                "status": "Not available",
+                "value": "2026-11-21",
+                "status": "Unconfirmed",
                 "evidence": []
               },
               "price_per_person": {
@@ -768,7 +887,44 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null
+              "image_url": null,
+              "category": "activity"
+            },
+            {
+              "id": "10000000-0000-4000-8000-000000000104",
+              "name": {
+                "value": "MOCK: Local restaurant — Baku",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "description": {
+                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "location": {
+                "value": "Baku",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "duration": {
+                "value": "1 hour",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "scheduled_date": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price_per_person": {
+                "amount_sar": "65.00",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "booking_url": null,
+              "image_url": null,
+              "category": "restaurant"
             }
           ]
         }

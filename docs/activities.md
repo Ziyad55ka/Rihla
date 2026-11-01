@@ -10,13 +10,12 @@ It uses synthetic proposals from `src/data/activities.mock.json`. Select activit
 save, refresh, switch proposals, and remove selections. Demo selections live only
 in this browser and are isolated by trip, proposal and generation version.
 An unavailable price remains unknown rather than becoming zero; a free activity
-has an explicit zero price. The displayed activity subtotal is per person and
-separate from the proposal's existing budget status.
+has an explicit zero price. The saved activity subtotal is included in the relevant per-person proposal estimate. The original budget label is marked as applying before selected activities.
 
 ## Shared schema additions
 
 `CityStay.activities` defaults to an empty list, preserving saved proposals without
-activities. Each activity has a UUID, name, description, location, duration,
+activities. Each activity has a UUID, a category (activity, attraction or restaurant), name, description, location, duration,
 scheduled date, price per person, optional HTTPS booking link, and optional HTTPS
 image URL. Text and date fields use `InfoField`; the price retains `SarPrice`'s
 status and evidence contract, with zero permitted only by `ActivityPrice`.
@@ -73,14 +72,10 @@ matching commit 357ce2218af325df8d87bdaa5c3822bd9ccc20b0. It deliberately does n
 incorporate subsequent teammate changes. Only Ziyad is the upload target.
 
 The explicit Save activities button is retained by the user's preference.
-This is a mock-backed development delivery, not a claim of full acceptance:
-real activity generation and cloud persistence need integration testing, and
-US-12-AC03 still needs integration of selected activity costs into the relevant
-proposal estimate with the US-13 developer. A separate saved-activities page is
-not required by US-12; access to the finalized plan is covered by US-24.
-US-11-AC01 calls for activities, attractions and restaurants: the current generic
-activity schema can carry them, but the demo currently has no restaurant fixture
-or category filter. These should be checked during the acceptance review.
+The latest local revision implements all seven US-11/12 criteria with mock data;
+see [activity-acceptance.md](activity-acceptance.md) for the criterion-by-criterion
+review, tests, scope boundary and the proposal-estimate response contract.
+The user reviewed the local revision and approved updating Ziyad only. No merge into main or teammate branch changes are authorized.
 
 ## Visual layout
 
@@ -91,3 +86,11 @@ Synthetic example copy is localized without changing activity IDs or selection
 keys. Cards include decorative line art when no photo is supplied. The missing
 price status appears once per field. Lint, translations, TypeScript and the
 production build pass after this layout change.
+
+## Estimate API
+
+Selection reads and saves now return `estimate`, including proposal_id, version,
+currency, flights, accommodation, transport, activities and total. Every component
+has known_amount_sar (decimal string), missing_items, unconfirmed_items and
+estimated_items. The service uses member-filtered proposals and recomputes from
+saved IDs, never request prices. The mock store returns the same contract.

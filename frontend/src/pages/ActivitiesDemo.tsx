@@ -19,15 +19,16 @@ export function ActivitiesDemo() {
   const { t } = useLanguage()
   const preview = { ...stored, proposals: stored.proposals.map(proposal => ({
     ...proposal,
+    flights: proposal.flights.slice(0, 1),
     title: t(proposal.title.replace(/^MOCK: /, '')),
     destination: t(proposal.destination),
     cities: proposal.cities.map(city => ({
       ...city, city: t(city.city), activities: city.activities?.map(activity => ({
         ...activity,
         name: { ...activity.name, value: t(activity.name.value?.replace(/^MOCK: /, '').split(' — ')[0] ?? 'Not available') },
-        description: { ...activity.description, value: t('A little time to explore, at your own pace.') },
+        description: { ...activity.description, value: t(activity.category === 'restaurant' ? 'A suggested local meal. The price is an estimate per person.' : 'A little time to explore, at your own pace.') },
         location: { ...activity.location, value: t(city.city) },
-        duration: { ...activity.duration, value: t('2 hours') },
+        duration: { ...activity.duration, value: t(activity.duration.value ?? 'Not available') },
       })),
     })),
   })) }

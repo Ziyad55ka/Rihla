@@ -181,6 +181,7 @@ class ActivityPrice(SarPrice):
 
 class Activity(StrictModel):
     id: UUID
+    category: Literal["activity", "attraction", "restaurant"] = "activity"
     name: InfoField
     description: InfoField = Field(default_factory=unavailable_info)
     location: InfoField = Field(default_factory=unavailable_info)

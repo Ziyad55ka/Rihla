@@ -50,6 +50,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
         <p className="proposals-destination">{proposal.destination}</p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
+        <small className="proposal-base-budget-note">{t('Before selected activities')}</small>
         <button className="trip-secondary proposal-activities-button" type="button" aria-pressed={active?.id === proposal.id} onClick={() => setActiveId(proposal.id)}>{t('View activities')}</button>
       </li>)}
     </ol> : !generating && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}

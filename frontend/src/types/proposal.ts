@@ -105,8 +105,12 @@ export interface Flights {
 }
 
 /** Stable within a saved proposal; selections are scoped to its version. */
+export type ActivityCategory = 'activity' | 'attraction' | 'restaurant'
+
 export interface Activity {
   id: string
+  /** Legacy records without a category are ordinary activities. */
+  category?: ActivityCategory
   name: InfoField
   description: InfoField
   location: InfoField
@@ -118,10 +122,30 @@ export interface Activity {
   image_url: string | null
 }
 
+export interface EstimateComponent {
+  known_amount_sar: string
+  missing_items: number
+  unconfirmed_items: number
+  estimated_items: number
+}
+
+/** Per-person estimate for the current caller's flight route and selections. */
+export interface ActivityProposalEstimate {
+  proposal_id: string
+  version: number
+  currency: 'SAR'
+  flights: EstimateComponent
+  accommodation: EstimateComponent
+  transport: EstimateComponent
+  activities: EstimateComponent
+  total: EstimateComponent
+}
+
 export interface ActivitySelections {
   proposal_id: string
   version: number
   activity_ids: string[]
+  estimate?: ActivityProposalEstimate
 }
 
 /** A stay in one city. */

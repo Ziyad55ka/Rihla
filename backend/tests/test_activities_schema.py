@@ -75,3 +75,26 @@ def test_selection_request_rejects_duplicate_and_malformed_ids():
     for ids in ([activity_id, activity_id], ["invalid"]):
         with pytest.raises(ValidationError):
             SelectionRequest(version=1, activity_ids=ids)
+
+
+def test_every_city_in_demo_has_activities_attractions_and_restaurants():
+    from app.schemas.proposals import ProposalSet
+
+    data = ProposalSet.model_validate(mock_data())
+    for proposal in data.proposals:
+        for stay in proposal.cities:
+            assert {a.category for a in stay.activities} == {
+                "activity",
+                "attraction",
+                "restaurant",
+            }
+
+
+def test_category_is_backwards_compatible_but_rejects_unknown_values():
+    data = mock_data()["proposals"][0]
+    activity = data["cities"][0]["activities"][0]
+    activity.pop("category")
+    assert Proposal.model_validate(data).cities[0].activities[0].category == "activity"
+    activity["category"] = "other"
+    with pytest.raises(ValidationError):
+        Proposal.model_validate(data)

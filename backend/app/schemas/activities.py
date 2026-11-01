@@ -2,6 +2,7 @@ from uuid import UUID
 
 from pydantic import Field, model_validator
 
+from app.schemas.activity_estimate import ActivityProposalEstimate
 from app.schemas.proposals import StrictModel
 
 
@@ -18,3 +19,4 @@ class SelectionRequest(StrictModel):
 
 class ActivitySelections(SelectionRequest):
     proposal_id: UUID
+    estimate: ActivityProposalEstimate | None = None
