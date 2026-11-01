@@ -82,7 +82,14 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Fewer than three proposals can appear.** Options that fail the checks or reach the request limit are left out, and the page says so.
 - **Prices are estimates.** A hotel quote may describe a different hotel, room or date, and availability on the trip dates is not checked. A price with no source is Gemini's general estimate.
 - **`Sourced` means a source said it,** not that the fact was independently confirmed.
-- **Booking links.** Ignav links are rejected when their own parameters contradict their direction or dates, which can only be checked when the link includes them. A link can come from a different seller than the airline shown, and some may not open the exact flight. A flight from the web search has no links and is reported as `round_trip`.
+- **Fares and seats are live and not guaranteed.** Ignav returns no seat count, and its documentation says a link does not confirm price or availability.
+- **Seller pages can expire, or may not open the exact flight.** A link is checked against its own parameters and an airline's own site, which cannot catch every wrong page. An outside agent's link cannot be checked for its airline.
+- **Limits lead to Google Flights.** Above a limit, or when a flight is gone, people get a search instead of a checked link. Google may ignore the passenger count.
+- **The city hint.** "Available for all travellers from your city" can suggest that someone else departs from the same city.
+- **Rooms for the group cannot be fully confirmed.** A search link asks for the group's size and assumes two people per room. The page asks people to check.
+- **Limits are counted on one server,** in a local file. Several servers would each count alone.
+- **Older proposals** have no flight numbers, so the same flight is matched by airline name alone. Airline names follow Ignav's SA market and can stay in Arabic on the English page. City names outside a fixed table stay as written, until a new generation stores Arabic names.
+- **A flight from the web search** has no links and is reported as `round_trip`. Its Book button needs airports, so it goes to Google Flights.
 - **Ignav fares can change.** Ignav says a search price is not a reserved fare or a guarantee of one combined ticket. The round-trip cost may need separate bookings.
 - **Multi-city trips** price a round trip to the first city only, which may not match the actual route home.
 - **Airports.** Departure cities use a fixed Saudi table; an unlisted city falls back to web search. Arrival airports come from Gemini.
@@ -97,7 +104,55 @@ One generation for one departure city uses at least 4 Gemini requests including 
 
 ## Booking and payment are out of scope
 
-Rihla ends at the Final Plan defined in Sprint 0. It does not book or take payment. Flight and hotel links only redirect to outside sites, open in a new tab, and send nothing back; Rihla saves nothing about a booking.
+Rihla ends at the Final Plan defined in Sprint 0. It does not book or take payment. Flight and hotel links only send people to outside sites, in a new tab. Rihla saves nothing about a booking.
+
+## Flights for the group
+
+Each departure city is searched with `adults` set to everyone flying from it. Ignav has no seat count, so a flight returned by that search is treated as having room for all of them. If the search returns nothing, the page says one flight may not fit everyone, and `budget_status` cannot be `within_group_budget`. A member never sees a count, only "available for all travellers from your city".
+
+A trip on one airline both ways is preferred. A different trip replaces it only when it saves at least `SPLIT_MIN_SAVING_PERCENT` (15) and takes no more than `SPLIT_MAX_EXTRA_DURATION_PERCENT` (30) longer. This can add one Ignav request for each departure city.
+
+Ignav's documentation does not say whether an amount covers one passenger or the whole party. `IGNAV_PRICE_SCOPE` chooses: `per_person` (the default, which errs high) or `total` (divides by the party).
+
+## The light flight update
+
+Both actions check one ticket with Ignav. They never use Gemini or Tavily, and never change the destination, cities or hotels.
+
+- **Book:** `GET /api/trips/{trip_id}/proposals/{proposal_id}/book-flight?leg=outbound|inbound|round_trip`. A saved link is never used. It finds the same flight again, then returns a new link, checked against the airline, route and dates, and the new price if it changed. If the flight is gone, or Ignav fails, it returns a Google Flights search.
+- **Refresh:** `POST /api/trips/{trip_id}/proposals/{proposal_id}/refresh-flights`. Updates only the caller's city's price, `priced_at` and availability, and `budget_status`.
+
+Each works only on the caller's own departure city. Both read and save through the secret key, because the backend needs a traveller count and the lowest budget that no browser may see.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `FLIGHT_CACHE_MINUTES` | 15 | The same route, dates and party ask Ignav once, for every member |
+| `MEMBER_FLIGHT_ACTIONS_PER_HOUR` | 5 | Book or refresh presses per member |
+| `TRIP_IGNAV_REQUESTS_PER_DAY` | 30 | New Ignav requests per trip |
+| `DAILY_IGNAV_REQUESTS` | 200 | New Ignav requests for the project, protecting the 1,000 free ones |
+| `REFRESH_COOLDOWN_MINUTES` | 5 | How long the refresh button waits after a checked price |
+
+At a limit the person still gets a Google Flights search, with a message. Round-trip refreshes cost 1 request. Booking, and refreshing separate bookings, cost 2.
+
+Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: members appear only as a hash. See it with `uv run python -m app.services.flight_usage`.
+
+## Price age
+
+`priced_at` is saved for every flight and hotel price. Older proposals use the generation time.
+
+| Age | Label |
+| --- | --- |
+| Under `PRICE_FRESH_HOURS` (3) | Updated X minutes ago |
+| Up to `PRICE_STALE_HOURS` (24) | X hours ago, may have changed |
+| Older | Old price, refresh before booking |
+
+## Stay sources
+
+Sources are classified by domain with `BOOKING_DOMAINS`.
+
+- **Booking sources:** Booking.com, Agoda, Expedia, Hotels.com, Airbnb, Marriott, Hilton, IHG, Accor and Hyatt. Only these can name or price a hotel. The button is a Booking.com search with hotel, city, country, dates, `group_adults` and `no_rooms`, assuming two people per room.
+- **Sources for ideas:** everything else, including blogs and guides. They can suggest an area, but never a hotel name, a price or a button.
+
+The rule also runs when reading, so older proposals follow it: a hotel from any other site is hidden and replaced by a search of its city. Generation runs one ideas search per proposal and one search limited to booking sites per city, which adds one Tavily search per proposal. Preferences are not put in these searches, because queries leave the system.
 
 ## Regeneration signal
 

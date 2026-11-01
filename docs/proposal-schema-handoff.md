@@ -225,9 +225,28 @@ class Proposal(StrictModel):
 
 - **Developer 2 (الأنشطة):** عدّلوا `CityActivities.tsx` فقط. يظهر داخل بطاقة كل مدينة، ويستقبل `stay`، فاقرؤوا `stay.activities`.
 - **Developer 3 (التكاليف والتوافق):** عدّلوا `CostsAndCompatibility.tsx` فقط. يظهر قبل المصادر، ويستقبل `proposal`.
-- **المصادر:** قائمة بسيطة في `SourcesSection.tsx`. طوروها في نفس الملف بدل قسم ثانٍ.
-- **القيم:** استخدموا `InfoValue` و`PriceValue` و`BookingLink` من `values.tsx`، فتطلع الحالات وتحذير الروابط بنفس الشكل.
+- **المصادر:** في `SourcesSection.tsx`، مقسمة: مصادر الحجز ومصادر الأفكار. طوروها في نفس الملف بدل قسم ثانٍ.
+- **القيم:** استخدموا `InfoValue` و`PriceValue` و`PriceAgeBadge` من `values.tsx`.
 - **النصوص:** كل نص جديد في `frontend/src/lib/translations.ts`، والأنماط في `frontend/src/proposal-details.css`.
+
+### حقول جديدة (كلها اختيارية، والعروض القديمة ما فيها)
+
+| الحقل | وين | المعنى |
+| --- | --- | --- |
+| `title_ar`, `title_en`, `destination_ar` | `Proposal` | العنوان باللغتين والوجهة بالعربي. والبديل `title` و`destination` |
+| `city_ar`, `area` | `CityStay` | اسم المدينة بالعربي، ومنطقة مقترحة |
+| `priced_at` | `Flights` و`CityStay` | وقت فحص السعر |
+| `flight_number`, `departure_time`, `arrival_time`, `stops`, `seller` | `FlightLeg` | تفاصيل الرحلة والبائع |
+| `origin_airport`, `destination_airport` | `Flights` | رموز المطارات |
+| `group_availability` | `Flights` | `available` أو `not_found` أو `unknown`. Ignav ما يعطي عدد مقاعد، فما فيه حقل عدد |
+| `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
+
+### تغييرات لازم تنتبهون لها
+
+- **ما فيه "عرض الدليل":** `evidence` يبقى في البيانات للتحقق، بس لا تعرضون الاقتباسات ولا مصادر `flight` للمستخدم.
+- **لا تستخدمون `booking_url` للطيران:** الرابط المحفوظ ممكن ينتهي. زر الحجز يطلب رابطًا جديدًا عبر `book-flight`.
+- **الفنادق:** الاسم والسعر يجون من مصادر الحجز المعتمدة بس، وغيرها يظهر `Not available`.
+- **`over_group_budget` ممكن يظهر الحين:** تحديث سعر الطيران ممكن يخلي عرضًا محفوظًا فوق الميزانية.
 
 ## قواعد لازم تلتزمون فيها
 
