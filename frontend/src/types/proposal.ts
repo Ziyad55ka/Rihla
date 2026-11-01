@@ -191,6 +191,9 @@ export interface CityStay {
   hotel_source?: string | null
   /** A photo of this city, or null. */
   image?: PlaceImage | null
+  /** Short general reasons a stay here suits the group. */
+  labels_en?: string[]
+  labels_ar?: string[]
 }
 
 /** Travel between two consecutive cities. */
@@ -205,6 +208,9 @@ export interface IntercityTransfer {
   duration: InfoField
   /** The price for one person. It is never `Sourced`. Example amount: `"53.00"`. */
   price_per_person: SarPrice
+  /** Station names, or null. Nothing fills these yet. */
+  from_station?: string | null
+  to_station?: string | null
 }
 
 /** Explains a Flexible preference that this proposal could not meet. */

@@ -45,11 +45,6 @@ export const statusLabels: Record<InfoStatus, string> = {
   'Not available': 'Not available',
 }
 
-/** A flight's source is an internal fare note, so people never see it. */
-export function isInternalSource(source: { title: string; kind?: string | null }): boolean {
-  return source.kind === 'flight' || /^Ignav\b/.test(source.title)
-}
-
 export function proposalTitle(proposal: Proposal, language: Language): string {
   return (language === 'ar' ? proposal.title_ar : proposal.title_en) ?? proposal.title
 }
@@ -152,6 +147,40 @@ export function sourceLabel(facts: { provider?: string | null; seller_type?: str
   return 'Price from flight search results'
 }
 
+/** A time in the page's digits. */
+export function localTime(time: string, locale: string): string {
+  const format = new Intl.NumberFormat(locale, { minimumIntegerDigits: 2, useGrouping: false })
+  return time.split(':').map((part) => format.format(Number(part))).join(':')
+}
+
+/** "1h 20m" in the page's language. Other wording stays as the source wrote it. */
+export function durationLabel(text: string | null, language: Language, locale: string): string | null {
+  if (!text) return null
+  const found = /^\s*(?:(\d+)\s*h(?:ours?)?)?\s*(?:(\d+)\s*m(?:in(?:utes?)?)?)?\s*$/i.exec(text)
+  if (!found || (!found[1] && !found[2])) return text
+  const number = (value: string) => Number(value).toLocaleString(locale)
+  const hours = found[1] ? `${number(found[1])}${language === 'ar' ? ' س' : 'h'}` : ''
+  const minutes = found[2] ? `${number(found[2])}${language === 'ar' ? ' د' : 'm'}` : ''
+  return [hours, minutes].filter(Boolean).join(' ')
+}
+
+export type ModeKind = 'train' | 'bus' | 'flight' | 'car' | 'ferry' | 'other'
+
+export function modeKind(mode: string | null): ModeKind {
+  const text = mode ?? ''
+  if (/train|rail|tgv|قطار/i.test(text)) return 'train'
+  if (/bus|coach|باص|حافلة/i.test(text)) return 'bus'
+  if (/flight|fly|plane|air|طيران|طائرة/i.test(text)) return 'flight'
+  if (/ferry|boat|عبّارة|عبارة/i.test(text)) return 'ferry'
+  if (/car|taxi|drive|سيارة|تاكسي/i.test(text)) return 'car'
+  return 'other'
+}
+
+/** A plain web search for this trip. It does not check a price or a seat. */
+export function transferSearchUrl(mode: string | null, from: string, to: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(`${mode ?? ''} ${from} to ${to}`.trim())}`
+}
+
 /** Reloads the page's proposals after a check saved something, so it shows the new price. */
 export async function checkAndReload(check: () => Promise<FlightCheckResult>, reload: () => void): Promise<FlightCheckResult> {
   const result = await check()
@@ -164,6 +193,13 @@ export function linkMinutesLeft(checkedAt: string | null, validMinutes: number, 
   if (!checkedAt) return null
   const left = new Date(checkedAt).getTime() + validMinutes * 60000 - now
   return left > 0 ? Math.ceil(left / 60000) : 0
+}
+
+/** How much of the link's time is left, from 1 down to 0, for the ring. */
+export function linkFractionLeft(checkedAt: string | null, validMinutes: number, now: number): number {
+  if (!checkedAt) return 0
+  const left = new Date(checkedAt).getTime() + validMinutes * 60000 - now
+  return Math.min(Math.max(left / (validMinutes * 60000), 0), 1)
 }
 
 export function priceChange(price: string | null, previous: string | null): { price: number; previous: number; difference: number } | null {

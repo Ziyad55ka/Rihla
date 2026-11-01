@@ -14,6 +14,14 @@ const ARABIC_PLACES: Record<string, string> = {
   tbilisi: 'تبليسي', batumi: 'باتومي', georgia: 'جورجيا', baku: 'باكو', azerbaijan: 'أذربيجان',
   'kuala lumpur': 'كوالالمبور', malaysia: 'ماليزيا', bangkok: 'بانكوك', phuket: 'بوكيت', thailand: 'تايلاند', bali: 'بالي', indonesia: 'إندونيسيا',
   tokyo: 'طوكيو', japan: 'اليابان', casablanca: 'الدار البيضاء', marrakech: 'مراكش', morocco: 'المغرب', tunis: 'تونس',
+  muharraq: 'المحرق', riffa: 'الرفاع', sharjah: 'الشارقة', salalah: 'صلالة', 'sharm el sheikh': 'شرم الشيخ', hurghada: 'الغردقة', petra: 'البتراء',
+  bordeaux: 'بوردو', toulouse: 'تولوز', cannes: 'كان', rabat: 'الرباط', fes: 'فاس', bursa: 'بورصة', izmir: 'إزمير', naples: 'نابولي', seville: 'إشبيلية', granada: 'غرناطة', valencia: 'فالنسيا',
+  'saudi arabia': 'السعودية', tunisia: 'تونس', singapore: 'سنغافورة', maldives: 'المالديف', 'sri lanka': 'سريلانكا', bosnia: 'البوسنة', sarajevo: 'سراييفو',
+}
+const STATIONS: Record<string, string> = {
+  'paris gare de lest': 'باريس غار دو ليست', 'paris gare du nord': 'باريس غار دو نور', 'paris gare de lyon': 'باريس غار دو ليون', 'paris montparnasse': 'باريس مونبارناس',
+  strasbourg: 'ستراسبورغ', 'lyon part-dieu': 'ليون بار ديو', 'marseille saint-charles': 'مرسيليا سان شارل', 'nice-ville': 'نيس فيل',
+  'roma termini': 'روما تيرميني', 'milano centrale': 'ميلانو سنترال', 'firenze santa maria novella': 'فلورنسا سانتا ماريا نوفيلا', 'madrid atocha': 'مدريد أتوتشا',
 }
 const ENGLISH_PLACES = Object.fromEntries(Object.entries(ARABIC_PLACES).map(([english, arabic]) => [arabic, english.replace(/\b\w/g, (letter) => letter.toUpperCase())]))
 
@@ -22,4 +30,9 @@ export function placeName(name: string, language: Language, stored?: string | nu
   const key = name.trim()
   if (language === 'ar') return stored || ARABIC_PLACES[key.toLowerCase()] || name
   return ENGLISH_PLACES[key] ?? name
+}
+
+/** A station in the page's language. Unknown names stay as they were written. */
+export function stationName(name: string, language: Language): string {
+  return language === 'ar' ? STATIONS[name.trim().toLowerCase().replace(/['’]/g, '')] ?? name : name
 }

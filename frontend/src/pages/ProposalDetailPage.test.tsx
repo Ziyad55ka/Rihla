@@ -1,10 +1,15 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { BookResultView, BookSteps, RefreshView } from '../components/proposal-details/FlightActions'
+import { BookResultView, BookSteps, RefreshView, TimerRing } from '../components/proposal-details/FlightActions'
 import { PlacePhoto } from '../components/proposal-details/PlacePhoto'
 import { airlineName } from '../lib/airlines'
-import { checkAndReload, type FlightCheckResult, linkMinutesLeft, priceChange, staySource } from '../lib/proposals'
+import { ActivitiesSection } from '../components/proposal-details/ActivitiesSection'
+import { checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, staySource, transferSearchUrl } from '../lib/proposals'
+import { countUpValue, prefersReducedMotion } from '../lib/motion'
+import { adultsInLink, defaultRoomChoice, roomsFor, sharePerPerson } from '../lib/rooms'
 import { placeName } from '../lib/places'
 import { LanguageProvider } from '../lib/language'
 import { readRoute } from '../lib/navigation'
@@ -38,6 +43,7 @@ function page(item: Proposal = proposal(), isAdmin = true, proposalId = 'p1', ex
 }
 const count = (html: string, text: string) => html.split(text).length - 1
 
+const detailsCss = readFileSync('src/proposal-details.css', 'utf8')
 const saved = new Map<string, string>()
 beforeEach(() => {
   saved.clear()
@@ -64,7 +70,7 @@ describe('ProposalDetailView', () => {
   it('shows one price badge, not one for each flight field', () => {
     const html = page()
     expect(html).toContain('Confirmed by the seller')
-    expect(count(html, 'Confirmed by the seller')).toBe(2)
+    expect(count(html, 'Confirmed by the seller')).toBe(1)
   })
   it('shows Estimated with About', () => {
     const html = page()
@@ -196,7 +202,7 @@ describe('ProposalDetailView', () => {
     expect(pure(<BookResultView result={{ ...both, airline_fares: [] }} />)).toContain('then the return GF 163 at 09:35, and check the total')
     localStorage.setItem('rihla-language', 'ar')
     const arabic = pure(<BookResultView result={both} />)
-    expect(arabic).toContain('اختر الذهاب GF 162 الساعة 06:50')
+    expect(arabic).toContain('اختر الذهاب GF 162 الساعة ٠٦:٥٠')
     expect(arabic).toContain('بفئة السياحية الخفيفة')
     localStorage.clear?.()
   })
@@ -326,6 +332,131 @@ describe('ProposalDetailView', () => {
     expect(staySource(stay, [{ id: 1, title: 'T', url: 'https://www.kayak.com/h' }])).toBe('kayak.com')
     expect(staySource({ ...stay, hotel_source: 'Trip.com' }, [])).toBe('Trip.com')
   })
+  it('shows the parts of the page in the agreed order, with no sources section', () => {
+    const second = { ...stay, order: 2, city: 'Luxor', nights: 2 }
+    const html = page(proposal({ cities: [{ ...stay, nights: 2 }, second], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
+    const order = ['details-hero', 'id="details-flights"', 'id="details-cities"', 'id="details-transfers"']
+    const places = order.map((part) => html.indexOf(part))
+    expect(places.every((place) => place >= 0)).toBe(true)
+    expect([...places].sort((x, y) => x - y)).toEqual(places)
+    expect(html).not.toContain('details-sources')
+    expect(html).not.toContain('Mock source')
+    expect(html).not.toContain('Sources')
+  })
+  const fourPeople = 'https://www.booking.com/searchresults.html?ss=Cairo&group_adults=4&no_rooms=2'
+  it('changes the price and the Booking link with the room choice', () => {
+    const shared = page(proposal({ cities: [{ ...stay, booking_url: fourPeople }] }))
+    expect(shared).toContain('How will you share rooms?')
+    expect(shared).toContain('About 225 SAR per person a night')
+    expect(shared).toContain('About 900 SAR per person for the whole stay')
+    expect(shared).toContain('no_rooms=2')
+    const own = renderToStaticMarkup(<LanguageProvider><ProposalDetailView stored={stored(proposal({ cities: [{ ...stay, booking_url: fourPeople }] }))} proposalId="p1" isAdmin onBack={() => undefined} defaultRooms="own" /></LanguageProvider>)
+    expect(own).toContain('About 450 SAR per person a night')
+    expect(own).toContain('no_rooms=4')
+    expect(roomsFor('shared', 5)).toBe(3)
+    expect(roomsFor('own', 5)).toBe(5)
+    expect(sharePerPerson(450, 3, 5)).toBe(270)
+    expect(adultsInLink(fourPeople)).toBe(4)
+    expect(adultsInLink('not a link')).toBeNull()
+    expect(defaultRoomChoice('غرفة خاصة لوحدي')).toBe('own')
+    expect(defaultRoomChoice('Private room')).toBe('own')
+    expect(defaultRoomChoice('')).toBe('shared')
+    expect(defaultRoomChoice(null)).toBe('shared')
+  })
+  it('hides the room choice for one traveller, and keeps it for a city with no hotel', () => {
+    const one = 'https://www.booking.com/searchresults.html?ss=Cairo&group_adults=1'
+    expect(page(proposal({ cities: [{ ...stay, booking_url: one }] }))).not.toContain('How will you share rooms?')
+    const empty = page(proposal({ cities: [{ ...stay, booking_url: fourPeople, hotel_name: { value: null, status: 'Not available', evidence: [] }, hotel_price_per_night: none }] }))
+    expect(empty).toContain('How will you share rooms?')
+    expect(empty).toContain('Search for hotels in Cairo')
+  })
+  it('shows labels in the page language', () => {
+    const labelled = { ...stay, labels_en: ['Near the museums'], labels_ar: ['قريب من المتاحف'] }
+    expect(page(proposal({ cities: [labelled] }))).toContain('Near the museums')
+    localStorage.setItem('rihla-language', 'ar')
+    const arabic = page(proposal({ cities: [labelled] }))
+    expect(arabic).toContain('قريب من المتاحف')
+    expect(arabic).not.toContain('Near the museums')
+  })
+  const twoCities = (extra = {}) => proposal({
+    cities: [{ ...stay, city: 'Paris', nights: 2 }, { ...stay, order: 2, city: 'Strasbourg', nights: 2 }],
+    intercity_transport: [{ from_city: 'Paris', to_city: 'Strasbourg', mode: info('Train'), duration: info('1h 48m'), price_per_person: price('260'), ...extra }],
+  })
+  it('draws the route as a line, with stations only when the data has them', () => {
+    const plain = page(twoCities())
+    expect(plain).toContain('details-metro')
+    expect(plain).toContain('Paris')
+    expect(plain).toContain('1h 48m')
+    expect(plain).toContain('Train')
+    expect(plain).not.toContain('Gare')
+    const stations = page(twoCities({ from_station: "Paris Gare de l'Est", to_station: 'Strasbourg' }))
+    expect(stations).toContain('Gare de l')
+    expect(modeKind('High-speed train (TGV)')).toBe('train')
+    expect(modeKind('باص')).toBe('bus')
+    expect(modeKind('Flight')).toBe('flight')
+    expect(modeKind(null)).toBe('other')
+    expect(transferSearchUrl('Train', 'Paris', 'Strasbourg')).toContain('Train%20Paris%20to%20Strasbourg')
+  })
+  it('shows a whole Arabic page with no English beyond flight numbers and unknown names', () => {
+    localStorage.setItem('rihla-language', 'ar')
+    const gulf = flights({ legs: [{ ...leg('outbound', null), airline: info('Gulf Air'), flight_number: 'GF 162', departure_time: '2026-12-13T06:50:00', arrival_time: '2026-12-13T08:10:00', stops: 0, duration: info('1h 25m') }, { ...leg('return', null), airline: info('Gulf Air'), duration: info('1h 25m') }], duration: info('1h 25m') })
+    const html = page({ ...twoCities({ from_station: "Paris Gare de l'Est", to_station: 'Strasbourg' }), title: 'رحلة', destination: 'France', flights: [gulf], sources: [] })
+    const visible = html.replace(/<(style|script)[^>]*>.*?<\/\1>/gs, '').replace(/<[^>]+>/g, ' ').replace(/GF \d+/g, ' ').replace(/Booking(\.com)?/g, ' ').replace(/Mock Hotel/g, ' ')
+    expect(visible.match(/[A-Za-z]{2,}/g) ?? []).toEqual([])
+    expect(html).toContain('الرياض')
+    expect(html).toContain('٠٦:٥٠')
+  })
+  it('keeps unknown names isolated, and everything English on an English page', () => {
+    const html = page(proposal({ cities: [{ ...stay, city: 'Nowhere', hotel_name: info('Hotel Mock') }] }))
+    expect(html).toContain('<bdi>Hotel Mock</bdi>')
+    expect(html).not.toMatch(/[\u0600-\u06FF]/)
+    expect(durationLabel('2h 5m', 'ar', 'ar-SA-u-ca-gregory')).toContain('س')
+    expect(durationLabel('about five hours', 'ar', 'ar-SA-u-ca-gregory')).toBe('about five hours')
+  })
+  it('honours reduced motion, and keeps motion short', () => {
+    vi.stubGlobal('matchMedia', undefined)
+    expect(prefersReducedMotion()).toBe(false)
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) })
+    expect(prefersReducedMotion()).toBe(true)
+    vi.unstubAllGlobals()
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined })
+    expect(countUpValue(900, 1000, 0)).toBe(900)
+    expect(countUpValue(900, 1000, 1)).toBe(1000)
+    expect(countUpValue(900, 1000, 0.5)).toBeGreaterThan(950)
+    expect(detailsCss).toContain('@media (prefers-reduced-motion: reduce)')
+    const once = detailsCss.split('\n').filter((line) => !line.includes('infinite'))
+    const times = once.join('\n').match(/\b\d+ms\b/g)?.map((time) => Number(time.replace('ms', ''))) ?? []
+    expect(times.length).toBeGreaterThan(5)
+    expect(times.every((time) => time === 0 || (time >= 150 && time <= 400))).toBe(true)
+  })
+  it('empties the timer ring as the link runs out', () => {
+    const at = '2026-11-01T10:00:00Z'
+    const base = new Date(at).getTime()
+    expect(linkFractionLeft(at, 10, base)).toBe(1)
+    expect(linkFractionLeft(at, 10, base + 5 * 60000)).toBe(0.5)
+    expect(linkFractionLeft(at, 10, base + 11 * 60000)).toBe(0)
+    expect(pure(<TimerRing fraction={0.5} />)).toContain('stroke-dashoffset="50"')
+    expect(pure(<BookResultView result={checked({ checked_at: at })} now={base} />)).toContain('details-ring')
+  })
+  it('shows the progress of the booking steps', () => {
+    const html = pure(<BookSteps busy result={null} />)
+    expect(html).toContain('role="progressbar"')
+    expect(html).toContain('aria-valuenow="1"')
+    expect(pure(<BookSteps busy={false} result={checked()} />)).toContain('aria-valuenow="3"')
+  })
+  it('reserves room for the activities with nothing shown', () => {
+    expect(pure(<ActivitiesSection proposal={proposal()} />)).toBe('')
+  })
+  it('makes the photo open its page, with the credit in the corner and no text below', () => {
+    const image = { url: 'https://upload.wikimedia.org/a.jpg', source_url: 'https://commons.wikimedia.org/a', artist: 'A. Person', license: 'CC BY-SA 4.0' }
+    const html = pure(<PlacePhoto image={image} place="Cairo" />)
+    expect(html).toContain('href="https://commons.wikimedia.org/a"')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('aria-label="Photo source and licence"')
+    expect(html).toContain('details-photo-credit')
+    expect(detailsCss).toMatch(/\.details-photo-credit \{[^}]*visibility:hidden/)
+    expect(html).toContain('is-loading')
+  })
   it('shows photos with their credit, and a designed panel without one', () => {
     const image = { url: 'https://upload.wikimedia.org/a.jpg', source_url: 'https://commons.wikimedia.org/a', artist: 'A. Person', license: 'CC BY-SA 4.0' }
     const html = page(proposal({ image, cities: [{ ...stay, image }] }))
@@ -375,12 +506,6 @@ describe('ProposalDetailView', () => {
     const html = page(proposal({ flexible_adjustments: [{ category: 'flights', explanation: 'A stop was added.' }] }), false, 'p1', { needs_regeneration: true })
     expect(html).toContain('A stop was added.')
     expect(html).toContain('details changed after these proposals')
-  })
-  it('splits booking sources from sources for ideas', () => {
-    const html = page(proposal({ sources: [{ id: 1, title: 'On Booking', url: 'https://a.example/', kind: 'booking' }, { id: 2, title: 'A blog', url: 'https://b.example/', kind: 'ideas' }] }))
-    expect(html).toContain('Booking and price sources')
-    expect(html).toContain('Sources for ideas')
-    expect(html.indexOf('On Booking')).toBeLessThan(html.indexOf('A blog'))
   })
   it('picks the title by language and falls back to the main title', () => {
     expect(page(proposal({ title_en: 'English title', title_ar: 'عنوان عربي' }))).toContain('English title')
