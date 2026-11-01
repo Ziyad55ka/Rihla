@@ -1,57 +1,56 @@
 import { useLanguage } from '../../lib/language'
-import { safeLink, statusLabels } from '../../lib/proposals'
-import type { Evidence, InfoField, InfoStatus, ProposalSource, SarPrice } from '../../types/proposal'
+import { priceAge, type PriceAgeLimits, safeLink, statusLabels } from '../../lib/proposals'
+import type { InfoField, InfoStatus, SarPrice } from '../../types/proposal'
+import { useSar } from './useSar'
 
 export function StatusBadge({ status, short = false }: { status: InfoStatus; short?: boolean }) {
   const { t } = useLanguage()
   return <span className={`planning-badge${status === 'Sourced' ? ' planning-badge--ready' : status === 'Unconfirmed' ? ' planning-badge--conflict' : ' details-badge--neutral'}`}>{t(short && status === 'Unconfirmed' ? 'Unconfirmed' : statusLabels[status])}</span>
 }
 
-function EvidenceDetails({ evidence, sources }: { evidence: Evidence[]; sources: ProposalSource[] }) {
-  const { t } = useLanguage()
-  if (evidence.length === 0) return null
-  return <details className="details-evidence">
-    <summary>{t('Show evidence')}</summary>
-    <ul>{evidence.map((item, index) => {
-      const source = sources.find((entry) => entry.id === item.source_id)
-      const link = source ? safeLink(source.url) : null
-      return <li key={index}>
-        <q><bdi>{item.quote}</bdi></q>
-        {source && (link ? <a href={link} target="_blank" rel="noopener noreferrer"><bdi>{source.title}</bdi></a> : <bdi>{source.title}</bdi>)}
-      </li>
-    })}</ul>
-  </details>
-}
-
-export function InfoValue({ field, sources }: { field: InfoField; sources: ProposalSource[] }) {
+/** A label only when the value is doubtful or missing, so pages do not repeat badges. */
+export function InfoValue({ field }: { field: InfoField }) {
+  const missing = field.status === 'Not available' || field.value === null
   return <span className="details-value">
-    <span><bdi>{field.status === 'Not available' || field.value === null ? '—' : field.value}</bdi></span>
-    <StatusBadge status={field.status} />
-    {field.status !== 'Not available' && <EvidenceDetails evidence={field.evidence} sources={sources} />}
+    <span><bdi>{missing ? '—' : field.value}</bdi></span>
+    {(missing || field.status === 'Unconfirmed') && <StatusBadge status={field.status} />}
   </span>
 }
 
-export function PriceValue({ price, unit, sources }: { price: SarPrice; unit?: string; sources: ProposalSource[] }) {
-  const { t, locale } = useLanguage()
+export function PriceValue({ price, unit }: { price: SarPrice; unit?: string }) {
+  const { t } = useLanguage()
+  const sar = useSar()
   const known = price.status !== 'Not available' && price.amount_sar !== null
-  const amount = known ? t('{amount} SAR', { amount: Number(price.amount_sar).toLocaleString(locale) }) : '—'
+  const amount = known ? sar(price.amount_sar as string) : '—'
   return <span className="details-value">
     <span>
       {known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}
       {known && unit && ` ${t(unit)}`}
     </span>
     <StatusBadge status={price.status} />
-    {known && <EvidenceDetails evidence={price.evidence} sources={sources} />}
   </span>
 }
 
-/** Every booking link leaves Rihla. Nothing about a booking is sent back or saved. */
-export function BookingLink({ url, label, solid = false }: { url: string | null; label: string; solid?: boolean }) {
+export function PriceAgeBadge({ pricedAt, limits, canRefresh = false, now = Date.now() }: { pricedAt?: string | null; limits: PriceAgeLimits; canRefresh?: boolean; now?: number }) {
+  const { t, locale } = useLanguage()
+  const age = priceAge(pricedAt ?? limits.fallback ?? null, now, limits)
+  if (!age) return null
+  const count = age.count.toLocaleString(locale)
+  const text = age.level === 'old'
+    ? t(canRefresh ? 'Old price. Refresh it before booking.' : 'Old price. Check it before booking.')
+    : age.level === 'recent'
+      ? t('{count} hours ago. It may have changed.', { count })
+      : t(age.unit === 'minutes' ? 'Updated {count} minutes ago' : 'Updated {count} hours ago', { count })
+  return <span className={`planning-badge details-age details-age--${age.level}`}><span aria-hidden="true">●</span> {text}</span>
+}
+
+/** A stay's search page. It does not expire, and it does not confirm a room. */
+export function StayLink({ url, label }: { url: string | null; label: string }) {
   const { t } = useLanguage()
   const link = safeLink(url)
   if (!link) return <p className="details-hint">{t('No booking link')}</p>
   return <div className="details-booking">
-    <a className={solid ? 'trip-primary' : 'trip-secondary'} href={link} target="_blank" rel="noopener noreferrer">{label} <span aria-hidden="true">↗</span></a>
-    <p className="details-hint">{t('This takes you to the seller’s site. Check the flight and price before paying.')}</p>
+    <a className="trip-secondary" href={link} target="_blank" rel="noopener noreferrer">{label} <span aria-hidden="true">↗</span></a>
+    <p className="details-hint">{t('Prices and availability change, and we cannot guarantee them. Check for enough rooms for the group.')}</p>
   </div>
 }

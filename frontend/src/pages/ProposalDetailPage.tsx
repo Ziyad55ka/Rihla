@@ -13,20 +13,21 @@ import '../planning.css'
 import '../proposals.css'
 import '../proposal-details.css'
 
-export function ProposalDetailView({ stored, proposalId, isAdmin, onBack }: { stored: StoredProposals; proposalId: string; isAdmin: boolean; onBack: () => void }) {
+export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChanged = () => undefined }: { stored: StoredProposals; proposalId: string; isAdmin: boolean; onBack: () => void; onChanged?: () => void }) {
   const { t } = useLanguage()
   const proposal = stored.proposals.find((item) => item.id === proposalId)
   const back = <button type="button" className="trip-back" onClick={onBack}>← {t('Back to the trip')}</button>
   if (!proposal) return <section className="proposal-details">{back}
     <div className="trip-state-panel"><h3 role="status">{t('This proposal has been replaced.')}</h3><button type="button" className="trip-secondary" onClick={onBack}>{t('Back to the trip')}</button></div>
   </section>
+  const limits = { freshHours: stored.price_fresh_hours ?? 3, staleHours: stored.price_stale_hours ?? 24, fallback: stored.generated_at }
   return <article className="proposal-details">
     {back}
     <ProposalHeader proposal={proposal} total={stored.proposals.length} />
     {stored.needs_regeneration && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
-    <CityStaysSection proposal={proposal} />
+    <CityStaysSection proposal={proposal} limits={limits} />
     <TransfersSection proposal={proposal} />
-    <FlightsSection proposal={proposal} isAdmin={isAdmin} />
+    <FlightsSection proposal={proposal} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 5} onChanged={onChanged} />
     <CostsAndCompatibility proposal={proposal} />
     <SourcesSection sources={proposal.sources} />
   </article>
@@ -50,5 +51,5 @@ export function ProposalDetailPage({ tripId, proposalId, onBack }: { tripId: str
     <div className="trip-feedback trip-feedback--error" role="alert">{t(error)}<button type="button" className="trip-text-button" onClick={() => setAttempt((value) => value + 1)}>{t('Try again')}</button></div>
   </section>
   if (!loaded) return <p className="trip-loading" role="status">{t('Opening this proposal…')}</p>
-  return <ProposalDetailView stored={loaded.stored} proposalId={proposalId} isAdmin={loaded.isAdmin} onBack={onBack} />
+  return <ProposalDetailView stored={loaded.stored} proposalId={proposalId} isAdmin={loaded.isAdmin} onBack={onBack} onChanged={() => setAttempt((value) => value + 1)} />
 }

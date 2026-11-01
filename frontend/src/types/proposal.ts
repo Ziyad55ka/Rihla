@@ -70,6 +70,8 @@ export interface ProposalSource {
   title: string
   /** The page address. Example: `"https://example.com/istanbul"`. */
   url: string
+  /** `booking`: an approved booking site. `ideas`: ideas only. `flight`: never listed. */
+  kind?: 'booking' | 'ideas' | 'flight' | null
 }
 
 /** One direction of a flight trip. */
@@ -84,8 +86,18 @@ export interface FlightLeg {
   duration: InfoField
   /** On a round_trip the price is on the whole trip, so this is `Not available`. */
   price: SarPrice
-  /** The link for this direction, or null. Both legs share one link on a round_trip. */
+  /** A link saved at generation. It can expire, so the page asks for a fresh one. */
   booking_url: string | null
+  /** Null on older proposals. Example: `"SV 1020"`. Connections: `"SV 1020, SV 45"`. */
+  flight_number?: string | null
+  /** Local airport time, or null on older proposals. Example: `"2026-12-13T08:30"`. */
+  departure_time?: string | null
+  /** Local airport time, or null on older proposals. */
+  arrival_time?: string | null
+  /** 0 is nonstop. Null on older proposals. */
+  stops?: number | null
+  /** Who sells this leg, or null. It can differ from the airline. */
+  seller?: string | null
 }
 
 /** The flights from one departure city. */
@@ -102,6 +114,14 @@ export interface Flights {
   duration: InfoField
   /** The whole trip's cost. On one_way, the return is not counted. */
   price_per_person: SarPrice
+  /** When this price was checked, or null on older proposals. */
+  priced_at?: string | null
+  /** Three-letter code, or null on older proposals. Example: `"RUH"`. */
+  origin_airport?: string | null
+  /** Three-letter code, or null on older proposals. */
+  destination_airport?: string | null
+  /** Whether the search for everyone from this city found the flight. Never a count. */
+  group_availability?: 'available' | 'not_found' | 'unknown'
 }
 
 /** A stay in one city. */
@@ -110,6 +130,8 @@ export interface CityStay {
   order: number
   /** The city name. Example: `"Cairo"`. */
   city: string
+  /** The city in Arabic, or null on older proposals. */
+  city_ar?: string | null
   /** Nights here. All stays add up to the trip dates. Example: `4`. */
   nights: number
   /** A suggested hotel. Example value: `"Mock Hotel"`. */
@@ -118,6 +140,10 @@ export interface CityStay {
   hotel_price_per_night: SarPrice
   /** A Booking.com search, or null. It does not confirm availability or price. */
   booking_url: string | null
+  /** A suggested area from idea sources, or null. Example: `"Le Marais"`. */
+  area?: string | null
+  /** When this price was checked, or null on older proposals. */
+  priced_at?: string | null
 }
 
 /** Travel between two consecutive cities. */
@@ -160,6 +186,8 @@ export interface Proposal {
   title_en?: string | null
   /** The place shown to users. Example: `"Cairo"`. */
   destination: string
+  /** The place in Arabic, or null on older proposals. */
+  destination_ar?: string | null
   /** The first day, YYYY-MM-DD. Example: `"2026-12-13"`. */
   start_date: string
   /** The last day, YYYY-MM-DD. Example: `"2026-12-17"`. */
@@ -205,6 +233,12 @@ export interface StoredProposals {
   needs_regeneration: boolean
   /** Up to three proposals, by option number. Can be empty. */
   proposals: Proposal[]
+  /** A price is fresh below this many hours. Set by the backend. */
+  price_fresh_hours?: number
+  /** A price is old above this many hours. Set by the backend. */
+  price_stale_hours?: number
+  /** Minutes before the flight price can be refreshed again. */
+  refresh_cooldown_minutes?: number
 }
 
 /** The response of `POST /api/trips/{trip_id}/proposals`, administrator only. */

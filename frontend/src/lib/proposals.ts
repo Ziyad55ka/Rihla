@@ -39,7 +39,7 @@ export const budgetStatusLabels: Record<BudgetStatus, string> = {
 }
 
 export const statusLabels: Record<InfoStatus, string> = {
-  Sourced: 'From a source',
+  Sourced: 'Confirmed by the seller',
   Estimated: 'Estimated',
   Unconfirmed: 'Unconfirmed · Check before booking',
   'Not available': 'Not available',
@@ -69,6 +69,56 @@ export function stayDates(proposal: Proposal): { start: string; end: string }[] 
     start = end
     return dates
   })
+}
+
+export type BookLeg = 'outbound' | 'inbound' | 'round_trip'
+export type FlightFallback = 'not_available' | 'limit' | 'demo'
+
+export interface BookFlightResult {
+  url: string
+  fallback: FlightFallback | null
+  seller: string | null
+  exact_flight: boolean
+  price_sar: string | null
+  previous_price_sar: string | null
+}
+
+export interface RefreshFlightsResult {
+  updated: boolean
+  fallback: FlightFallback | null
+  url: string | null
+  now_over_budget: boolean
+  next_refresh_seconds: number
+}
+
+export const bookFlight = (tripId: string, proposalId: string, leg: BookLeg) =>
+  authenticatedRequest<BookFlightResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/book-flight?leg=${leg}`, { timeoutMs: 60000 })
+
+export const refreshFlights = (tripId: string, proposalId: string) =>
+  authenticatedRequest<RefreshFlightsResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { method: 'POST', timeoutMs: 60000 })
+
+export interface PriceAgeLimits {
+  freshHours: number
+  staleHours: number
+  /** For older proposals with no price time: when the proposals were generated. */
+  fallback?: string | null
+}
+
+export function priceAge(pricedAt: string | null, now: number, limits: PriceAgeLimits): { level: 'fresh' | 'recent' | 'old'; unit: 'minutes' | 'hours'; count: number } | null {
+  if (!pricedAt) return null
+  const minutes = Math.max(0, Math.floor((now - new Date(pricedAt).getTime()) / 60000))
+  if (Number.isNaN(minutes)) return null
+  const hours = Math.floor(minutes / 60)
+  if (hours >= limits.staleHours) return { level: 'old', unit: 'hours', count: hours }
+  if (hours >= limits.freshHours) return { level: 'recent', unit: 'hours', count: hours }
+  return minutes < 60 ? { level: 'fresh', unit: 'minutes', count: minutes } : { level: 'fresh', unit: 'hours', count: hours }
+}
+
+/** Minutes left before another update, counted from when the price was last checked. */
+export function refreshWaitMinutes(pricedAt: string | null | undefined, cooldownMinutes: number, now: number): number {
+  if (!pricedAt) return 0
+  const left = new Date(pricedAt).getTime() + cooldownMinutes * 60000 - now
+  return left > 0 ? Math.ceil(left / 60000) : 0
 }
 
 export function canPressGenerate(conflicts: GroupConflicts | null, generating: boolean): boolean {
