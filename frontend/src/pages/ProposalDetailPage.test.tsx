@@ -205,7 +205,7 @@ describe('ProposalDetailView', () => {
   })
   it('splits booking sources from sources for ideas', () => {
     const html = page(proposal({ sources: [{ id: 1, title: 'On Booking', url: 'https://a.example/', kind: 'booking' }, { id: 2, title: 'A blog', url: 'https://b.example/', kind: 'ideas' }] }))
-    expect(html).toContain('Booking sources')
+    expect(html).toContain('Booking and price sources')
     expect(html).toContain('Sources for ideas')
     expect(html.indexOf('On Booking')).toBeLessThan(html.indexOf('A blog'))
   })

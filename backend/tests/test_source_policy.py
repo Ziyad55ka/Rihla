@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from app.core.config import DEFAULT_BOOKING_DOMAINS
 from app.schemas.proposals import (
     CityStay,
     Evidence,
@@ -12,7 +13,11 @@ from app.schemas.proposals import (
     ProposalSource,
     SarPrice,
 )
-from app.services.source_policy import apply_source_policy, classify_source
+from app.services.source_policy import (
+    apply_source_policy,
+    classify_source,
+    search_hosts,
+)
 from app.services.trip_research import (
     ExtractedFact,
     FieldSpec,
@@ -167,3 +172,27 @@ def test_older_proposal_from_booking_is_unchanged() -> None:
     assert result.cities[0].hotel_name.value == "Palace"
     assert result.budget_status == "within_group_budget"
     assert result.sources[0].kind == "booking"
+
+
+def test_price_sources_count_but_only_google_hotels_of_google() -> None:
+    domains = list(DEFAULT_BOOKING_DOMAINS)
+    for url in (
+        "https://www.kayak.com/hotels",
+        "https://www.momondo.com/hotels",
+        "https://www.trivago.com/en/hotel",
+        "https://www.google.com/travel/hotels/manama",
+    ):
+        assert classify_source(url, "Hotels", domains) == "booking"
+    for url in (
+        "https://www.google.com/search?q=hotels",
+        "https://www.google.com/travelling",
+        "https://notkayak.com/hotels",
+    ):
+        assert classify_source(url, "Hotels", domains) == "ideas"
+
+
+def test_the_search_filter_receives_sites_without_paths() -> None:
+    assert search_hosts(["kayak.com", "google.com/travel"]) == [
+        "kayak.com",
+        "google.com",
+    ]

@@ -508,6 +508,6 @@ export const arabic: Record<string, string> = {
   "Round trip, per person": "ذهاب وعودة، للشخص",
   "Suggested area:": "المنطقة المقترحة:",
   "About {amount} for the whole stay": "حوالي {amount} لكل الإقامة",
-  "Booking sources": "مصادر الحجز",
+  "Booking and price sources": "مصادر الحجز والأسعار",
   "Sources for ideas": "مصادر الأفكار",
 }

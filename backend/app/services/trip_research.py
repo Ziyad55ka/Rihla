@@ -33,7 +33,7 @@ from app.services.flight_prices import (
     format_duration,
     get_flight_provider,
 )
-from app.services.source_policy import on_domain
+from app.services.source_policy import on_domain, search_hosts
 
 logger = logging.getLogger(__name__)
 
@@ -860,7 +860,9 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
 
     for group in groups:
         extra = (
-            {"include_domains": settings.booking_domains} if group.booking_only else {}
+            {"include_domains": search_hosts(settings.booking_domains)}
+            if group.booking_only
+            else {}
         )
         found, _ = await search_sources(group.query, settings, cost=cost, **extra)
         for source in found:

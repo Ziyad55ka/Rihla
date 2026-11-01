@@ -162,6 +162,8 @@ class FakeIgnav:
 
 
 def make_settings(tmp_path: Path, **values) -> Settings:
+    # Fake amounts here are per person, so these tests do not divide by the party.
+    values.setdefault("ignav_price_scope", "per_person")
     return Settings(
         _env_file=None,
         flight_usage_db=tmp_path / "usage.sqlite3",
@@ -468,6 +470,10 @@ def test_refresh_of_a_split_trip_updates_each_direction(tmp_path) -> None:
         Decimal("400.00"),
     ]
     assert result.flights.price_per_person.status == "Estimated"
+
+
+def test_ignav_prices_are_for_the_whole_party_by_default() -> None:
+    assert Settings(_env_file=None).ignav_price_scope == "total"
 
 
 def test_total_price_setting_divides_by_the_party(tmp_path) -> None:

@@ -25,6 +25,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         _env_file=None,
         app_env="test",
         ignav_api_key="fake",
+        ignav_price_scope="per_person",
         flight_usage_db=tmp_path / "usage.sqlite3",
     )
     app = create_app(settings)

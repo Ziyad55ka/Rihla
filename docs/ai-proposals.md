@@ -100,11 +100,12 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Quota.** At 20 Gemini requests a day, few generations fit. `MAX_GEMINI_CALLS_PER_GENERATION` (default 7) limits the requests a generation starts; one provider retry can pass it by one.
 - **Older proposals have no change signal.** Proposals saved before the `20261102000300` migration keep only the departure city check until the next generation.
 - **Older proposals have one title.** Without `title_ar` and `title_en`, the page shows `title` in either language. Other generated text, such as hotel names and adjustment explanations, stays as Gemini wrote it.
+- **Evidence reaches the browser.** The page no longer shows `evidence`, but it stays in the API response, so it can be read in the browser's network tools. Removing it from the response is planned if time allows after the trial.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
 ## Booking and payment are out of scope
 
-Rihla ends at the Final Plan defined in Sprint 0. It does not book or take payment. Flight and hotel links only send people to outside sites, in a new tab. Rihla saves nothing about a booking.
+Rihla ends at the Final Plan, defined in Sprint 0 as: "The final version of the selected proposal saved by the administrator. Members can view it in Rihla, but it does not mean that flights or hotels have been booked or paid for." Rihla does not book or take payment. Flight and hotel links only send people to outside sites, in a new tab. Rihla saves nothing about a booking.
 
 ## Flights for the group
 
@@ -112,7 +113,7 @@ Each departure city is searched with `adults` set to everyone flying from it. Ig
 
 A trip on one airline both ways is preferred. A different trip replaces it only when it saves at least `SPLIT_MIN_SAVING_PERCENT` (15) and takes no more than `SPLIT_MAX_EXTRA_DURATION_PERCENT` (30) longer. This can add one Ignav request for each departure city.
 
-Ignav's documentation does not say whether an amount covers one passenger or the whole party. `IGNAV_PRICE_SCOPE` chooses: `per_person` (the default, which errs high) or `total` (divides by the party).
+Ignav's documentation does not say whether an amount covers one passenger or the whole party, so we tested it on 1 November 2026: RUH to BAH, 20 to 30 November, with `adults` 1 and 2. All 54 itineraries matched by flight number, and each cost about twice as much for 2 adults (900 and 1,800 SAR on Gulf Air). So an amount covers the whole party, and `IGNAV_PRICE_SCOPE` defaults to `total`, which divides by the party.
 
 ## The light flight update
 
@@ -149,7 +150,7 @@ Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: 
 
 Sources are classified by domain with `BOOKING_DOMAINS`.
 
-- **Booking sources:** Booking.com, Agoda, Expedia, Hotels.com, Airbnb, Marriott, Hilton, IHG, Accor and Hyatt. Only these can name or price a hotel. The button is a Booking.com search with hotel, city, country, dates, `group_adults` and `no_rooms`, assuming two people per room.
+- **Booking and price sources:** Booking.com, Agoda, Expedia, Hotels.com, Airbnb, Marriott, Hilton, IHG, Accor, Hyatt, KAYAK, momondo, trivago and Google Hotels (`google.com/travel` only). Only these can name or price a hotel. Whichever one supplied the price, the button is a Booking.com search with hotel, city, country, dates, `group_adults` and `no_rooms`, assuming two people per room.
 - **Sources for ideas:** everything else, including blogs and guides. They can suggest an area, but never a hotel name, a price or a button.
 
 The rule also runs when reading, so older proposals follow it: a hotel from any other site is hidden and replaced by a search of its city. Generation runs one ideas search per proposal and one search limited to booking sites per city, which adds one Tavily search per proposal. Preferences are not put in these searches, because queries leave the system.

@@ -10,8 +10,20 @@ FLIGHT_SOURCE_TITLE = "Ignav booking link"
 
 
 def on_domain(url: str, domains: list[str] | tuple[str, ...]) -> bool:
-    host = (urlsplit(url).hostname or "").casefold()
-    return any(host == item or host.endswith(f".{item}") for item in domains)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").casefold()
+    for item in domains:
+        domain, slash, path = item.partition("/")
+        if (host == domain or host.endswith(f".{domain}")) and (
+            not slash or f"{parts.path}/".startswith(f"/{path}/")
+        ):
+            return True
+    return False
+
+
+def search_hosts(domains: list[str]) -> list[str]:
+    """The search filter takes sites only, so on_domain checks any path afterwards."""
+    return list(dict.fromkeys(item.partition("/")[0] for item in domains))
 
 
 def classify_source(url: str, title: str, booking_domains: list[str]) -> SourceKind:

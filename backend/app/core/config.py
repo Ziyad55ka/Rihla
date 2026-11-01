@@ -17,6 +17,12 @@ DEFAULT_BOOKING_DOMAINS = (
     "ihg.com",
     "accor.com",
     "hyatt.com",
+    # Price sources. The booking button stays Booking.com.
+    "kayak.com",
+    "momondo.com",
+    "trivago.com",
+    # Google Hotels only, not the rest of Google.
+    "google.com/travel",
 )
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -59,8 +65,8 @@ class Settings(BaseSettings):
     saved_proposals_ttl_hours: int = Field(default=24, ge=1)
     # Generation stops here and returns the proposals that already passed.
     max_gemini_calls_per_generation: int = Field(default=7, ge=1)
-    # Does an Ignav amount cover one passenger or the whole party? Its docs do not say.
-    ignav_price_scope: Literal["per_person", "total"] = "per_person"
+    # An Ignav amount covers the whole party: tested with 1 and 2 adults, 1 Nov 2026.
+    ignav_price_scope: Literal["per_person", "total"] = "total"
     # A split trip must save this much, and may take only this much longer.
     split_min_saving_percent: Decimal = Field(default=Decimal(15), ge=0, lt=100)
     split_max_extra_duration_percent: Decimal = Field(default=Decimal(30), ge=0)
@@ -75,6 +81,7 @@ class Settings(BaseSettings):
     price_fresh_hours: int = Field(default=3, ge=1)
     price_stale_hours: int = Field(default=24, ge=1)
     # Only these sites may name or price a stay. Everything else gives ideas only.
+    # An entry can include a path, as in google.com/travel.
     booking_domains: list[str] = Field(
         default_factory=lambda: list(DEFAULT_BOOKING_DOMAINS)
     )

@@ -24,7 +24,7 @@ export function SourcesSection({ sources }: { sources: ProposalSource[] }) {
   return <section aria-labelledby="details-sources">
     <h2 id="details-sources">{t('Sources')}</h2>
     <div className="details-card">
-      <SourceList title={t('Booking sources')} sources={booking} />
+      <SourceList title={t('Booking and price sources')} sources={booking} />
       <SourceList title={t('Sources for ideas')} sources={ideas} />
       {shown.length === 0 && <p className="details-hint">{t('No sources are listed for this proposal.')}</p>}
       <div className="details-legend"><span>{t('Status guide:')}</span>{statuses.map((status) => <StatusBadge key={status} status={status} short />)}</div>
