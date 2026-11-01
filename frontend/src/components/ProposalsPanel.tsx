@@ -49,7 +49,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
       {conflicts.conflicts.map((category) => <li key={category}>{t(conflictMessages[category])}</li>)}
     </ul>}
     {conflicts?.own_review.map((category) => reviewMessages[category] && <p className="proposals-review" key={category}>{t(reviewMessages[category])}</p>)}
-    {generating && <p className="proposals-note" role="status">{t('This can take a few minutes. You can stay on this page.')}</p>}
+    {generating && <p className="proposals-note">{t('This can take a few minutes. You can stay on this page.')}</p>}
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
     {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
