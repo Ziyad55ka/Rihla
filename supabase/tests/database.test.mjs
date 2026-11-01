@@ -985,6 +985,16 @@ async function savedWithIds() {
 const flightContext = (id, proposalId, user) => rpc('rihla_flight_context', [id, proposalId, user])
 const saveRefresh = (id, proposalId, user, flights, status = null) => rpc('rihla_save_flight_refresh', [id, proposalId, user, JSON.stringify(flights), status])
 
+test('running the proposals migration again changes nothing and keeps the data', async () => {
+  const { id } = await savedWithIds()
+  const before = (await db.query('select count(*)::int as saved from public.proposals where trip_id = $1', [id])).rows[0]
+  await db.exec(await readFile(new URL('../migrations/20261102000100_ai_proposals.sql', import.meta.url), 'utf8'))
+  await root()
+  assert.deepEqual((await db.query('select count(*)::int as saved from public.proposals where trip_id = $1', [id])).rows[0], before)
+  const open = (await db.query("select has_function_privilege('authenticated', 'public.rihla_save_proposals(uuid,uuid,integer,text,boolean,jsonb)', 'execute') as browser")).rows[0]
+  assert.equal(open.browser, false)
+})
+
 test('browser roles cannot read the flight context or save a refresh', async () => {
   const { id, proposalId } = await savedWithIds()
   const privileges = (await db.query(`select

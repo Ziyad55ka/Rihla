@@ -23,7 +23,7 @@ TRIP = UUID("00000000-0000-4000-8000-0000000000aa")
 ADMIN = UUID("11111111-1111-4111-8111-111111111111")
 MIGRATION = (
     ROOT
-    / "supabase/migrations/20261102000100_group_conflicts_and_generation_inputs.sql"
+    / "supabase/migrations/20261102000100_ai_proposals.sql"
 )
 PAYLOAD = {
     "trip_id": str(TRIP),

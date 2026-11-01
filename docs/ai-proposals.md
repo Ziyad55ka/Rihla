@@ -98,7 +98,7 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Conflicts Gemini finds are not shown early.** A doubtful destination conflict passes stage 1, so the trip page shows no conflict until someone generates.
 - **Departure cities can be learned by experiment.** A member who changes their city to another member's city receives that city's flights, which shows someone departs from there, but not who. The team accepted this.
 - **Quota.** At 20 Gemini requests a day, few generations fit. `MAX_GEMINI_CALLS_PER_GENERATION` (default 7) limits the requests a generation starts; one provider retry can pass it by one.
-- **Older proposals have no change signal.** Proposals saved before the `20261102000300` migration keep only the departure city check until the next generation.
+- **Older proposals have no change signal.** Proposals saved before fingerprints existed keep only the departure city check until the next generation.
 - **Older proposals have one title.** Without `title_ar` and `title_en`, the page shows `title` in either language. Other generated text, such as hotel names and adjustment explanations, stays as Gemini wrote it.
 - **Evidence reaches the browser.** The page no longer shows `evidence`, but it stays in the API response, so it can be read in the browser's network tools. Removing it from the response is planned if time allows after the trial.
 - **The final price is only confirmed at checkout.** Every price is the last one a source reported.
@@ -127,7 +127,7 @@ Flight sources are asked at the same time. See [Sources](#sources). Ignav's docu
 
 When more than one person flies from a city, the same flight is also searched with `adults=1`, which costs one more request, or none from the cache. If booking alone saves at least 1 SAR per person, `price_per_person` becomes that price, `fare_basis` is `solo`, booking checks that one-person fare, and the page warns that people may not share a flight. Otherwise `fare_basis` is `group`. The budget check always uses `price_per_person`.
 
-`rihla_flight_group` tells the backend whether all members share a departure city. Browsers receive only `all_same_city`, and `group_total_sar` when it is true and there is more than one member. Otherwise they get no group figure or count. Without the `20261102000500` migration, the flag is false and the page still works.
+`rihla_flight_group` tells the backend whether all members share a departure city. Browsers receive only `all_same_city`, and `group_total_sar` when it is true and there is more than one member. Otherwise they get no group figure or count. If that check fails, the flag is false and the page still works.
 
 ## Sources
 
