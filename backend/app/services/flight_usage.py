@@ -1,11 +1,10 @@
-"""Ignav use, limits and the short fare cache, in a local file.
+"""Flight source use and limits, in a local file.
 
 Holds no private data: routes are public facts, and members appear only as a hash.
 See the totals with: uv run python -m app.services.flight_usage
 """
 
 import hashlib
-import json
 import sqlite3
 import time
 from pathlib import Path
@@ -27,9 +26,15 @@ class FlightUsage:
             "cached INTEGER NOT NULL);"
             "CREATE TABLE IF NOT EXISTS member_actions "
             "(at REAL NOT NULL, member TEXT NOT NULL);"
-            "CREATE TABLE IF NOT EXISTS fare_cache "
-            "(key TEXT PRIMARY KEY, at REAL NOT NULL, body TEXT NOT NULL);"
         )
+        columns = [
+            row[1] for row in connection.execute("PRAGMA table_info(ignav_usage)")
+        ]
+        if "provider" not in columns:
+            connection.execute(
+                "ALTER TABLE ignav_usage "
+                "ADD COLUMN provider TEXT NOT NULL DEFAULT 'ignav'"
+            )
         return connection
 
     def _write(self, sql: str, values: tuple) -> None:
@@ -47,23 +52,25 @@ class FlightUsage:
         finally:
             connection.close()
 
-    def record(self, kind: str, trip: str, cached: bool) -> None:
+    def record(
+        self, kind: str, trip: str, cached: bool, provider: str = "ignav"
+    ) -> None:
         self._write(
-            "INSERT INTO ignav_usage VALUES (?, ?, ?, ?)",
-            (time.time(), kind, trip, int(cached)),
+            "INSERT INTO ignav_usage (at, kind, trip, cached, provider) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (time.time(), kind, trip, int(cached), provider),
         )
 
-    def spent_today(self, trip: str | None = None) -> int:
-        since = time.time() - DAY
-        if trip is None:
-            return self._count(
-                "SELECT count(*) FROM ignav_usage WHERE cached = 0 AND at > ?",
-                (since,),
-            )
-        return self._count(
-            "SELECT count(*) FROM ignav_usage WHERE cached = 0 AND at > ? AND trip = ?",
-            (since, trip),
-        )
+    def spent_today(self, trip: str | None = None, provider: str | None = None) -> int:
+        sql = "SELECT count(*) FROM ignav_usage WHERE cached = 0 AND at > ?"
+        values: list = [time.time() - DAY]
+        if trip is not None:
+            sql += " AND trip = ?"
+            values.append(trip)
+        if provider is not None:
+            sql += " AND provider = ?"
+            values.append(provider)
+        return self._count(sql, tuple(values))
 
     @staticmethod
     def _member(member: str) -> str:
@@ -81,30 +88,14 @@ class FlightUsage:
         self._write("INSERT INTO member_actions VALUES (?, ?)", (time.time(), key))
         return True
 
-    def cache_get(self, key: str, max_age_seconds: float) -> tuple[float, dict] | None:
-        connection = self._connect()
-        try:
-            row = connection.execute(
-                "SELECT at, body FROM fare_cache WHERE key = ?", (key,)
-            ).fetchone()
-        finally:
-            connection.close()
-        if row is None or time.time() - row[0] >= max_age_seconds:
-            return None
-        return row[0], json.loads(row[1])
-
-    def cache_put(self, key: str, body: dict) -> None:
-        self._write(
-            "INSERT OR REPLACE INTO fare_cache VALUES (?, ?, ?)",
-            (key, time.time(), json.dumps(body)),
-        )
-
     def summary(self) -> list[tuple]:
         connection = self._connect()
         try:
             return connection.execute(
-                "SELECT trip, kind, cached, count(*) FROM ignav_usage "
-                "WHERE at > ? GROUP BY trip, kind, cached ORDER BY trip, kind",
+                "SELECT trip, provider || ':' || kind, cached, count(*) "
+                "FROM ignav_usage "
+                "WHERE at > ? GROUP BY trip, provider, kind, cached "
+                "ORDER BY trip, provider, kind",
                 (time.time() - DAY,),
             ).fetchall()
         finally:

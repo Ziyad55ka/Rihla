@@ -112,7 +112,8 @@ If previous_problem is duplicate_route, the last option repeated a route: choose
 that appear nowhere in avoid_routes. If it is over_group_budget, the last option cost
 too much: choose cheaper cities, simpler stays or fewer paid transfers, and never
 mention this in the title or explanations.
-Do not state prices, hotels or flights: those come from later research."""
+Do not state prices, hotels or flights: those come from later research. A hotel and its
+price only ever come from a real source, never from you."""
 
 
 class RequirementCheck(BaseModel):
@@ -345,7 +346,8 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
     def known(value: str | None) -> InfoField:
         if not value:
             return NOT_AVAILABLE
-        return InfoField(value=value, status="Sourced", evidence=evidence)
+        status = "Sourced" if evidence else "Unconfirmed"
+        return InfoField(value=value, status=status, evidence=evidence)
 
     minutes = leg.duration_minutes
     amount = trip_research.sar_amount(leg.amount, leg.currency)
@@ -356,7 +358,11 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
         duration=known(format_duration(minutes) if minutes else None),
         # A link's price is a single seller's offer, so it stays an estimate.
         price=(
-            SarPrice(amount_sar=amount, status="Estimated", evidence=evidence)
+            SarPrice(
+                amount_sar=amount,
+                status="Estimated" if evidence else "Unconfirmed",
+                evidence=evidence,
+            )
             if amount
             else NO_PRICE
         ),
@@ -367,6 +373,14 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
         stops=leg.stops,
         seller=leg.seller,
     )
+
+
+def _priced_at(fare: FlightFare | None) -> datetime:
+    """When the source fetched the fare, which can be before this request."""
+    try:
+        return datetime.fromisoformat(str(fare.observed_at).replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return datetime.now(UTC)
 
 
 def _build_route(
@@ -412,7 +426,7 @@ def _build_route(
         airline=airline,
         duration=duration,
         price_per_person=price,
-        priced_at=datetime.now(UTC),
+        priced_at=_priced_at(fare),
         origin_airport=research.airports.get(index, (None, None))[0],
         destination_airport=research.airports.get(index, (None, None))[1],
         group_availability=(
@@ -428,6 +442,13 @@ def _build_route(
             if fare is not None and fare.solo_saving
             else None
         ),
+        provider=fare.provider if fare else None,
+        seller_type=fare.seller_type if fare else None,
+        price_source=fare.price_source if fare else None,
+        cabin_class=fare.cabin_class if fare else None,
+        fare_name=fare.fare_name if fare else None,
+        checked_bags=fare.checked_bags if fare else None,
+        carry_on_bags=fare.carry_on_bags if fare else None,
     )
 
 
@@ -493,6 +514,8 @@ def build_proposal(
                 city_ar=_arabic_name(option.cities_ar, index),
                 area=_area(by_id.get(f"cities.{index}.hotel_area")),
                 priced_at=datetime.now(UTC),
+                hotel_url=research.hotel_links.get(index),
+                hotel_source=research.hotel_sources.get(index),
             )
         )
         check_in = check_out

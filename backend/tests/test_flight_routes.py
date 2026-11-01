@@ -56,7 +56,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def test_book_returns_a_fresh_link_and_no_private_count(api) -> None:
     client, _ = api
 
-    response = client.get(
+    response = client.post(
         f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=round_trip"
     )
 
@@ -67,12 +67,15 @@ def test_book_returns_a_fresh_link_and_no_private_count(api) -> None:
     assert Decimal(body["price_sar"]) == Decimal(950)
     assert Decimal(body["previous_price_sar"]) == Decimal(900)
     assert "adults" not in body and "ceiling" not in body
+    assert body["link_valid_minutes"] == 15
+    assert body["checked_at"]
+    assert body["flights"][0]["direction"] == "outbound"
 
 
 def test_book_rejects_an_unknown_leg(api) -> None:
     client, _ = api
 
-    response = client.get(
+    response = client.post(
         f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=everything"
     )
 
@@ -87,7 +90,7 @@ def test_refresh_saves_only_for_the_verified_account(api) -> None:
     assert response.status_code == 200
     assert response.json()["updated"] is True
     assert response.json()["now_over_budget"] is False
-    assert response.json()["next_refresh_seconds"] == 300
+    assert response.json()["next_refresh_seconds"] == 120
     assert saved[0][0] == MEMBER
     assert saved[0][1].price_per_person.amount_sar == Decimal("950.00")
 
@@ -106,7 +109,7 @@ def test_outsiders_and_replaced_proposals_are_refused(
     monkeypatch.setattr(routes, "fetch_flight_context", refuse)
 
     assert (
-        client.get(
+        client.post(
             f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=outbound"
         ).status_code
         == status
@@ -131,8 +134,30 @@ def test_a_city_with_no_flights_gets_not_found(
 
     monkeypatch.setattr(routes, "fetch_flight_context", other_city)
 
-    response = client.get(
+    response = client.post(
         f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=round_trip"
     )
 
     assert response.status_code == 404
+
+
+def test_book_saves_the_price_it_found(api) -> None:
+    client, saved = api
+
+    client.post(f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=round_trip")
+
+    assert saved[0][1].price_per_person.amount_sar == Decimal("950.00")
+
+
+def test_book_still_gives_the_link_when_saving_fails(api, monkeypatch) -> None:
+    client, _ = api
+
+    async def broken(*args):
+        raise GenerationInputsError("unavailable")
+
+    monkeypatch.setattr(routes, "save_flight_refresh", broken)
+
+    url = f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=round_trip"
+    assert client.post(url).json()["url"]
+    refresh = f"/api/trips/{TRIP}/proposals/{PROPOSAL}/refresh-flights"
+    assert client.post(refresh).status_code == 503

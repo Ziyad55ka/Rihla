@@ -83,16 +83,6 @@ def test_no_comparison_for_one_person(tmp_path) -> None:
     assert result.flights.fare_basis == "group"
 
 
-def test_the_comparison_uses_the_cache(tmp_path) -> None:
-    fake = ByParty(group=2000, alone=900)
-    check = checker(tmp_path, fake, ignav_price_scope="total")
-
-    refresh(check, 2)
-    refresh(check, 2)
-
-    assert len(fake.searches) == 2
-
-
 def test_a_failed_comparison_keeps_the_group_price(tmp_path) -> None:
     class AloneFails(ByParty):
         async def search(self, query: FlightQuery) -> dict:
@@ -165,7 +155,7 @@ def test_generation_takes_the_cheaper_alone_fare() -> None:
     fare, calls = _generation_check(2, {"itineraries": [_numbered(900)]})
 
     assert calls[0].adults == 1
-    assert fare.amount == "900"
+    assert Decimal(fare.amount) == Decimal(900)
     assert Decimal(fare.solo_saving) == Decimal(100)
 
 
@@ -208,6 +198,7 @@ def test_reading_still_works_without_the_group_check(monkeypatch) -> None:
     monkeypatch.setattr(routes, "trip_rpc", rpc)
     identity = SimpleNamespace(account=SimpleNamespace(id=UUID(int=1)))
     settings = SimpleNamespace(
+        place_images_enabled=False,
         booking_domains=[],
         price_fresh_hours=3,
         price_stale_hours=24,

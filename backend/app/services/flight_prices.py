@@ -3,6 +3,7 @@
 import hashlib
 import logging
 import re
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
@@ -92,6 +93,27 @@ class FlightFare:
     legs: tuple[FareLeg, ...]
     # Per person, set when booking alone beats booking together. `amount` is then alone.
     solo_saving: str | None = None
+    # What the search showed for one person, before the seller's own price.
+    search_amount: str | None = None
+    # seller: the link's own price. search: the search's, with no price on a link.
+    price_source: Literal["seller", "search"] = "search"
+    # The link opens this flight, rather than a list to choose from.
+    exact: bool = False
+    seller_type: str | None = None
+    fare_name: str | None = None
+    cabin_class: str | None = None
+    checked_bags: int | None = None
+    carry_on_bags: int | None = None
+    provider: str = "ignav"
+    # When the source fetched this fare, in ISO form, or null when unknown.
+    observed_at: str | None = None
+
+    def price_gap_percent(self) -> Decimal:
+        """How far the seller's price is above what the search showed."""
+        if not self.search_amount or self.price_source != "seller":
+            return Decimal(0)
+        shown = Decimal(self.search_amount)
+        return (Decimal(self.amount) / shown - 1) * 100 if shown > 0 else Decimal(0)
 
     @property
     def source_url(self) -> str:
@@ -127,6 +149,8 @@ class IgnavError(Exception):
 
 
 class IgnavProvider:
+    name = "ignav"
+
     def __init__(
         self,
         api_key: str,
@@ -137,7 +161,11 @@ class IgnavProvider:
         split_min_saving_percent: Decimal = Decimal(15),
         split_max_extra_duration_percent: Decimal = Decimal(30),
         on_request: Callable[[str], None] | None = None,
+        price_conflict_percent: Decimal = Decimal(10),
+        cache_seconds: float = 900,
     ) -> None:
+        self.price_conflict_percent = price_conflict_percent
+        self.cache_seconds = cache_seconds
         self.api_key = api_key
         self.cache = cache
         self.transport = transport
@@ -207,6 +235,13 @@ class IgnavProvider:
         worth_it = cheapest is not steady and clearly_better(
             cheapest, steady, self.split_saving, self.split_extra
         )
+        if fare is not None and fare.price_gap_percent() > self.price_conflict_percent:
+            # The seller asks far more than the search showed, so try another airline.
+            other = other_airline_itinerary(body, steady)
+            second = await self._fare(other, query) if other else None
+            if second and Decimal(second.amount) < Decimal(fare.amount):
+                return second
+            return fare
         if fare is not None and not worth_it:
             return fare
         if cheapest is steady:
@@ -237,12 +272,13 @@ class IgnavProvider:
         alone = min(same, key=_amount, default=None)
         if alone is None or str(alone["price"]["currency"]).upper() != fare.currency:
             return fare
-        saving = Decimal(fare.amount) - _amount(alone)
+        # Compared at the search's price, and taken off the seller's.
+        saving = Decimal(fare.search_amount or fare.amount) - _amount(alone)
         if saving < 1:
             return fare
         return replace(
             fare,
-            amount=str(alone["price"]["amount"]),
+            amount=str(Decimal(fare.amount) - saving),
             verified=fare.verified and alone["price"].get("status") == "verified",
             solo_saving=str(saving),
         )
@@ -250,12 +286,14 @@ class IgnavProvider:
     async def find(self, query: FlightQuery) -> FlightFare | None:
         key = hashlib.sha256(f"ignav-legs|{query}".encode()).hexdigest()
         cached = self.cache.get(key) if self.cache else None
-        if cached:
+        if cached and time.time() - cached[0].get("cached_at", 0) < self.cache_seconds:
             saved = dict(cached[0])
+            saved.pop("cached_at")
             saved["legs"] = tuple(FareLeg(**leg) for leg in saved["legs"])
             return FlightFare(**saved)
         try:
             body = await self.search(query)
+            observed = body.get("observed_at")
             if cheapest_itinerary(body) is None:
                 logger.info("flight_provider_fallback reason=no_itinerary")
                 self.no_itinerary.add(query)
@@ -265,6 +303,7 @@ class IgnavProvider:
                 logger.info("flight_provider_fallback reason=no_booking_link")
                 return None
             fare = await self._cheaper_alone(fare, query)
+            fare = replace(fare, observed_at=str(observed) if observed else None)
         except IgnavError as error:
             logger.info("flight_provider_fallback reason=%s", error)
             return None
@@ -272,7 +311,7 @@ class IgnavProvider:
             logger.info("flight_provider_fallback reason=unexpected_response")
             return None
         if self.cache:
-            self.cache.put(key, [asdict(fare)])
+            self.cache.put(key, [{**asdict(fare), "cached_at": time.time()}])
         return fare
 
 
@@ -306,6 +345,20 @@ def steady_itinerary(body: dict) -> dict | None:
         and item["outbound"].get("carrier") == item["inbound"].get("carrier")
     ]
     return min(same, key=_amount, default=None)
+
+
+def other_airline_itinerary(body: dict, avoid: dict) -> dict | None:
+    """The cheapest one-airline trip that is not on the airline already tried."""
+    carrier = avoid["outbound"].get("carrier")
+    return steady_itinerary(
+        {
+            "itineraries": [
+                item
+                for item in usable_itineraries(body)
+                if item["outbound"].get("carrier") != carrier
+            ]
+        }
+    )
 
 
 def _minutes(itinerary: dict) -> int:
@@ -444,13 +497,34 @@ def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
     return True
 
 
+def link_is_exact(link: dict, numbers: list[str]) -> bool:
+    """Does it open this flight? Most links do not say, so check for its number."""
+    stated = link.get("specificity")
+    if stated:
+        return stated == "exact_flight"
+    url = str(link.get("url") or "").upper()
+    return bool(numbers) and all(item.replace(" ", "") in url for item in numbers)
+
+
+def _link_amount(link: dict | None, currency: str | None = None) -> Decimal | None:
+    price = (link or {}).get("price") or {}
+    try:
+        amount = Decimal(str(price.get("amount")))
+    except InvalidOperation:
+        return None
+    if amount <= 0 or (currency and str(price.get("currency")).upper() != currency):
+        return None
+    return amount
+
+
 def pick_link(
     options: list[dict],
     directions: set[str],
     query: FlightQuery,
     codes: set[str] | None = None,
+    numbers: list[str] | None = None,
 ) -> dict | None:
-    """The first valid link for these directions, preferring an exact flight."""
+    """A valid link for these directions: this flight, then its airline, then price."""
     links = [
         link
         for option in options
@@ -459,8 +533,24 @@ def pick_link(
         if link_matches(str(link.get("url") or ""), directions, query)
         and seller_matches(str(link.get("url") or ""), codes or set())
     ]
-    links.sort(key=lambda link: link.get("specificity") != "exact_flight")
+    links.sort(
+        key=lambda link: (
+            not link_is_exact(link, numbers or []),
+            link.get("provider_type") != "airline",
+            _link_amount(link) or Decimal("Infinity"),
+        )
+    )
     return links[0] if links else None
+
+
+def _any_price(options: list[dict], direction: str) -> dict | None:
+    """A leg's price from any link. A link that cannot open still states one."""
+    for option in options:
+        if set(option.get("legs") or []) == {direction}:
+            for link in option.get("links") or []:
+                if link.get("price"):
+                    return link
+    return None
 
 
 def _party_amount(amount: object, adults: int, price_is_total: bool) -> str:
@@ -477,8 +567,9 @@ def _leg(
     priced: bool,
     adults: int = 1,
     price_is_total: bool = False,
+    priced_by: dict | None = None,
 ) -> FareLeg:
-    price = (link or {}).get("price") if priced else None
+    price = ((link or priced_by) or {}).get("price") if priced else None
     segments = _segments(part)
     return FareLeg(
         direction=direction,
@@ -507,29 +598,63 @@ def fare_from_itinerary(
     outbound, inbound = choice["outbound"], choice.get("inbound")
     out_codes = carrier_codes(outbound)
     back_codes = carrier_codes(inbound) if inbound else set()
+    out_numbers = flight_numbers(outbound)
+    back_numbers = flight_numbers(inbound) if inbound else []
     whole = (
-        pick_link(options, {"outbound", "inbound"}, query, out_codes | back_codes)
+        pick_link(
+            options,
+            {"outbound", "inbound"},
+            query,
+            out_codes | back_codes,
+            out_numbers + back_numbers,
+        )
         if inbound
         else None
     )
-    out_link = pick_link(options, {"outbound"}, query, out_codes)
-    back_link = pick_link(options, {"inbound"}, query, back_codes)
+    out_link = pick_link(options, {"outbound"}, query, out_codes, out_numbers)
+    back_link = pick_link(options, {"inbound"}, query, back_codes, back_numbers)
     extra = (query.adults, price_is_total)
     if not (whole or out_link or back_link):
         raise IgnavError("no_booking_link")
 
+    price = choice["price"]
+    currency = str(price["currency"]).upper()
+    amount = Decimal(str(price["amount"]))
+    source: Literal["seller", "search"] = "search"
     if whole:
         trip_type = "round_trip"
         legs = (
             _leg("outbound", query.departure_date, outbound, whole, False),
             _leg("return", query.return_date, inbound, whole, False),
         )
+        seller_price = _link_amount(whole, currency)
+        if seller_price:
+            amount, source = seller_price, "seller"
     elif inbound:
         trip_type = "split"
         legs = (
-            _leg("outbound", query.departure_date, outbound, out_link, True, *extra),
-            _leg("return", query.return_date, inbound, back_link, True, *extra),
+            _leg(
+                "outbound",
+                query.departure_date,
+                outbound,
+                out_link,
+                True,
+                *extra,
+                priced_by=_any_price(options, "outbound"),
+            ),
+            _leg(
+                "return",
+                query.return_date,
+                inbound,
+                back_link,
+                True,
+                *extra,
+                priced_by=_any_price(options, "inbound"),
+            ),
         )
+        both = [_link_amount(out_link, currency), _link_amount(back_link, currency)]
+        if all(both):
+            amount, source = sum(both), "seller"
     else:
         if out_link is None:
             raise IgnavError("no_booking_link")
@@ -537,18 +662,48 @@ def fare_from_itinerary(
         legs = (
             _leg("outbound", query.departure_date, outbound, out_link, True, *extra),
         )
+        seller_price = _link_amount(out_link, currency)
+        if seller_price:
+            amount, source = seller_price, "seller"
 
-    price = choice["price"]
     provider = whole or out_link or back_link
+    parts = (whole,) if whole else tuple(item for item in (out_link, back_link) if item)
+    numbers = (
+        out_numbers + back_numbers
+        if whole
+        else (out_numbers if out_link else []) + (back_numbers if back_link else [])
+    )
+    exact = (
+        link_is_exact(whole, numbers)
+        if whole
+        else all(
+            link_is_exact(link, flights)
+            for link, flights in ((out_link, out_numbers), (back_link, back_numbers))
+            if link
+        )
+    )
+    bags = choice.get("bags") or {}
+    status = provider.get("price", {}).get("status") if source == "seller" else None
     return FlightFare(
         airline=str(outbound["carrier"]),
         duration_minutes=int(outbound["duration_minutes"]),
-        amount=_party_amount(price["amount"], query.adults, price_is_total),
-        currency=str(price["currency"]).upper(),
-        verified=trip_type == "round_trip" and price.get("status") == "verified",
+        amount=_party_amount(amount, query.adults, price_is_total),
+        currency=currency,
+        verified=trip_type == "round_trip"
+        and (status or price.get("status")) == "verified",
         provider_name=str(provider.get("provider_name") or "Ignav"),
         trip_type=trip_type,
         legs=legs,
+        search_amount=_party_amount(price["amount"], query.adults, price_is_total),
+        price_source=source,
+        exact=exact,
+        seller_type=provider.get("provider_type"),
+        fare_name=next(
+            (item["fare_name"] for item in parts if item.get("fare_name")), None
+        ),
+        cabin_class=choice.get("cabin_class"),
+        checked_bags=bags.get("checked"),
+        carry_on_bags=bags.get("carry_on"),
     )
 
 
@@ -564,6 +719,8 @@ def get_flight_provider(
             split_min_saving_percent=settings.split_min_saving_percent,
             split_max_extra_duration_percent=settings.split_max_extra_duration_percent,
             on_request=lambda kind: usage.record(kind, "generation", False),
+            price_conflict_percent=settings.price_conflict_percent,
+            cache_seconds=settings.flight_cache_minutes * 60,
         )
     return WebSearchOnly()
 

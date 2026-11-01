@@ -210,25 +210,202 @@ def test_same_price_reports_no_change(tmp_path) -> None:
     assert book(checker(tmp_path, fake)).previous_price_sar is None
 
 
-@pytest.mark.parametrize(
-    "fake",
-    [
-        # No seats for the whole party: Ignav returns no trip for that many adults.
-        FakeIgnav({"itineraries": []}),
-        # The same flight is gone, and another airline remains.
-        FakeIgnav({"itineraries": [itinerary("Saudia")]}),
-        # Ignav failed.
-        FakeIgnav(error=True),
-    ],
-)
-def test_no_usable_flight_falls_back_to_google_flights(tmp_path, fake) -> None:
-    result = book(checker(tmp_path, fake))
+def test_no_flight_and_no_replacement_falls_back_to_google_flights(tmp_path) -> None:
+    result = book(checker(tmp_path, FakeIgnav({"itineraries": []})))
 
     assert result.fallback == "not_available"
     assert result.url.startswith("https://www.google.com/travel/flights")
     assert "RUH" in result.url and "BAH" in result.url
     assert "2%20adults" in result.url
+    assert "Gulf%20Air" in result.url
     assert result.price_sar is None
+
+
+def test_a_failed_source_never_says_the_flight_is_gone(tmp_path) -> None:
+    result = book(checker(tmp_path, FakeIgnav(error=True)))
+
+    assert result.fallback == "check_failed"
+    assert not result.updated
+    assert "google.com" in result.url
+
+
+def test_gone_flight_moves_to_the_best_replacement(tmp_path) -> None:
+    other = itinerary("Saudia", amount=1000)
+    fake = FakeIgnav({"itineraries": [other]}, links("https://www.saudia.com/book?x=1"))
+
+    result = book(checker(tmp_path, fake))
+
+    assert result.fallback is None
+    assert result.alternative.reason == "gone"
+    assert result.url == "https://www.saudia.com/book?x=1"
+    assert result.flights.airline.value == "Saudia"
+    assert result.flights.price_per_person.amount_sar == Decimal("1000.00")
+    assert result.updated
+
+
+def test_replacement_over_budget_is_said_plainly(tmp_path) -> None:
+    fake = FakeIgnav(
+        {"itineraries": [itinerary("Saudia", amount=9000)]},
+        links("https://www.saudia.com/book?x=1"),
+    )
+    check = checker(tmp_path, fake)
+
+    result = asyncio.run(
+        book_flight(
+            check, proposal(), "الرياض", "round_trip", 1, TRIP, "m", Decimal(5000)
+        )
+    )
+
+    assert result.alternative.within_budget is False
+    assert result.budget_status == "over_group_budget"
+
+
+def test_link_price_beats_the_search_price(tmp_path) -> None:
+    # The real case: the search says 900, and Gulf Air's own page says 1614.
+    priced = links("https://flights.gulfair.com/falcon/deeplink?origin=RUH")
+    priced["booking_options"][0]["links"][0]["price"] = {
+        "amount": 1614,
+        "currency": "SAR",
+        "status": "verified",
+    }
+    fake = FakeIgnav({"itineraries": [itinerary(amount=900)]}, priced)
+
+    result = book(checker(tmp_path, fake))
+
+    assert result.price_sar == Decimal("1614.00")
+    assert result.previous_price_sar == Decimal("900")
+    assert result.flights.price_source == "seller"
+
+
+def test_seller_far_above_the_search_offers_a_cheaper_airline(tmp_path) -> None:
+    class Sellers(FakeIgnav):
+        async def booking_links(self, ignav_id: str) -> dict:
+            self.link_requests += 1
+            found = links(
+                "https://www.flynas.com/b"
+                if "flynas" in ignav_id
+                else "https://flights.gulfair.com/d"
+            )
+            amount = 1000 if "flynas" in ignav_id else 1614
+            found["booking_options"][0]["links"][0]["price"] = {
+                "amount": amount,
+                "currency": "SAR",
+                "status": "verified",
+            }
+            return found
+
+    fake = Sellers(
+        {"itineraries": [itinerary(amount=900), itinerary("flynas", amount=1000)]}
+    )
+
+    result = book(checker(tmp_path, fake))
+
+    assert result.price_sar == Decimal("1614.00")
+    assert result.alternative.reason == "cheaper"
+    assert result.alternative.price_sar == Decimal("1000.00")
+    assert result.alternative.url == "https://www.flynas.com/b"
+    # A suggestion: the proposal keeps its own flight.
+    assert result.flights.airline.value == "Gulf Air"
+    assert fake.link_requests == 2
+
+
+def test_flight_with_no_usable_link_stays_and_offers_another(tmp_path) -> None:
+    class Sellers(FakeIgnav):
+        async def booking_links(self, ignav_id: str) -> dict:
+            if "Saudia" in ignav_id:
+                return links("https://www.saudia.com/book?x=1")
+            return links("https://book.aegeanair.com/PostHandler.axd")
+
+    fake = Sellers(
+        {"itineraries": [itinerary(amount=900), itinerary("Saudia", amount=1000)]}
+    )
+
+    result = book(checker(tmp_path, fake))
+
+    assert result.fallback == "no_link"
+    assert "google.com" in result.url
+    assert result.flights.airline.value == "Gulf Air"
+    assert result.alternative.reason == "no_link"
+    assert result.alternative.url == "https://www.saudia.com/book?x=1"
+
+
+def test_second_source_takes_over_when_the_first_fails(tmp_path) -> None:
+    broken, working = FakeIgnav(error=True), FakeIgnav()
+    broken.name, working.name = "first", "second"
+    settings = make_settings(tmp_path)
+    check = FlightChecker(settings, providers=[broken, working])
+
+    result = book(check)
+
+    assert result.fallback is None
+    assert result.provider == "second"
+
+
+def test_second_source_takes_over_at_the_first_ones_limit(tmp_path) -> None:
+    first, second = FakeIgnav(), FakeIgnav()
+    first.name, second.name = "first", "second"
+    settings = make_settings(tmp_path, daily_requests_per_source=2)
+    check = FlightChecker(settings, providers=[first, second])
+    for _ in range(2):
+        check.usage.record("search", "other", False, "first")
+
+    result = book(check)
+
+    assert first.searches == []
+    assert result.provider == "second"
+
+
+def test_all_sources_at_their_limit_give_the_search_link(tmp_path) -> None:
+    first, second = FakeIgnav(), FakeIgnav()
+    first.name, second.name = "first", "second"
+    settings = make_settings(tmp_path, daily_requests_per_source=0)
+
+    result = book(FlightChecker(settings, providers=[first, second]))
+
+    assert result.fallback == "limit"
+    assert first.searches == [] and second.searches == []
+
+
+def _priced_links(url: str, amount: float, kind: str = "airline") -> dict:
+    found = links(url)
+    link = found["booking_options"][0]["links"][0]
+    link.pop("specificity")
+    link.update(
+        provider_type=kind,
+        price={"amount": amount, "currency": "SAR", "status": "verified"},
+    )
+    return found
+
+
+def test_sources_are_asked_together_and_the_airline_price_wins_a_conflict(
+    tmp_path,
+) -> None:
+    agent = FakeIgnav(
+        link_body=_priced_links("https://agent.example/x", 800, "third_party")
+    )
+    airline = FakeIgnav(link_body=_priced_links("https://www.gulfair.com/x", 1000))
+    agent.name, airline.name = "agent", "airline"
+    check = FlightChecker(make_settings(tmp_path), providers=[agent, airline])
+
+    result = book(check)
+
+    assert result.provider == "airline"
+    assert result.price_sar == Decimal("1000.00")
+    assert result.seller_type == "airline"
+
+
+def test_a_link_to_the_flight_itself_beats_a_results_page(tmp_path) -> None:
+    results = _priced_links("https://www.gulfair.com/list", 950)
+    results["booking_options"][0]["links"][0]["specificity"] = "search_results"
+    exact = _priced_links("https://agent.example/exact", 950, "third_party")
+    exact["booking_options"][0]["links"][0]["specificity"] = "exact_flight"
+    first, second = FakeIgnav(link_body=results), FakeIgnav(link_body=exact)
+    first.name, second.name = "first", "second"
+
+    result = book(FlightChecker(make_settings(tmp_path), providers=[first, second]))
+
+    assert result.provider == "second"
+    assert result.exact_flight
 
 
 def test_link_for_another_airline_is_never_returned(tmp_path) -> None:
@@ -251,7 +428,7 @@ def test_link_for_another_airline_is_never_returned(tmp_path) -> None:
 
     result = book(checker(tmp_path, fake))
 
-    assert result.fallback == "not_available"
+    assert result.fallback == "no_link"
     assert "flynas" not in result.url
 
 
@@ -287,31 +464,16 @@ def test_stored_link_is_never_used(tmp_path) -> None:
     assert "old.example" not in result.url
 
 
-def test_same_search_within_the_cache_time_asks_ignav_once(tmp_path) -> None:
+def test_every_press_asks_the_source_again_with_no_local_cache(tmp_path) -> None:
     fake = FakeIgnav()
     check = checker(tmp_path, fake)
 
     book(check, member="m1")
     book(check, member="m2")
 
-    assert len(fake.searches) == 1
-    assert fake.link_requests == 1
-    assert check.usage.spent_today() == 2
-    kinds = {(kind, cached) for _, kind, cached, _ in check.usage.summary()}
-    assert ("search", 1) in kinds and ("search", 0) in kinds
-
-
-def test_expired_cache_or_another_party_size_searches_again(tmp_path) -> None:
-    fake = FakeIgnav()
-    check = checker(tmp_path, fake)
-    book(check, adults=2)
-    book(check, adults=3)
     assert len(fake.searches) == 2
-
-    expired = checker(tmp_path / "x", FakeIgnav(), flight_cache_minutes=0)
-    book(expired)
-    book(expired)
-    assert len(expired.provider.searches) == 2
+    assert fake.link_requests == 2
+    assert check.usage.spent_today() == 4
 
 
 def test_member_limit_returns_google_flights_with_no_request(tmp_path) -> None:
@@ -330,7 +492,7 @@ def test_member_limit_returns_google_flights_with_no_request(tmp_path) -> None:
 
 def test_trip_limit_returns_google_flights(tmp_path) -> None:
     fake = FakeIgnav()
-    check = checker(tmp_path, fake, trip_ignav_requests_per_day=0)
+    check = checker(tmp_path, fake, trip_requests_per_day=0)
 
     result = book(check)
 
@@ -340,8 +502,8 @@ def test_trip_limit_returns_google_flights(tmp_path) -> None:
 
 def test_project_limit_covers_other_trips_too(tmp_path) -> None:
     fake = FakeIgnav()
-    check = checker(tmp_path, fake, daily_ignav_requests=1)
-    check.usage.record("search", "another-trip", False)
+    check = checker(tmp_path, fake, daily_requests_per_source=1)
+    check.usage.record("search", "another-trip", False, "ignav")
 
     assert book(check).fallback == "limit"
     assert fake.searches == []
@@ -388,7 +550,7 @@ def refresh(check, item=None, ceiling="5000", adults=1, city="الرياض"):
     )
 
 
-def test_refresh_changes_only_price_time_and_availability(tmp_path) -> None:
+def test_refresh_saves_the_new_price_and_time(tmp_path) -> None:
     before = route()
 
     result = refresh(checker(tmp_path, FakeIgnav()), proposal(before))
@@ -398,9 +560,42 @@ def test_refresh_changes_only_price_time_and_availability(tmp_path) -> None:
     assert result.flights.price_per_person.status == "Sourced"
     assert result.flights.priced_at is not None
     assert result.flights.group_availability == "available"
-    assert result.flights.legs == before.legs
     assert result.flights.origin == before.origin
+    assert result.previous_price_sar == Decimal("900")
     assert result.budget_status == "within_group_budget"
+
+
+def test_refresh_uses_the_time_the_source_fetched_the_fare(tmp_path) -> None:
+    body = {"observed_at": "2026-11-01T19:09:48Z", "itineraries": [itinerary()]}
+
+    result = refresh(checker(tmp_path, FakeIgnav(body)))
+
+    assert result.flights.priced_at.isoformat() == "2026-11-01T19:09:48+00:00"
+
+
+def test_unchanged_price_reports_no_difference(tmp_path) -> None:
+    fake = FakeIgnav({"itineraries": [itinerary(amount=900)]})
+
+    result = refresh(checker(tmp_path, fake))
+
+    assert result.previous_price_sar is None
+    assert result.updated
+
+
+def test_refresh_saves_cabin_fare_and_bags_when_given(tmp_path) -> None:
+    body = {
+        "itineraries": [
+            {**itinerary(), "cabin_class": "economy", "bags": {"checked": 1}}
+        ]
+    }
+    fares = links()
+    fares["booking_options"][0]["links"][0]["fare_name"] = "Light"
+
+    fresh = refresh(checker(tmp_path, FakeIgnav(body, fares))).flights
+
+    assert (fresh.cabin_class, fresh.fare_name) == ("economy", "Light")
+    assert fresh.checked_bags == 1
+    assert fresh.carry_on_bags is None
 
 
 def test_refresh_over_budget_only_changes_the_status(tmp_path) -> None:
@@ -409,15 +604,17 @@ def test_refresh_over_budget_only_changes_the_status(tmp_path) -> None:
     assert result.budget_status == "over_group_budget"
 
 
-def test_refresh_of_a_round_trip_needs_only_the_search(tmp_path) -> None:
+def test_refresh_needs_a_search_and_a_price_check(tmp_path) -> None:
     fake = FakeIgnav()
 
     refresh(checker(tmp_path, fake))
 
-    assert (len(fake.searches), fake.link_requests) == (1, 0)
+    assert (len(fake.searches), fake.link_requests) == (1, 1)
 
 
-def test_refresh_when_the_flight_is_gone_keeps_the_old_price(tmp_path) -> None:
+def test_refresh_with_no_flight_and_no_replacement_keeps_the_old_price(
+    tmp_path,
+) -> None:
     result = refresh(checker(tmp_path, FakeIgnav({"itineraries": []})))
 
     assert result.fallback == "not_available"
@@ -427,7 +624,7 @@ def test_refresh_when_the_flight_is_gone_keeps_the_old_price(tmp_path) -> None:
 
 
 def test_refresh_at_the_limit_saves_nothing(tmp_path) -> None:
-    result = refresh(checker(tmp_path, FakeIgnav(), daily_ignav_requests=0))
+    result = refresh(checker(tmp_path, FakeIgnav(), daily_requests_per_source=0))
 
     assert result.fallback == "limit"
     assert not result.updated

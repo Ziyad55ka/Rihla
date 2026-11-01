@@ -9,6 +9,9 @@ from app.main import create_app
 def clean_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     # Tests must never count towards the real Ignav usage file.
     monkeypatch.setenv("FLIGHT_USAGE_DB", str(tmp_path / "flight-usage.sqlite3"))
+    # Nor reach Wikimedia or Trip.com.
+    monkeypatch.setenv("PLACE_IMAGES_ENABLED", "false")
+    monkeypatch.setenv("TRIPCOM_ENABLED", "false")
     for variable in (
         "APP_ENV",
         "CORS_ORIGINS",

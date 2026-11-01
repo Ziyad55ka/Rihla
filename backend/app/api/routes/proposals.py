@@ -27,6 +27,7 @@ from app.services.generation_inputs import (
 )
 from app.services.generation_precheck import generate_checked
 from app.services.proposal_generation import GenerationBlocked
+from app.services.place_images import with_place_images
 from app.services.proposal_store import SupabaseProposalStore
 from app.services.source_policy import apply_source_policy
 from app.services.supabase import SupabaseHTTP
@@ -46,6 +47,14 @@ INPUT_FAILURES = {
     "not_configured": (503, "Proposal generation is not set up on the backend."),
     "proposal_not_found": (404, "This proposal has been replaced."),
 }
+
+
+class FlightSummary(BaseModel):
+    direction: Literal["outbound", "return"]
+    airline: str | None
+    flight_number: str | None
+    departure_time: str | None
+    arrival_time: str | None
 
 
 class GenerateRequest(BaseModel):
@@ -79,24 +88,124 @@ class GeneratedProposals(StoredProposals):
     demo: bool
 
 
-class BookFlightResponse(BaseModel):
-    url: str
-    # not_available or limit or demo mean url is a Google Flights search.
-    fallback: Literal["not_available", "limit", "demo"] | None
+class FlightFacts(BaseModel):
+    """What a check found. Never a passenger count or a budget."""
+
+    url: str | None
     seller: str | None
+    seller_type: str | None
+    # Which source: "ignav" or "tripcom".
+    provider: str | None
     exact_flight: bool
     price_sar: Decimal | None
     # Set only when the price differs from the one saved.
     previous_price_sar: Decimal | None
+    cabin_class: str | None
+    fare_name: str | None
+    checked_bags: int | None
+    carry_on_bags: int | None
+    # Flight numbers and local times in the order shown, so a person can find it.
+    flights: list[FlightSummary]
 
 
-class RefreshFlightsResponse(BaseModel):
+class AlternativeResponse(FlightFacts):
+    # gone: already saved in place of the old flight. no_link and cheaper: a suggestion.
+    reason: Literal["gone", "no_link", "cheaper"]
+    # Null when not checked. Never says by how much.
+    within_budget: bool | None
+
+
+class FlightCheckResponse(FlightFacts):
     updated: bool
-    fallback: Literal["not_available", "limit", "demo"] | None
-    # A Google Flights search, for when no update was possible.
-    url: str | None
+    # Set means url, if any, is a Google Flights search.
+    fallback: (
+        Literal["not_available", "limit", "demo", "check_failed", "no_link"] | None
+    )
+    alternative: AlternativeResponse | None
     now_over_budget: bool
+    checked_at: datetime | None
+    link_valid_minutes: int
     next_refresh_seconds: int
+
+
+def _summaries(route) -> list[FlightSummary]:
+    if route is None:
+        return []
+    return [
+        FlightSummary(
+            direction=item.direction,
+            airline=item.airline.value,
+            flight_number=item.flight_number,
+            departure_time=item.departure_time,
+            arrival_time=item.arrival_time,
+        )
+        for item in route.legs
+    ]
+
+
+def _check_response(result, settings) -> FlightCheckResponse:
+    route = result.flights
+    alternative = result.alternative
+    return FlightCheckResponse(
+        url=result.url,
+        seller=result.seller,
+        seller_type=result.seller_type,
+        provider=result.provider,
+        exact_flight=result.exact_flight,
+        price_sar=result.price_sar,
+        previous_price_sar=result.previous_price_sar,
+        cabin_class=route.cabin_class if route else None,
+        fare_name=route.fare_name if route else None,
+        checked_bags=route.checked_bags if route else None,
+        carry_on_bags=route.carry_on_bags if route else None,
+        flights=_summaries(route),
+        updated=result.updated and result.fallback not in {"not_available"},
+        fallback=result.fallback,
+        alternative=AlternativeResponse(
+            url=alternative.url,
+            seller=alternative.seller,
+            seller_type=alternative.flights.seller_type,
+            provider=alternative.provider,
+            exact_flight=alternative.exact_flight,
+            price_sar=alternative.price_sar,
+            previous_price_sar=None,
+            cabin_class=alternative.flights.cabin_class,
+            fare_name=alternative.flights.fare_name,
+            checked_bags=alternative.flights.checked_bags,
+            carry_on_bags=alternative.flights.carry_on_bags,
+            flights=_summaries(alternative.flights),
+            reason=alternative.reason,
+            within_budget=alternative.within_budget,
+        )
+        if alternative
+        else None,
+        now_over_budget=result.budget_status == "over_group_budget",
+        checked_at=result.checked_at,
+        link_valid_minutes=settings.link_valid_minutes,
+        next_refresh_seconds=settings.refresh_cooldown_minutes * 60,
+    )
+
+
+async def _save_check(
+    result, trip_id: UUID, proposal_id: UUID, identity, settings, required: bool
+) -> None:
+    if not result.updated or result.flights is None:
+        return
+    try:
+        await save_flight_refresh(
+            trip_id,
+            proposal_id,
+            identity.account.id,
+            result.flights,
+            result.budget_status,
+            settings,
+        )
+    except GenerationInputsError as error:
+        # A person about to book still needs the link, even if saving failed.
+        if required:
+            raise HTTPException(
+                503, "Flight checks are temporarily unavailable."
+            ) from error
 
 
 def _with_group_totals(proposal: Proposal, group: FlightGroup) -> Proposal:
@@ -137,13 +246,14 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
             group = await fetch_flight_group(trip_id, identity.account.id, settings)
         except GenerationInputsError:
             pass
+    proposals = await with_place_images(stored.proposals, settings)
     return stored.model_copy(
         update={
             "proposals": [
                 _with_group_totals(
                     apply_source_policy(item, settings.booking_domains), group
                 )
-                for item in stored.proposals
+                for item in proposals
             ],
             "all_same_city": group.all_same_city,
             "price_fresh_hours": settings.price_fresh_hours,
@@ -188,9 +298,9 @@ async def _flight_context(
         raise HTTPException(status, message) from error
 
 
-@router.get(
+@router.post(
     "/{trip_id}/proposals/{proposal_id}/book-flight",
-    response_model=BookFlightResponse,
+    response_model=FlightCheckResponse,
 )
 async def book_proposal_flight(
     trip_id: UUID,
@@ -210,24 +320,19 @@ async def book_proposal_flight(
             context.adults,
             str(trip_id),
             str(identity.account.id),
+            context.ceiling,
         )
     except NoRoute as error:
         raise HTTPException(
             404, "No flights from your city in this proposal."
         ) from error
-    return BookFlightResponse(
-        url=result.url,
-        fallback=result.fallback,
-        seller=result.seller,
-        exact_flight=result.exact_flight,
-        price_sar=result.price_sar,
-        previous_price_sar=result.previous_price_sar,
-    )
+    await _save_check(result, trip_id, proposal_id, identity, settings, required=False)
+    return _check_response(result, settings)
 
 
 @router.post(
     "/{trip_id}/proposals/{proposal_id}/refresh-flights",
-    response_model=RefreshFlightsResponse,
+    response_model=FlightCheckResponse,
 )
 async def refresh_proposal_flights(
     trip_id: UUID,
@@ -251,27 +356,8 @@ async def refresh_proposal_flights(
         raise HTTPException(
             404, "No flights from your city in this proposal."
         ) from error
-    if result.updated:
-        try:
-            await save_flight_refresh(
-                trip_id,
-                proposal_id,
-                identity.account.id,
-                result.flights,
-                result.budget_status,
-                settings,
-            )
-        except GenerationInputsError as error:
-            raise HTTPException(
-                503, "Flight checks are temporarily unavailable."
-            ) from error
-    return RefreshFlightsResponse(
-        updated=result.updated and result.fallback is None,
-        fallback=result.fallback,
-        url=result.url if result.fallback else None,
-        now_over_budget=result.budget_status == "over_group_budget",
-        next_refresh_seconds=settings.refresh_cooldown_minutes * 60,
-    )
+    await _save_check(result, trip_id, proposal_id, identity, settings, required=True)
+    return _check_response(result, settings)
 
 
 @router.post("/{trip_id}/proposals", response_model=GeneratedProposals)

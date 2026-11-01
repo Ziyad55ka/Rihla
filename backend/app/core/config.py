@@ -23,6 +23,8 @@ DEFAULT_BOOKING_DOMAINS = (
     "trivago.com",
     # Google Hotels only, not the rest of Google.
     "google.com/travel",
+    # Off unless TRIPCOM_ENABLED. Listed so its own hotels count as a price source.
+    "trip.com",
 )
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
@@ -70,12 +72,27 @@ class Settings(BaseSettings):
     # A split trip must save this much, and may take only this much longer.
     split_min_saving_percent: Decimal = Field(default=Decimal(15), ge=0, lt=100)
     split_max_extra_duration_percent: Decimal = Field(default=Decimal(30), ge=0)
-    # The light flight update: cache and limits, all to protect the free requests.
+    # Fares reused by generation only. Refresh and book always ask the sources.
     flight_cache_minutes: int = Field(default=15, ge=0)
+    # Limits, all to protect the free requests.
     member_flight_actions_per_hour: int = Field(default=5, ge=0)
-    trip_ignav_requests_per_day: int = Field(default=30, ge=0)
-    daily_ignav_requests: int = Field(default=200, ge=0)
-    refresh_cooldown_minutes: int = Field(default=5, ge=0)
+    trip_requests_per_day: int = Field(default=30, ge=0)
+    daily_requests_per_source: int = Field(default=200, ge=0)
+    # How long a flight button stays off after each press.
+    refresh_cooldown_minutes: int = Field(default=2, ge=0)
+    # Sources in the order they are preferred. Only sources switched on are asked.
+    flight_providers: list[str] = Field(default_factory=lambda: ["tripcom", "ignav"])
+    hotel_providers: list[str] = Field(default_factory=lambda: ["tripcom"])
+    # Academic use only. Read docs/ai-proposals.md before switching this on.
+    tripcom_enabled: bool = False
+    # Ignav's docs give no lifetime for a link, so this is an assumption.
+    link_valid_minutes: int = Field(default=15, ge=1)
+    # Above this gap between prices, the airline's own price decides.
+    price_conflict_percent: Decimal = Field(default=Decimal(10), ge=0)
+    # Free city photos from Wikimedia, kept locally with their licence.
+    place_images_enabled: bool = True
+    place_images_db: Path = BACKEND_DIR / ".local" / "place-images.sqlite3"
+    place_images_ttl_days: int = Field(default=30, ge=1)
     flight_usage_db: Path = BACKEND_DIR / ".local" / "flight-usage.sqlite3"
     # Price age: fresh below the first, old above the second.
     price_fresh_hours: int = Field(default=3, ge=1)

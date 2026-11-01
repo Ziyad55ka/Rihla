@@ -34,6 +34,8 @@ from app.services.flight_prices import (
     get_flight_provider,
 )
 from app.services.source_policy import on_domain, search_hosts
+from app.services.travel_providers import find_hotel, live_hotel_providers
+from app.services.tripcom_provider import HotelQuery
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +232,9 @@ class ResearchResult(BaseModel):
     no_group_fare: list[int] = []
     # The airports searched, by the same position.
     airports: dict[int, tuple[str, str]] = {}
+    # A live source's page and name for each city's hotel, by position.
+    hotel_links: dict[int, str] = {}
+    hotel_sources: dict[int, str] = {}
     fields: list[VerifiedField]
     sources: list[ResearchSource]
     cost: ResearchCost
@@ -891,7 +896,12 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         for group in groups
         for spec in group.fields
     ]
+    hotel_links, hotel_sources = await _apply_hotel_sources(
+        request, settings, fields, public_sources
+    )
     return ResearchResult(
+        hotel_links=hotel_links,
+        hotel_sources=hotel_sources,
         fields=fare_fields + fields,
         sources=public_sources,
         cost=cost,
@@ -937,6 +947,59 @@ async def _find_fares(
             no_group.append(index)
     cost.ignav_requests += provider.requests_made
     return fares, no_group
+
+
+async def _apply_hotel_sources(
+    request: ResearchRequest,
+    settings: Settings,
+    fields: list[VerifiedField],
+    sources: list[ResearchSource],
+) -> tuple[dict[int, str], dict[int, str]]:
+    """A live source's hotel replaces the web search's. None switched on, no change."""
+    providers = live_hotel_providers(settings)
+    if not providers or request.departure_date is None or request.return_date is None:
+        return {}, {}
+    links: dict[int, str] = {}
+    names: dict[int, str] = {}
+    by_id = {item.field_id: position for position, item in enumerate(fields)}
+    for index, city in enumerate(request.cities):
+        offer = await find_hotel(
+            providers,
+            HotelQuery(city, request.departure_date, request.return_date),
+        )
+        if offer is None or not offer.url or offer.price_sar is None:
+            continue
+        source = ResearchSource(
+            id=max((item.id for item in sources), default=0) + 1,
+            title=f"{offer.source}: {offer.name}"[:300],
+            url=offer.url,
+            content=f"{offer.name}: {offer.price_sar} SAR, {offer.source}.",
+        )
+        sources.append(source)
+        evidence = [Evidence(source_id=source.id, quote=source.content)]
+        name_id = f"cities.{index}.hotel_name"
+        price_id = f"cities.{index}.hotel_price_per_night"
+        if name_id in by_id and price_id in by_id:
+            fields[by_id[name_id]] = VerifiedField(
+                field_id=name_id,
+                category="hotel_name",
+                value=offer.name,
+                status="Sourced",
+                evidence=evidence,
+            )
+            fields[by_id[price_id]] = VerifiedField(
+                field_id=price_id,
+                category="hotel_price",
+                value=str(offer.price_sar),
+                status="Estimated",
+                evidence=evidence,
+                source_amount=offer.price_sar,
+                source_currency="SAR",
+                amount_sar=offer.price_sar,
+            )
+            links[index] = offer.url
+            names[index] = offer.source
+    return links, names
 
 
 def sar_amount(value: str | None, currency: str | None) -> Decimal | None:

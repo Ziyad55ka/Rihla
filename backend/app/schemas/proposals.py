@@ -180,6 +180,18 @@ class Flights(StrictModel):
     fare_basis: Literal["group", "solo"] | None = None
     # With solo: how much less per person than one booking together.
     solo_saving_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    # Which source gave this price. Example: "ignav". Null on older proposals.
+    provider: str | None = None
+    # airline: sold by the airline itself. third_party: an agent. Null when unknown.
+    seller_type: str | None = None
+    # seller: the seller's own price. search: the search result's. Null when older.
+    price_source: Literal["seller", "search"] | None = None
+    # Null when the source does not say. Examples: "economy" and "Main Cabin".
+    cabin_class: str | None = None
+    fare_name: str | None = None
+    # Allowance per person, or null when the source does not say.
+    checked_bags: int | None = Field(default=None, ge=0)
+    carry_on_bags: int | None = Field(default=None, ge=0)
     # Added on reading, never saved, and only when the whole trip departs from one city.
     group_total_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
 
@@ -197,6 +209,18 @@ class Flights(StrictModel):
         elif self.price_per_person.status == "Sourced":
             raise ValueError("Only a round_trip fare can be Sourced.")
         return self
+
+
+# A free photo with its credit. Added on reading, never saved.
+class PlaceImage(StrictModel):
+    # The picture itself. Example: "https://upload.wikimedia.org/x.jpg".
+    url: str = Field(pattern=r"^https://", max_length=2000)
+    # The picture's page, with its full licence.
+    source_url: str = Field(pattern=r"^https://", max_length=2000)
+    # Who made it, as plain text, or null. Example: "A. Photographer".
+    artist: str | None = Field(default=None, max_length=200)
+    # Example: "CC BY-SA 4.0".
+    license: str = Field(min_length=1, max_length=100)
 
 
 # A stay in one city.
@@ -219,6 +243,12 @@ class CityStay(StrictModel):
     area: str | None = Field(default=None, max_length=150)
     # When this price was checked, or null on older proposals.
     priced_at: datetime | None = None
+    # A page for this hotel itself, as its source gave it, or null. Example: Trip.com.
+    hotel_url: BookingUrl = None
+    # Who gave the hotel and price when it was a live source. Example: "Trip.com".
+    hotel_source: str | None = Field(default=None, max_length=50)
+    # A photo of this city, or null.
+    image: PlaceImage | None = None
 
     @field_validator("hotel_price_per_night")
     @classmethod
@@ -297,6 +327,8 @@ class Proposal(StrictModel):
     budget_status: BudgetStatus
     # Every source cited by Evidence in this proposal.
     sources: list[ProposalSource]
+    # A photo of the destination, or null.
+    image: PlaceImage | None = None
 
     @model_validator(mode="after")
     def consistent_itinerary(self):
