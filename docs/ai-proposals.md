@@ -101,6 +101,14 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Older proposals have no change signal.** Proposals saved before the `20261102000300` migration keep only the departure city check until the next generation.
 - **Older proposals have one title.** Without `title_ar` and `title_en`, the page shows `title` in either language. Other generated text, such as hotel names and adjustment explanations, stays as Gemini wrote it.
 - **Evidence reaches the browser.** The page no longer shows `evidence`, but it stays in the API response, so it can be read in the browser's network tools. Removing it from the response is planned if time allows after the trial.
+- **The final price is only confirmed at checkout.** Every price is the last one a source reported.
+- **Sources reuse results.** Ignav may return a fare fetched up to 30 minutes earlier, with no documented way to force a new one. `priced_at` holds the time the source fetched it, so a price just refreshed can still say 25 minutes.
+- **Search and seller can disagree badly.** On 1 November 2026, Gulf Air RUH to BAH showed 900 SAR in the search, sold by flynas, and 1,614 SAR on Gulf Air's own page, while the person trying it saw "From 998.50 SAR" on Gulf Air's site. The 5% accuracy goal is not met for that flight, and has not been measured by a person after the change.
+- **The cheapest fare may leave out bags.** In the trial Ignav returned no `bags` and no `fare_name`, so the page usually says the bag may not be included. A search with `checked_bags=1` returned the same price with baggage status `unknown`.
+- **Not every airline has a direct link.** Gulf Air and flynas gave results pages, and Aegean gave a posted form that cannot open from a link. Lufthansa's link held the flight numbers. `exact` is worked out from those numbers when the source does not say.
+- **Trip.com is academic only, and not working today.** It stays off unless `TRIPCOM_ENABLED=true`, and its terms need review or an agreement before any commercial use. Its routes return 404, and its code is written from an archived file and has never run against a real reply. See [Trip.com](#tripcom).
+- **No hotel photos.** The archived Trip.com file has no image field, and no photo is taken from any site without permission, so hotels link to Booking.com for photos. City photos are from Wikimedia, by exact page title, so an unclear name gives the designed panel instead.
+- **Limits are local.** Requests are counted in a local file, so several backend servers would not share them. The 2 minute button wait is only in the browser.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
 
 ## Booking and payment are out of scope
@@ -113,32 +121,97 @@ Each departure city is searched with `adults` set to everyone flying from it. Ig
 
 A trip on one airline both ways is preferred. A different trip replaces it only when it saves at least `SPLIT_MIN_SAVING_PERCENT` (15) and takes no more than `SPLIT_MAX_EXTRA_DURATION_PERCENT` (30) longer. This can add one Ignav request for each departure city.
 
-Ignav's documentation does not say whether an amount covers one passenger or the whole party, so we tested it on 1 November 2026: RUH to BAH, 20 to 30 November, with `adults` 1 and 2. All 54 itineraries matched by flight number, and each cost about twice as much for 2 adults (900 and 1,800 SAR on Gulf Air). So an amount covers the whole party, and `IGNAV_PRICE_SCOPE` defaults to `total`, which divides by the party.
+Flight sources are asked at the same time. See [Sources](#sources). Ignav's documentation does not say whether an amount covers one passenger or the whole party, so we tested it on 1 November 2026: RUH to BAH, 20 to 30 November, with `adults` 1 and 2. All 54 itineraries matched by flight number, and each cost about twice as much for 2 adults (900 and 1,800 SAR on Gulf Air). So an amount covers the whole party, and `IGNAV_PRICE_SCOPE` defaults to `total`, which divides by the party.
 
 When more than one person flies from a city, the same flight is also searched with `adults=1`, which costs one more request, or none from the cache. If booking alone saves at least 1 SAR per person, `price_per_person` becomes that price, `fare_basis` is `solo`, booking checks that one-person fare, and the page warns that people may not share a flight. Otherwise `fare_basis` is `group`. The budget check always uses `price_per_person`.
 
 `rihla_flight_group` tells the backend whether all members share a departure city. Browsers receive only `all_same_city`, and `group_total_sar` when it is true and there is more than one member. Otherwise they get no group figure or count. Without the `20261102000500` migration, the flag is false and the page still works.
 
+## Sources
+
+| Source | Used for | Cost | State |
+| --- | --- | --- | --- |
+| Ignav | Flight search, seller links and seller prices | First 1,000 requests free once, then paid | On when `IGNAV_API_KEY` is set |
+| Trip.com AI plugin | Flights and hotels, with links | No key, no stated price | Off: `TRIPCOM_ENABLED=false` |
+| Tavily and Gemini | Hotels from approved booking sites, ideas for an area | Free plans | On |
+| Wikimedia | City and destination photos, with credit | Free, no key | On: `PLACE_IMAGES_ENABLED=true` |
+
+`FLIGHT_PROVIDERS` and `HOTEL_PROVIDERS` set the order, and `app/services/travel_providers.py` holds the shared shape and how to add a source.
+
+**How the best price is chosen.** All sources are asked at once for the same route, dates and party. If the same flight is in more than one, the winner is a link to the flight itself, then the airline's own price, then the newest. Above `PRICE_CONFLICT_PERCENT` (10) between sources, the price closest to the airline's wins and the gap is logged. A source that fails or reaches its limit is skipped, and when none is left the person gets a search link.
+
+**The seller's price comes first.** A search shows one price, but each seller on the booking link has its own. Rihla shows the price of the seller it links to, with `price_source` set to `seller`. If that is above the search's by more than the limit, generation tries another airline, and a check suggests one.
+
+### Trip.com
+
+Trip.com is used for an academic, non-commercial purpose according to its terms. Its terms must be reviewed, or an agreement reached with Trip.com, before any commercial use.
+
+> Trip.com مستخدم لغرض أكاديمي غير تجاري حسب شروطه، ويجب مراجعة الشروط أو الاتفاق مع Trip.com قبل أي استخدام تجاري.
+
+Checked on 1 November 2026, against [the terms](https://www.trip.com/contents/service-guideline/terms.html?locale=en-XX) updated on 25 August 2026:
+
+| Rule in the terms | What Rihla does |
+| --- | --- |
+| No commercial use of content without a licence, and the site is for "domestic and private use" | Off by default, academic use only |
+| "You must not ... create a link to any part of our Website other than the home page" | Only links the API itself returns, unchanged. **This wording may not allow them, since the terms do not mention the API. Decide before relying on it.** |
+| Trip.com must be acknowledged as the author | "Trip.com" is shown beside each price and link from it |
+| No photos separately from their text | Hotel photos are not used. The API file has no image field anyway |
+| No framing | Links open in a new tab |
+
+The terms do not limit it to AI assistants, ban storage or set a rate limit, but the plugin file does describe itself as a "travel assistant" and asks for the user's original words. Rihla sends a plain description of the search with no private data.
+
+**It does not work today.** The published file, `https://www.trip.com/ai-resource/trip/openapi.yaml`, and the routes `/searchFlightTicket` and `/searchHotel` on `www.trip.com` and `us.trip.com` all returned HTTP 404 on 1 November 2026. The code follows the copy archived on 1 May 2026. Switched on, it fails quietly and the next source answers. It has no passenger count, so a ticket's price is multiplied by the party, and seats for a group are not checked.
+
 ## The light flight update
 
-Both actions check one ticket with Ignav. They never use Gemini or Tavily, and never change the destination, cities or hotels.
+Both actions check one trip with every source switched on, always asking directly with no local cache. They never use Gemini or Tavily, and never change the destination, cities or hotels.
 
-- **Book:** `GET /api/trips/{trip_id}/proposals/{proposal_id}/book-flight?leg=outbound|inbound|round_trip`. A saved link is never used. It finds the same flight again, then returns a new link, checked against the airline, route and dates, and the new price if it changed. If the flight is gone, or Ignav fails, it returns a Google Flights search.
-- **Refresh:** `POST /api/trips/{trip_id}/proposals/{proposal_id}/refresh-flights`. Updates only the caller's city's price, `priced_at` and availability, and `budget_status`.
+- **Book:** `POST /api/trips/{trip_id}/proposals/{proposal_id}/book-flight?leg=outbound|inbound|round_trip`. A saved link is never used. It finds the same flight again, saves the new price, and returns a new link, checked against the airline, route and dates. It is now a POST, because it saves.
+- **Refresh:** `POST /api/trips/{trip_id}/proposals/{proposal_id}/refresh-flights`. Updates the caller's city's flights, `priced_at`, availability and `budget_status`. The page then reloads and shows the new price with the difference.
 
 Each works only on the caller's own departure city. Both read and save through the secret key, because the backend needs a traveller count and the lowest budget that no browser may see.
 
+| What it finds | What happens |
+| --- | --- |
+| The same flight, with a link | New price and link. A `link_valid_minutes` timer starts, and when it ends the page asks for a new check |
+| The same flight, with a results page | The page says which flight number and time to choose |
+| The same flight, with no link that opens | `no_link`: price updated, Google search, and another flight offered with a link |
+| The seller far above the search | The seller's price is saved, and a cheaper airline is offered as a suggestion |
+| The flight is gone | The best replacement is saved in its place, with a card comparing it. Over budget is stated |
+| No replacement anywhere | `not_available`: Google Flights search, filtered by airline, date and party where possible |
+| No source answered | `check_failed`: says nothing was checked, and never that the flight is gone |
+
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `FLIGHT_CACHE_MINUTES` | 15 | The same route, dates and party ask Ignav once, for every member |
+| `FLIGHT_CACHE_MINUTES` | 15 | How long generation may reuse a fare. Refresh and book never do |
 | `MEMBER_FLIGHT_ACTIONS_PER_HOUR` | 5 | Book or refresh presses per member |
-| `TRIP_IGNAV_REQUESTS_PER_DAY` | 30 | New Ignav requests per trip |
-| `DAILY_IGNAV_REQUESTS` | 200 | New Ignav requests for the project, protecting the 1,000 free ones |
-| `REFRESH_COOLDOWN_MINUTES` | 5 | How long the refresh button waits after a checked price |
+| `TRIP_REQUESTS_PER_DAY` | 30 | New requests per trip, for each source |
+| `DAILY_REQUESTS_PER_SOURCE` | 200 | New requests for the project, for each source |
+| `REFRESH_COOLDOWN_MINUTES` | 2 | How long a button stays off after a press |
+| `LINK_VALID_MINUTES` | 15 | The timer. Ignav's docs give no lifetime, so this is an assumption |
+| `PRICE_CONFLICT_PERCENT` | 10 | The gap that counts as prices disagreeing |
 
-At a limit the person still gets a Google Flights search, with a message. Round-trip refreshes cost 1 request. Booking, and refreshing separate bookings, cost 2. Refreshing for more than one person from a city adds 1.
+A book or a refresh costs 2 requests with Ignav. Add 1 when refreshing for more than one person from a city, and up to 2 when another flight has to be found.
 
 Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: members appear only as a hash. See it with `uv run python -m app.services.flight_usage`.
+
+## Why a refresh once showed no change
+
+Diagnosed with real requests on 1 November 2026, RUH to BAH, 20 to 30 November, one adult.
+
+| Check | Result |
+| --- | --- |
+| Our 15 minute cache | The trial's refresh was served from it: logged as `cached=1`, 63 seconds after the search |
+| Ignav's own reuse | Up to 30 minutes, with `observed_at` keeping the first time. Seen on the CDG search, 20 minutes old. No documented way to force a new one |
+| Which price was read | The search's 900. The link it opened was Gulf Air's at 1,614, so the page and the link disagreed. This was the main fault, and also why booking showed 900 |
+| Saving | The secret key cannot read `proposals` directly, by design, so the saved row was not inspected |
+| France's "no longer available" | Wrong message. The flight existed, but Aegean's only link was a posted form that Rihla rejects, and that was reported as gone |
+
+| RUH to BAH | Search | Seller | Link |
+| --- | --- | --- | --- |
+| Gulf Air GF 162, GF 163 | 900 | flynas 900, a mismatch, rejected. Gulf Air 1,614 | Results page |
+| Gulf Air GF 170, GF 189 | 900 | Same as above | Results page |
+| flynas XY 233, XY 234 | 1,000 | flynas 1,000 | Results page |
 
 ## Price age
 
@@ -154,8 +227,10 @@ Usage is logged in `backend/.local/flight-usage.sqlite3`, with no private data: 
 
 Sources are classified by domain with `BOOKING_DOMAINS`.
 
-- **Booking and price sources:** Booking.com, Agoda, Expedia, Hotels.com, Airbnb, Marriott, Hilton, IHG, Accor, Hyatt, KAYAK, momondo, trivago and Google Hotels (`google.com/travel` only). Only these can name or price a hotel. Whichever one supplied the price, the button is a Booking.com search with hotel, city, country, dates, `group_adults` and `no_rooms`, assuming two people per room.
+- **Booking and price sources:** Booking.com, Agoda, Expedia, Hotels.com, Airbnb, Marriott, Hilton, IHG, Accor, Hyatt, KAYAK, momondo, trivago, Trip.com and Google Hotels (`google.com/travel` only). Only these can name or price a hotel. Whichever one supplied the price, the button is a Booking.com search with hotel, city, country, dates, `group_adults` and `no_rooms`, assuming two people per room.
 - **Sources for ideas:** everything else, including blogs and guides. They can suggest an area, but never a hotel name, a price or a button.
+
+When a hotel source is switched on, its hotel replaces the web search's, with `hotel_url` for its own page and `hotel_source` for its name. Booking.com stays as the comparison. Gemini never chooses a hotel or a price.
 
 The rule also runs when reading, so older proposals follow it: a hotel from any other site is hidden and replaced by a search of its city. Generation runs one ideas search per proposal and one search limited to booking sites per city, which adds one Tavily search per proposal. Preferences are not put in these searches, because queries leave the system.
 

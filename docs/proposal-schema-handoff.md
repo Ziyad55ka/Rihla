@@ -241,6 +241,10 @@ class Proposal(StrictModel):
 | `group_availability` | `Flights` | `available` أو `not_found` أو `unknown`. Ignav ما يعطي عدد مقاعد، فما فيه حقل عدد |
 | `fare_basis`, `solo_saving_sar` | `Flights` | هل السعر لحجز جماعي أو منفرد، والفرق للشخص |
 | `group_total_sar` | `Flights` | سعر المجموعة، ويوصل بس إذا كل الرحلة من مدينة وحدة |
+| `provider`, `seller_type`, `price_source` | `Flights` | مصدر السعر، ونوع البائع، وهل السعر من البائع أو من البحث |
+| `cabin_class`, `fare_name`, `checked_bags`, `carry_on_bags` | `Flights` | الفئة والشنط إذا المصدر رجعها |
+| `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
+| `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
 | `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
 
 ### تغييرات لازم تنتبهون لها
@@ -265,3 +269,30 @@ class Proposal(StrictModel):
 - [frontend/src/types/proposal.ts](../frontend/src/types/proposal.ts): تعريف TypeScript
 - [docs/examples/proposals.mock.json](examples/proposals.mock.json): ٣ عروض وهمية للتطوير
 - [docs/ai-proposals.md](ai-proposals.md): كيف يشتغل التوليد، والخصوصية، وسياسة الأسعار
+
+### الصور والأسعار (لـ Developer 2 و 3)
+
+- **الصور:** استخدموا `PlacePhoto` من `components/proposal-details/PlacePhoto.tsx`. يعرض ذكر المصدر والرخصة، ولوحة بديلة إذا ما فيه صورة.
+- **أسعار الطيران:** مرروا `startsFrom` إلى `PriceValue` حتى يظهر "يبدأ من". والملاحظة الثابتة هي `PriceNotice`.
+- **التكاليف (Developer 3):** استخدموا `price_per_person`، فهو نفس الرقم اللي يدخل في `budget_status`.
+- **الحجز:** `book-flight` صار `POST`، لأنه يحفظ السعر الجديد.
+
+### الأنشطة وTrip.com (لـ Developer 2)
+
+`searchAttractionAndActivity` موجود في ملف Trip.com المؤرشف بتاريخ 1 مايو 2026، **لكنه غير مجرب**، لأن مسارات Trip.com ترجع 404 منذ 1 نوفمبر 2026. فما عندنا مثال حقيقي من التجربة، وتأكدوا إنه يشتغل قبل الاعتماد عليه.
+
+الطلب حسب الملف: `POST https://www.trip.com/ai-resource/searchAttractionAndActivity` بدون مفتاح.
+
+```json
+{
+  "locale": "en-XX",
+  "destination": "Manama",
+  "beginDate": "2026-11-20",
+  "endDate": "2026-11-30",
+  "limit": 5,
+  "originalInput": "Things to do in Manama",
+  "originalInputInEnglish": "Things to do in Manama"
+}
+```
+
+الرد حسب الملف: `results`، وكل عنصر فيه `title` و`summary` و`url` و`categories` و`attributes`. لا تولدوا الرابط بأنفسكم، واذكروا Trip.com جنب أي شيء يجي منه، وخلوه تحت `TRIPCOM_ENABLED`. والشروط في `docs/ai-proposals.md`.
