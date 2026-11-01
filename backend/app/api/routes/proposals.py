@@ -26,8 +26,8 @@ from app.services.generation_inputs import (
     save_flight_refresh,
 )
 from app.services.generation_precheck import generate_checked
-from app.services.proposal_generation import GenerationBlocked
 from app.services.place_images import with_place_images
+from app.services.proposal_generation import GenerationBlocked
 from app.services.proposal_store import SupabaseProposalStore
 from app.services.source_policy import apply_source_policy
 from app.services.supabase import SupabaseHTTP
@@ -159,7 +159,7 @@ def _check_response(result, settings) -> FlightCheckResponse:
         checked_bags=route.checked_bags if route else None,
         carry_on_bags=route.carry_on_bags if route else None,
         flights=_summaries(route),
-        updated=result.updated and result.fallback not in {"not_available"},
+        updated=result.updated,
         fallback=result.fallback,
         alternative=AlternativeResponse(
             url=alternative.url,

@@ -42,7 +42,45 @@
 .details-route-total .proposals-review { margin:0; }
 .details-sources { margin:0 0 16px; padding-inline-start:22px; font-size:14px; line-height:1.9; overflow-wrap:anywhere; }
 .details-legend { display:flex; flex-wrap:wrap; align-items:center; gap:8px; color:var(--rihla-muted); font-size:12px; }
+.details-icon { flex:none; vertical-align:-3px; }
+.details-notice { display:flex; align-items:flex-start; gap:8px; margin:0 0 14px; padding:10px 14px; color:var(--rihla-ink); background:var(--rihla-paper); border:1px solid var(--rihla-line); border-radius:10px; font-size:13px; line-height:1.6; }
+.details-fact { display:flex; align-items:flex-start; gap:6px; margin:0; font-size:13px; line-height:1.6; }
+.details-price-row { font-size:17px; }
+.details-flight-number, .details-times { font-weight:600; }
+.details-change { display:flex; align-items:center; gap:6px; margin:0; color:#3d5f3c; font-size:14px; font-weight:600; }
+.details-change--moved { color:#786b42; }
+.details-timer { display:flex; align-items:center; gap:6px; margin:0; color:var(--rihla-ink); font-size:13px; font-variant-numeric:tabular-nums; }
+.details-steps { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0; padding:0; color:var(--rihla-muted); font-size:13px; list-style:none; }
+.details-steps li { display:inline-flex; align-items:center; gap:6px; }
+.details-steps li > span { display:inline-grid; place-items:center; width:22px; height:22px; color:var(--rihla-muted); border:1px solid var(--rihla-line); border-radius:50%; font-size:11px; }
+.details-steps .is-now { color:var(--rihla-ink); font-weight:600; }
+.details-steps .is-now > span { color:#fff; background:var(--rihla-green); border-color:var(--rihla-green); }
+.details-steps .is-done > span { color:#3d5f3c; background:#e8efdf; border-color:#cfddbf; }
+.details-alternative { display:grid; gap:8px; justify-items:start; width:100%; padding:14px; background:var(--rihla-paper); border:1px solid var(--rihla-green); border-radius:12px; font-size:13px; }
+.details-alternative p { margin:0; }
+.details-alternative-title { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:600; }
+.details-alternative-price { font-size:16px; }
+.details-flight-list { display:grid; gap:4px; margin:0; padding:0; list-style:none; }
+.details-flight-list li { display:flex; flex-wrap:wrap; gap:4px 12px; }
+.details-no-hotel { margin:0; font-size:14px; }
+.details-text-link { color:var(--rihla-green); font-size:13px; }
+.details-text-link, .details-photo figcaption a { text-underline-offset:2px; }
+.details-photo { position:relative; margin:0; overflow:hidden; border-radius:10px; }
+.details-photo img, .details-photo-empty { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; background:linear-gradient(135deg,var(--rihla-green),#6f8a72); }
+.details-photo-empty { display:grid; place-items:center; color:#f3f4ea; font-size:18px; opacity:.92; }
+.details-photo figcaption { padding:4px 2px 0; color:var(--rihla-muted); font-size:11px; line-height:1.4; overflow-wrap:anywhere; }
+.details-photo figcaption a { color:inherit; }
+.details-city .details-photo, .proposals-card .details-photo { margin-block-end:12px; }
+.details-hero--photo { position:relative; overflow:hidden; isolation:isolate; }
+.details-photo--hero { position:absolute; inset:0; z-index:-1; border-radius:0; }
+.details-photo--hero img { height:100%; aspect-ratio:auto; }
+/* Keeps the words readable over any photo. */
+.details-photo--hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#2d4a39d9,#2d4a39f2); pointer-events:none; }
+.details-photo--hero figcaption { position:absolute; inset-block-end:6px; inset-inline-end:12px; z-index:1; padding:0; color:#d4dece; }
+.details-hero--photo { padding-block-end:40px; }
 @media (max-width:640px) {
+  .details-steps { flex-direction:column; }
+  .details-alternative a { width:100%; }
   .details-cities { grid-template-columns:minmax(0,1fr); }
   .details-card { padding:18px; }
   .details-booking, .details-booking a, .details-booking button, .details-refresh, .details-refresh button, .details-refresh a, .details-book-result, .details-book-result a { width:100%; }

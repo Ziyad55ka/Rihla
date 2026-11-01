@@ -1,6 +1,7 @@
 import { useLanguage } from '../../lib/language'
 import { priceAge, type PriceAgeLimits, safeLink, statusLabels } from '../../lib/proposals'
 import type { InfoField, InfoStatus, SarPrice } from '../../types/proposal'
+import { InfoIcon } from './icons'
 import { useSar } from './useSar'
 
 export function StatusBadge({ status, short = false }: { status: InfoStatus; short?: boolean }) {
@@ -9,22 +10,29 @@ export function StatusBadge({ status, short = false }: { status: InfoStatus; sho
 }
 
 /** A label only when the value is doubtful or missing, so pages do not repeat badges. */
-export function InfoValue({ field }: { field: InfoField }) {
+export function InfoValue({ field, display }: { field: InfoField; display?: (value: string) => string }) {
   const missing = field.status === 'Not available' || field.value === null
   return <span className="details-value">
-    <span><bdi>{missing ? '—' : field.value}</bdi></span>
+    <span><bdi>{missing ? '—' : display ? display(field.value as string) : field.value}</bdi></span>
     {(missing || field.status === 'Unconfirmed') && <StatusBadge status={field.status} />}
   </span>
 }
 
-export function PriceValue({ price, unit }: { price: SarPrice; unit?: string }) {
+/** The same note wherever a price is shown, so nobody takes one as final. */
+export function PriceNotice() {
+  const { t } = useLanguage()
+  return <p className="details-notice"><InfoIcon /> <span>{t('Prices and seats change from time to time. The price shown is from the last check, and the final price is confirmed on the booking page.')}</span></p>
+}
+
+/** `startsFrom` is for flights: the cheapest fare is rarely the only one. */
+export function PriceValue({ price, unit, startsFrom = false }: { price: SarPrice; unit?: string; startsFrom?: boolean }) {
   const { t } = useLanguage()
   const sar = useSar()
   const known = price.status !== 'Not available' && price.amount_sar !== null
   const amount = known ? sar(price.amount_sar as string) : '—'
   return <span className="details-value">
     <span>
-      {known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}
+      {known && startsFrom ? t('From {amount}', { amount }) : known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}
       {known && unit && ` ${t(unit)}`}
     </span>
     <StatusBadge status={price.status} />
@@ -51,6 +59,6 @@ export function StayLink({ url, label }: { url: string | null; label: string }) 
   if (!link) return <p className="details-hint">{t('No booking link')}</p>
   return <div className="details-booking">
     <a className="trip-secondary" href={link} target="_blank" rel="noopener noreferrer">{label} <span aria-hidden="true">↗</span></a>
-    <p className="details-hint">{t('Prices and availability change, and we cannot guarantee them. Check for enough rooms for the group.')}</p>
+    <p className="details-hint">{t('Check for enough rooms for the group.')}</p>
   </div>
 }

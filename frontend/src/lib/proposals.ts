@@ -1,6 +1,6 @@
 import { authenticatedRequest } from './http'
 import type { Language } from './language'
-import type { BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
+import type { BudgetStatus, CityStay, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -77,30 +77,54 @@ export function stayDates(proposal: Proposal): { start: string; end: string }[] 
 }
 
 export type BookLeg = 'outbound' | 'inbound' | 'round_trip'
-export type FlightFallback = 'not_available' | 'limit' | 'demo'
+export type FlightFallback = 'not_available' | 'limit' | 'demo' | 'check_failed' | 'no_link'
 
-export interface BookFlightResult {
-  url: string
-  fallback: FlightFallback | null
-  seller: string | null
-  exact_flight: boolean
-  price_sar: string | null
-  previous_price_sar: string | null
+export interface FlightSummary {
+  direction: 'outbound' | 'return'
+  airline: string | null
+  flight_number: string | null
+  departure_time: string | null
+  arrival_time: string | null
 }
 
-export interface RefreshFlightsResult {
-  updated: boolean
-  fallback: FlightFallback | null
+export interface FlightFacts {
   url: string | null
+  seller: string | null
+  seller_type: string | null
+  provider: string | null
+  exact_flight: boolean
+  price_sar: string | null
+  /** Set only when the price differs from the one saved. */
+  previous_price_sar: string | null
+  cabin_class: string | null
+  fare_name: string | null
+  checked_bags: number | null
+  carry_on_bags: number | null
+  flights: FlightSummary[]
+}
+
+export interface FlightAlternative extends FlightFacts {
+  /** gone: already saved in place of the old flight. The others are suggestions. */
+  reason: 'gone' | 'no_link' | 'cheaper'
+  within_budget: boolean | null
+}
+
+export interface FlightCheckResult extends FlightFacts {
+  updated: boolean
+  /** Set means url, if any, is a Google Flights search. */
+  fallback: FlightFallback | null
+  alternative: FlightAlternative | null
   now_over_budget: boolean
+  checked_at: string | null
+  link_valid_minutes: number
   next_refresh_seconds: number
 }
 
 export const bookFlight = (tripId: string, proposalId: string, leg: BookLeg) =>
-  authenticatedRequest<BookFlightResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/book-flight?leg=${leg}`, { timeoutMs: 60000 })
+  authenticatedRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/book-flight?leg=${leg}`, { method: 'POST', timeoutMs: 60000 })
 
 export const refreshFlights = (tripId: string, proposalId: string) =>
-  authenticatedRequest<RefreshFlightsResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { method: 'POST', timeoutMs: 60000 })
+  authenticatedRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { method: 'POST', timeoutMs: 60000 })
 
 export interface PriceAgeLimits {
   freshHours: number
@@ -119,11 +143,41 @@ export function priceAge(pricedAt: string | null, now: number, limits: PriceAgeL
   return minutes < 60 ? { level: 'fresh', unit: 'minutes', count: minutes } : { level: 'fresh', unit: 'hours', count: hours }
 }
 
-/** Minutes left before another update, counted from when the price was last checked. */
-export function refreshWaitMinutes(pricedAt: string | null | undefined, cooldownMinutes: number, now: number): number {
-  if (!pricedAt) return 0
-  const left = new Date(pricedAt).getTime() + cooldownMinutes * 60000 - now
+/** Who gave a flight's price, in plain words. Trip.com must always be named. */
+export function sourceLabel(facts: { provider?: string | null; seller_type?: string | null; price_source?: string | null }): string {
+  if (facts.provider === 'tripcom') return 'Price from Trip.com'
+  if (facts.seller_type === 'airline' && facts.price_source !== 'search') return 'Price directly from the seller'
+  if (facts.price_source === 'seller') return 'Price from a travel agent'
+  return 'Price from flight search results'
+}
+
+/** Reloads the page's proposals after a check saved something, so it shows the new price. */
+export async function checkAndReload(check: () => Promise<FlightCheckResult>, reload: () => void): Promise<FlightCheckResult> {
+  const result = await check()
+  if (result.updated) reload()
+  return result
+}
+
+/** Minutes a checked link should still work. 0 means expired, null means no timer. */
+export function linkMinutesLeft(checkedAt: string | null, validMinutes: number, now: number): number | null {
+  if (!checkedAt) return null
+  const left = new Date(checkedAt).getTime() + validMinutes * 60000 - now
   return left > 0 ? Math.ceil(left / 60000) : 0
+}
+
+export function priceChange(price: string | null, previous: string | null): { price: number; previous: number; difference: number } | null {
+  if (!price || !previous) return null
+  const difference = Math.round((Number(price) - Number(previous)) * 100) / 100
+  return difference === 0 ? null : { price: Number(price), previous: Number(previous), difference }
+}
+
+/** Who gave a stay's name and price: a live source, or the booking site it was read from. */
+export function staySource(stay: CityStay, sources: ProposalSource[]): string | null {
+  if (stay.hotel_source) return stay.hotel_source
+  const cited = [...stay.hotel_price_per_night.evidence, ...stay.hotel_name.evidence][0]
+  const source = cited && sources.find((item) => item.id === cited.source_id)
+  if (!source) return null
+  try { return new URL(source.url).hostname.replace(/^www\./, '') } catch { return null }
 }
 
 export function canPressGenerate(conflicts: GroupConflicts | null, generating: boolean): boolean {

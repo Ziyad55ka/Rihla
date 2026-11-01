@@ -128,6 +128,28 @@ export interface Flights {
   solo_saving_sar?: string | null
   /** Sent only when the whole trip departs from one city. */
   group_total_sar?: string | null
+  /** Which source gave this price. Example: "ignav". */
+  provider?: string | null
+  /** airline, third_party, or null when unknown. */
+  seller_type?: string | null
+  /** seller: the seller's own price. search: the search result's. */
+  price_source?: 'seller' | 'search' | null
+  /** Null when the source does not say. */
+  cabin_class?: string | null
+  fare_name?: string | null
+  /** Allowance per person, or null when the source does not say. */
+  checked_bags?: number | null
+  carry_on_bags?: number | null
+}
+
+/** A free photo with its credit. Added when reading, and never saved. */
+export interface PlaceImage {
+  url: string
+  /** The picture's page, with its full licence. */
+  source_url: string
+  artist?: string | null
+  /** Example: "CC BY-SA 4.0". */
+  license: string
 }
 
 /** A stay in one city. */
@@ -150,6 +172,12 @@ export interface CityStay {
   area?: string | null
   /** When this price was checked, or null on older proposals. */
   priced_at?: string | null
+  /** A page for this hotel itself, as its source gave it. */
+  hotel_url?: string | null
+  /** Who gave the hotel and price when it was a live source. Example: "Trip.com". */
+  hotel_source?: string | null
+  /** A photo of this city, or null. */
+  image?: PlaceImage | null
 }
 
 /** Travel between two consecutive cities. */
@@ -210,6 +238,8 @@ export interface Proposal {
   budget_status: BudgetStatus
   /** Every source cited by Evidence in this proposal. */
   sources: ProposalSource[]
+  /** A photo of the destination, or null. */
+  image?: PlaceImage | null
 }
 
 /** A general conflict category. It never names a member or a value. */

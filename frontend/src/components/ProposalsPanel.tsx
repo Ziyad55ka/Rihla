@@ -2,9 +2,12 @@ import { useEffect, useState, type MouseEvent } from 'react'
 import { useLanguage } from '../lib/language'
 import { navigate } from '../lib/navigation'
 import { calendarDate } from '../lib/planning'
+import { placeName } from '../lib/places'
 import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, proposalTitle, reviewMessages } from '../lib/proposals'
 import type { GroupConflicts, Proposal, StoredProposals } from '../types/proposal'
+import { PlacePhoto } from './proposal-details/PlacePhoto'
 import '../proposals.css'
+import '../proposal-details.css'
 
 const proposalPath = (proposal: Proposal) => `/trips/${proposal.trip_id}/proposals/${proposal.id}`
 
@@ -50,9 +53,10 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
     {stored && stored.version !== null && !stored.complete && <p className="proposals-note">{t('Some proposals could not pass the checks, so fewer than three are shown.')}</p>}
     {proposals.length > 0 ? <ol className="proposals-list">
       {proposals.map((proposal) => <li className="proposals-card" key={proposal.id}>
+        <PlacePhoto image={proposal.image} place={placeName(proposal.destination, language, proposal.destination_ar)} />
         <p className="trip-eyebrow">{t('Option {number}', { number: proposal.option_number.toLocaleString(locale) })}</p>
         <h3><a href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}><bdi>{proposalTitle(proposal, language)}</bdi></a></h3>
-        <p className="proposals-destination">{proposal.destination}</p>
+        <p className="proposals-destination"><bdi>{placeName(proposal.destination, language, proposal.destination_ar)}</bdi></p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
         <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
