@@ -1,5 +1,5 @@
 import { useLanguage } from '../../lib/language'
-import { safeLink } from '../../lib/proposals'
+import { isInternalSource, safeLink } from '../../lib/proposals'
 import type { InfoStatus, ProposalSource } from '../../types/proposal'
 import { StatusBadge } from './values'
 
@@ -18,8 +18,7 @@ function SourceList({ title, sources }: { title: string; sources: ProposalSource
 
 export function SourcesSection({ sources }: { sources: ProposalSource[] }) {
   const { t } = useLanguage()
-  // A flight's source is an internal fare note, so people never see it.
-  const shown = sources.filter((source) => source.kind !== 'flight' && !source.title.startsWith('Ignav booking link'))
+  const shown = sources.filter((source) => !isInternalSource(source))
   const booking = shown.filter((source) => source.kind === 'booking')
   const ideas = shown.filter((source) => source.kind !== 'booking')
   return <section aria-labelledby="details-sources">

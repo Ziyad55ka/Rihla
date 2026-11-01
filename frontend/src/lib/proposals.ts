@@ -45,6 +45,11 @@ export const statusLabels: Record<InfoStatus, string> = {
   'Not available': 'Not available',
 }
 
+/** A flight's source is an internal fare note, so people never see it. */
+export function isInternalSource(source: { title: string; kind?: string | null }): boolean {
+  return source.kind === 'flight' || /^Ignav\b/.test(source.title)
+}
+
 export function proposalTitle(proposal: Proposal, language: Language): string {
   return (language === 'ar' ? proposal.title_ar : proposal.title_en) ?? proposal.title
 }
