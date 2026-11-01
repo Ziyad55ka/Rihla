@@ -107,7 +107,9 @@ As a trip member, I want to select or remove suggested activities so that the pl
 | الأزرار | كلاسا `trip-primary` و`trip-secondary` |
 | الصور | `PlacePhoto.tsx`: تحميل ناعم، وتصميم بديل، والصورة تفتح مصدرها |
 | الملصقات | كلاس `details-labels` |
-| الأيقونات | `icons.tsx`: SVG بدون إيموجي |
+| الأيقونات | `icons.tsx`: كلها من Lucide بوزن واحد. لا إيموجي ولا رموز نصية، لأنها تطلع مربعات |
+| شرح قصير عند الطلب | `Hint.tsx` |
+| عنوان القسم بأيقونة | `SectionTitle.tsx` |
 | ظهور عند التمرير | تلقائي لأي `section` مباشر داخل الصفحة |
 | ظهور عنصر | كلاس `details-reveal` |
 | رقم يعد لقيمته | `useCountUp` في `lib/motion.ts` |

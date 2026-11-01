@@ -13,7 +13,7 @@
 | القصة | الموجود | وين بالكود |
 | --- | --- | --- |
 | US-13-AC01 إجمالي الإقامة | السعر × الليالي لكل مدينة | `Hotel` و`PersonShare` في `components/proposal-details/CityStaysSection.tsx` |
-| US-13-AC02 سعر الفرد والمجموعة | `price_per_person` للشخص. و`group_total_sar` فقط إذا كل الأعضاء من مدينة وحدة | `_with_group_totals` في `backend/app/api/routes/proposals.py`، والعرض في `FlightsSection.tsx` |
+| US-13-AC02 سعر الفرد والمجموعة | `price_per_person` للشخص، وتفصيل الاتجاهين في `PriceParts` إذا البائع ذكره. و`group_total_sar` فقط إذا كل الأعضاء من مدينة وحدة | `_with_group_totals` في `backend/app/api/routes/proposals.py`، والعرض في `FlightsSection.tsx` |
 | US-13-AC03 الغرف المشتركة والفردية | اختيار عرض لكل عضو، ما ينحفظ، ويغيّر سعر الشخص و`no_rooms` في رابط Booking | `lib/rooms.ts` و`RoomPicker` في `CityStaysSection.tsx` |
 | US-14 المصادر وحالتها | `Proposal.sources`، و`ProposalSource.kind`، و`evidence`، والحالات الأربع. **قسم المصادر انحذف من الصفحة بطلب سابق، والبيانات باقية في الـ API** | `backend/app/services/source_policy.py`، و`StatusBadge` في `values.tsx`، و`staySource` في `lib/proposals.ts` |
 | US-15-AC02 ملاحظة التنازل | `flexible_adjustments` في رأس الصفحة، بنص عام بدون أي تفصيل خاص | `ProposalHeader.tsx`، و`build_proposal` في `proposal_generation.py` |
@@ -24,6 +24,7 @@
 - **مكانك في الصفحة:** `components/proposal-details/CostsAndCompatibility.tsx`، بعد الأنشطة، ويستقبل `proposal`. يرجع `null` اليوم، وما تحتاج تلمس `ProposalDetailPage.tsx`.
 - **الملفات أعلاه صارت لك:** طوّرها مباشرة، وما تحتاج نسخة ثانية. وإذا نقلت الأرقام لقسم التكاليف، احذفها من `CityStaysSection.tsx` في نفس التغيير حتى ما تتكرر.
 - **المصادر:** لو US-14 يطلب قائمة مصادر في الصفحة، ابنها داخل `CostsAndCompatibility.tsx` أو ملف جديد، من `proposal.sources`، مع إخفاء `kind === 'flight'`، لأنها ملاحظات داخلية.
+- **التصميم:** عنوان القسم من `SectionTitle.tsx`، والشرح الطويل في `Hint.tsx`، والأيقونات من `icons.tsx` (Lucide). وكل رسالة تظهر مرة وحدة.
 - **الحالات:** استخدم `PriceValue` و`InfoValue` و`StatusBadge` من `values.tsx`، وكل النصوص في `lib/translations.ts` باللغتين.
 - **الخصوصية:** ما يوصل المتصفح أي ميزانية أو عدد أعضاء أو مدينة عضو ثانٍ. و`rihla_flight_group` يوصل الباكند فقط، ويوصل الفرونت منه `all_same_city` و`group_total_sar`.
 - **الاختبارات:** قلّد `pages/ProposalDetailPage.test.tsx` و`backend/tests/test_flight_group.py`.

@@ -245,6 +245,7 @@ class Proposal(StrictModel):
 | `cabin_class`, `fare_name`, `checked_bags`, `carry_on_bags` | `Flights` | الفئة والشنط إذا المصدر رجعها |
 | `airline_fares` | `Flights` | معلومة عامة عن أرخص فئة لكل شركة: `fare_en` و`fare_ar` و`checked_kg`. تنضاف عند القراءة وما تنحفظ، وتنعدل في `app/data/airline_fares.json` |
 | `price` | `FlightLeg` | على round_trip موجود بس إذا البائع ذكر سعر كل اتجاه. لا تقسموا الإجمالي أبدًا |
+| `stop_airports` | `FlightLeg` | مطارات التوقف، مثل `["ATH"]`. فاضية في العروض القديمة |
 | `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
 | `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
 | `labels_en`, `labels_ar` | `CityStay` | ملصقات عامة توضح ليش الإقامة مناسبة، حد أقصى 3، وبدون تفاصيل أي عضو |
