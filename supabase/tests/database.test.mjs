@@ -976,6 +976,72 @@ test('proposals saved before fingerprints keep the departure city check only', a
   assert.equal((await proposals(id)).needs_regeneration, false)
 })
 
+async function savedWithIds() {
+  const id = await savedTrip()
+  await root()
+  const { rows } = await db.query('select id from public.proposals where trip_id = $1', [id])
+  return { id, proposalId: rows[0].id }
+}
+const flightContext = (id, proposalId, user) => rpc('rihla_flight_context', [id, proposalId, user])
+const saveRefresh = (id, proposalId, user, flights, status = null) => rpc('rihla_save_flight_refresh', [id, proposalId, user, JSON.stringify(flights), status])
+
+test('browser roles cannot read the flight context or save a refresh', async () => {
+  const { id, proposalId } = await savedWithIds()
+  const privileges = (await db.query(`select
+    has_function_privilege('authenticated', 'public.rihla_flight_context(uuid,uuid,uuid)', 'execute') as read_signed_in,
+    has_function_privilege('anon', 'public.rihla_flight_context(uuid,uuid,uuid)', 'execute') as read_anonymous,
+    has_function_privilege('service_role', 'public.rihla_flight_context(uuid,uuid,uuid)', 'execute') as read_backend,
+    has_function_privilege('authenticated', 'public.rihla_save_flight_refresh(uuid,uuid,uuid,jsonb,text)', 'execute') as save_signed_in,
+    has_function_privilege('anon', 'public.rihla_save_flight_refresh(uuid,uuid,uuid,jsonb,text)', 'execute') as save_anonymous,
+    has_function_privilege('service_role', 'public.rihla_save_flight_refresh(uuid,uuid,uuid,jsonb,text)', 'execute') as save_backend`)).rows[0]
+  assert.deepEqual(privileges, { read_signed_in: false, read_anonymous: false, read_backend: true, save_signed_in: false, save_anonymous: false, save_backend: true })
+  await role(ALICE)
+  await denied(() => flightContext(id, proposalId, ALICE))
+  await denied(() => saveRefresh(id, proposalId, ALICE, { origin: 'Riyadh' }))
+})
+
+test('the flight context counts travellers from the caller city, members only', async () => {
+  const { id, proposalId } = await savedWithIds()
+  await asServiceRole()
+  const riyadh = await flightContext(id, proposalId, ALICE)
+  assert.equal(riyadh.city, 'Riyadh')
+  assert.equal(riyadh.adults, 1)
+  assert.ok(riyadh.ceiling)
+  await denied(() => flightContext(id, proposalId, CAROL))
+})
+
+test('the flight context counts same-city members together, ignoring case', async () => {
+  const id = await twoMembers(member({ departure_city: 'Riyadh' }), member({ departure_city: ' riyadh ' }))
+  await role(ALICE)
+  await begin(id)
+  await saveAll(id)
+  await root()
+  const { rows } = await db.query('select id from public.proposals where trip_id = $1', [id])
+  await asServiceRole()
+  assert.equal((await flightContext(id, rows[0].id, BOB)).adults, 2)
+})
+
+test('a refresh replaces only the caller city, and no other proposal data', async () => {
+  const { id, proposalId } = await savedWithIds()
+  await asServiceRole()
+  await saveRefresh(id, proposalId, BOB, { origin: 'jeddah', marker: 'new' }, 'includes_unconfirmed')
+  await root()
+  const { data } = (await db.query('select data from public.proposals where id = $1', [proposalId])).rows[0]
+  assert.deepEqual(data.flights.map((item) => item.marker ?? item.origin), ['Riyadh', 'new'])
+  assert.equal(data.budget_status, 'includes_unconfirmed')
+  assert.equal(data.title, 'Option 1')
+})
+
+test('a refresh cannot write another member city, bad status, outsider or missing proposal', async () => {
+  const { id, proposalId } = await savedWithIds()
+  await asServiceRole()
+  await denied(() => saveRefresh(id, proposalId, BOB, { origin: 'Riyadh' }), '23514')
+  await denied(() => saveRefresh(id, proposalId, BOB, { origin: 'Jeddah' }, 'free'), '23514')
+  await denied(() => saveRefresh(id, proposalId, CAROL, { origin: 'Jeddah' }))
+  await denied(() => saveRefresh(id, CAROL, BOB, { origin: 'Jeddah' }), 'P0001')
+  await denied(() => flightContext(id, CAROL, BOB), 'P0001')
+})
+
 test('needs_regeneration is false with no proposals and ignores letter case', async () => {
   const id = await twoMembers()
   await role(BOB)

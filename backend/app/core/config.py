@@ -6,6 +6,18 @@ from urllib.parse import urlsplit
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_BOOKING_DOMAINS = (
+    "booking.com",
+    "agoda.com",
+    "expedia.com",
+    "hotels.com",
+    "airbnb.com",
+    "marriott.com",
+    "hilton.com",
+    "ihg.com",
+    "accor.com",
+    "hyatt.com",
+)
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
@@ -47,6 +59,25 @@ class Settings(BaseSettings):
     saved_proposals_ttl_hours: int = Field(default=24, ge=1)
     # Generation stops here and returns the proposals that already passed.
     max_gemini_calls_per_generation: int = Field(default=7, ge=1)
+    # Does an Ignav amount cover one passenger or the whole party? Its docs do not say.
+    ignav_price_scope: Literal["per_person", "total"] = "per_person"
+    # A split trip must save this much, and may take only this much longer.
+    split_min_saving_percent: Decimal = Field(default=Decimal(15), ge=0, lt=100)
+    split_max_extra_duration_percent: Decimal = Field(default=Decimal(30), ge=0)
+    # The light flight update: cache and limits, all to protect the free requests.
+    flight_cache_minutes: int = Field(default=15, ge=0)
+    member_flight_actions_per_hour: int = Field(default=5, ge=0)
+    trip_ignav_requests_per_day: int = Field(default=30, ge=0)
+    daily_ignav_requests: int = Field(default=200, ge=0)
+    refresh_cooldown_minutes: int = Field(default=5, ge=0)
+    flight_usage_db: Path = BACKEND_DIR / ".local" / "flight-usage.sqlite3"
+    # Price age: fresh below the first, old above the second.
+    price_fresh_hours: int = Field(default=3, ge=1)
+    price_stale_hours: int = Field(default=24, ge=1)
+    # Only these sites may name or price a stay. Everything else gives ideas only.
+    booking_domains: list[str] = Field(
+        default_factory=lambda: list(DEFAULT_BOOKING_DOMAINS)
+    )
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)

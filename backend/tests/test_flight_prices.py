@@ -172,7 +172,7 @@ def run_research(
 ):
     searched: list[str] = []
 
-    async def search(query, settings, cost=None):
+    async def search(query, settings, cost=None, include_domains=None):
         searched.append(query)
         return [
             ResearchSource(id=1, title="T", url="https://e.com", content="c")

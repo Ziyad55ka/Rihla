@@ -6,7 +6,7 @@ Sample data: docs/examples/proposals.mock.json.
 """
 
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
@@ -119,6 +119,9 @@ class ProposalSource(StrictModel):
     title: str = Field(min_length=1, max_length=300)
     # The page address. Example: "https://example.com/istanbul".
     url: str = Field(pattern=r"^https?://", max_length=2000)
+    # booking: an approved booking site. ideas: gives ideas only. flight: a fare note,
+    # never listed to users. Set when reading. Older data has none.
+    kind: Literal["booking", "ideas", "flight"] | None = None
 
 
 # One direction of a flight trip.
@@ -133,8 +136,18 @@ class FlightLeg(StrictModel):
     duration: InfoField
     # On a round_trip the price is on the whole trip, so this is Not available.
     price: SarPrice
-    # The link for this direction, or null. Both legs share one link on a round_trip.
+    # A link saved at generation. It can expire, so the page asks for a fresh one.
     booking_url: BookingUrl
+    # Null on older proposals. Example: "SV 1020". Connections: "SV 1020, SV 45".
+    flight_number: str | None = None
+    # Local airport time, or null on older proposals. Example: "2026-12-13T08:30".
+    departure_time: str | None = None
+    # Local airport time, or null on older proposals.
+    arrival_time: str | None = None
+    # 0 is nonstop. Null on older proposals.
+    stops: int | None = Field(default=None, ge=0)
+    # Who sells this leg, or null. It can differ from the airline. Example: "Saudia".
+    seller: str | None = None
 
 
 # The flights from one departure city.
@@ -153,6 +166,15 @@ class Flights(StrictModel):
     # The whole trip's cost. On one_way, the return is not counted.
     # Sourced only for a verified round_trip fare in SAR.
     price_per_person: SarPrice
+    # When this price was checked, or null on older proposals.
+    priced_at: datetime | None = None
+    # Three-letter codes, or null on older proposals. Example: "RUH".
+    origin_airport: str | None = None
+    destination_airport: str | None = None
+    # available: the search for everyone from this city found this flight.
+    # not_found: it found none, so they may need different flights.
+    # unknown: not checked. Never holds a seat count or a traveller count.
+    group_availability: Literal["available", "not_found", "unknown"] = "unknown"
 
     @model_validator(mode="after")
     def legs_match_trip_type(self):
@@ -176,6 +198,8 @@ class CityStay(StrictModel):
     order: int = Field(ge=1)
     # The city name. Example: "Cairo".
     city: str = Field(min_length=1, max_length=100)
+    # The city in Arabic, or null on older proposals.
+    city_ar: str | None = Field(default=None, min_length=1, max_length=100)
     # Nights here. All stays must add up to the trip dates. Example: 4.
     nights: int = Field(ge=0)
     # A suggested hotel. Example value: "Mock Hotel".
@@ -184,6 +208,10 @@ class CityStay(StrictModel):
     hotel_price_per_night: SarPrice
     # A Booking.com search, or null. It does not confirm availability or price.
     booking_url: BookingUrl
+    # A suggested area from idea sources, or null. Example: "Le Marais".
+    area: str | None = Field(default=None, max_length=150)
+    # When this price was checked, or null on older proposals.
+    priced_at: datetime | None = None
 
     @field_validator("hotel_price_per_night")
     @classmethod
@@ -244,6 +272,8 @@ class Proposal(StrictModel):
     title_en: str | None = Field(default=None, min_length=1, max_length=150)
     # The place shown to users. Example: "Cairo".
     destination: str = Field(min_length=1, max_length=100)
+    # The place in Arabic, or null on older proposals.
+    destination_ar: str | None = Field(default=None, min_length=1, max_length=100)
     # The first day. JSON sends YYYY-MM-DD. Example: "2026-12-13".
     start_date: date
     # The last day. JSON sends YYYY-MM-DD. Example: "2026-12-17".

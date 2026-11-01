@@ -1,20 +1,21 @@
 """The only place that uses the Supabase secret key.
 
-The key bypasses Row Level Security, so it is used for these two calls and nothing
-else: reading generation inputs, and saving generated proposals so that nobody can
-store invented ones. The caller must first verify the signed-in account, then pass
-its id. The inputs hold private member data: never return them to a browser or log
-them.
+The key bypasses Row Level Security, so it is used for these calls and nothing
+else: reading generation inputs, saving generated proposals so that nobody can
+store invented ones, and the light flight update's read and save. The caller must
+first verify the signed-in account, then pass its id. The inputs hold private member
+data: never return them to a browser or log them.
 """
 
+from decimal import Decimal
 from uuid import UUID
 
 import httpx2 as httpx
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
-from app.schemas.proposals import Proposal
+from app.schemas.proposals import BudgetStatus, Flights, Proposal
 
 
 class GenerationInputsError(Exception):
@@ -54,10 +55,69 @@ async def _secret_rpc(
         body = response.text
         if "generation_not_ready" in body:
             raise GenerationInputsError("not_ready")
+        if "proposal_not_found" in body:
+            raise GenerationInputsError("proposal_not_found")
         if "trip_access_denied" in body:
             raise GenerationInputsError("access_denied")
         raise GenerationInputsError("unavailable")
     return response
+
+
+class FlightContext(BaseModel):
+    """Private to the backend: a count, a budget and every city's flights."""
+
+    city: str | None
+    # Everyone flying from the caller's departure city.
+    adults: int
+    # The group's lowest budget.
+    ceiling: Decimal
+    proposal: Proposal
+
+
+async def fetch_flight_context(
+    trip_id: UUID,
+    proposal_id: UUID,
+    member_id: UUID,
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> FlightContext:
+    response = await _secret_rpc(
+        "rihla_flight_context",
+        {
+            "p_trip_id": str(trip_id),
+            "p_proposal_id": str(proposal_id),
+            "p_user_id": str(member_id),
+        },
+        settings,
+        transport,
+    )
+    try:
+        return FlightContext.model_validate_json(response.content)
+    except ValidationError as error:
+        raise GenerationInputsError("invalid_response") from error
+
+
+async def save_flight_refresh(
+    trip_id: UUID,
+    proposal_id: UUID,
+    member_id: UUID,
+    flights: Flights,
+    budget_status: BudgetStatus | None,
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> None:
+    await _secret_rpc(
+        "rihla_save_flight_refresh",
+        {
+            "p_trip_id": str(trip_id),
+            "p_proposal_id": str(proposal_id),
+            "p_user_id": str(member_id),
+            "p_flights": flights.model_dump(mode="json"),
+            "p_budget_status": budget_status,
+        },
+        settings,
+        transport,
+    )
 
 
 async def fetch_generation_inputs(

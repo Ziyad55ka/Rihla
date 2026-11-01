@@ -105,14 +105,16 @@ def request_for(*cities: str) -> ResearchRequest:
 def test_single_city_plan_skips_transfer_search() -> None:
     plan = build_search_plan(request_for("Istanbul"))
 
-    assert len(plan) == 1
+    # One ideas search, then one limited to booking sites.
+    assert len(plan) == 2
+    assert [group.booking_only for group in plan] == [False, True]
     assert not any("how to travel" in group.query for group in plan)
 
 
 def test_multi_city_plan_searches_each_needed_subject() -> None:
     plan = build_search_plan(request_for("Tbilisi", "Batumi"))
 
-    assert len(plan) == 3
+    assert len(plan) == 4
     assert any("from Tbilisi to Batumi" in group.query for group in plan)
 
 
@@ -204,7 +206,7 @@ def test_missing_key_stops_before_any_request(tmp_path: Path) -> None:
 def test_no_results_does_not_spend_a_gemini_request(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def no_sources(query, settings, cost=None):
+    async def no_sources(query, settings, cost=None, include_domains=None):
         return [], False
 
     async def fail_if_called(groups, settings, cost):

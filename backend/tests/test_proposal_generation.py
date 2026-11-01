@@ -82,6 +82,8 @@ def option(
         title=title,
         title_ar=None,
         title_en=None,
+        destination_ar=None,
+        cities_ar=None,
         destination=destination,
         country=destination,
         arrival_airport=None,
@@ -680,7 +682,7 @@ def test_hotel_link_uses_hotel_city_country_dates_and_group_size() -> None:
 
     assert url == (
         "https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt"
-        "&checkin=2026-12-13&checkout=2026-12-17&group_adults=2"
+        "&checkin=2026-12-13&checkout=2026-12-17&group_adults=2&no_rooms=1"
     )
 
 

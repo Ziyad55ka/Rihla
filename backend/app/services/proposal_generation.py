@@ -8,15 +8,17 @@ report, because free-text preferences cannot be fully verified in code.
 import json
 import logging
 import re
-from datetime import date, timedelta
+from collections import Counter
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from math import ceil
 from typing import Literal
 from urllib.parse import urlencode
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
 
-from app.core.config import Settings
+from app.core.config import DEFAULT_BOOKING_DOMAINS, Settings
 from app.schemas.generation import GenerationInput
 from app.schemas.planning import ConflictCategory
 from app.schemas.proposals import (
@@ -41,6 +43,7 @@ from app.services.flight_prices import (
     format_duration,
     without_tracking,
 )
+from app.services.source_policy import classify_source
 from app.services.trip_research import (
     ResearchCost,
     ResearchError,
@@ -89,6 +92,8 @@ cities. Dates must stay inside shared_start and shared_end, and nights across al
 cities must equal the days between start_date and end_date.
 Give each option's country as its plain English name, such as Egypt.
 Give title_ar as the title in Arabic and title_en as the title in English.
+Give destination_ar as the destination in Arabic, and cities_ar as each city's name in
+Arabic, in the same order as cities.
 Give arrival_airport as the three-letter IATA code of the first city's main airport.
 The group's total cost per person must stay within budget_ceiling_sar.
 Several destinations in one requirement, such as "France, Bahrain", are alternatives:
@@ -125,6 +130,8 @@ class PlannedOption(BaseModel):
     title: str
     title_ar: str | None
     title_en: str | None
+    destination_ar: str | None
+    cities_ar: list[str] | None
     destination: str
     country: str
     arrival_airport: str | None
@@ -293,7 +300,7 @@ def budget_status(
         shared += counted(stay.hotel_price_per_night, stay.nights)
     for leg in transfers:
         shared += counted(leg.price_per_person)
-    if not flights:
+    if not flights or any(route.group_availability == "not_found" for route in flights):
         settled = False
     highest = shared
     for route in flights:
@@ -323,6 +330,8 @@ def hotel_search_url(
             "checkin": check_in.isoformat(),
             "checkout": check_out.isoformat(),
             "group_adults": adults,
+            # Assumes two people per room, the usual default on booking sites.
+            "no_rooms": max(ceil(adults / 2), 1),
         }
     )
     return f"https://www.booking.com/searchresults.html?{query}"
@@ -352,6 +361,11 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
             else NO_PRICE
         ),
         booking_url=leg.booking_url,
+        flight_number=leg.flight_number,
+        departure_time=leg.departure_time,
+        arrival_time=leg.arrival_time,
+        stops=leg.stops,
+        seller=leg.seller,
     )
 
 
@@ -361,6 +375,7 @@ def _build_route(
     option: PlannedOption,
     by_id: dict[str, VerifiedField],
     fare: FlightFare | None,
+    research: ResearchResult,
 ) -> Flights:
     airline = to_info_field(by_id[f"flights.{index}.airline"])
     duration = to_info_field(by_id[f"flights.{index}.duration"])
@@ -397,7 +412,34 @@ def _build_route(
         airline=airline,
         duration=duration,
         price_per_person=price,
+        priced_at=datetime.now(UTC),
+        origin_airport=research.airports.get(index, (None, None))[0],
+        destination_airport=research.airports.get(index, (None, None))[1],
+        group_availability=(
+            "available"
+            if fare is not None
+            else "not_found"
+            if index in research.no_group_fare
+            else "unknown"
+        ),
     )
+
+
+DEFAULT_BOOKING_DOMAINS_LIST = list(DEFAULT_BOOKING_DOMAINS)
+
+
+def _shown_name(name: str | None) -> str | None:
+    cleaned = (name or "").strip()
+    return cleaned if 0 < len(cleaned) <= 100 else None
+
+
+def _arabic_name(names: list[str] | None, index: int) -> str | None:
+    return _shown_name(names[index]) if names and index < len(names) else None
+
+
+def _area(field: VerifiedField | None) -> str | None:
+    value = field.value if field and field.status != "Not available" else None
+    return value[:150] if value else None
 
 
 def _shown_title(title: str | None) -> str | None:
@@ -417,7 +459,7 @@ def build_proposal(
 ) -> Proposal:
     by_id: dict[str, VerifiedField] = {item.field_id: item for item in research.fields}
     flights = [
-        _build_route(index, origin, option, by_id, research.fares.get(index))
+        _build_route(index, origin, option, by_id, research.fares.get(index), research)
         for index, origin in enumerate(origins)
     ]
     cities = []
@@ -442,6 +484,9 @@ def build_proposal(
                     check_out,
                     len(generation.members),
                 ),
+                city_ar=_arabic_name(option.cities_ar, index),
+                area=_area(by_id.get(f"cities.{index}.hotel_area")),
+                priced_at=datetime.now(UTC),
             )
         )
         check_in = check_out
@@ -468,6 +513,7 @@ def build_proposal(
         title_ar=_shown_title(option.title_ar),
         title_en=_shown_title(option.title_en),
         destination=option.destination,
+        destination_ar=_shown_name(option.destination_ar),
         start_date=option.start_date,
         end_date=option.end_date,
         cities=cities,
@@ -480,6 +526,9 @@ def build_proposal(
                 id=source.id,
                 title=source.title[:300],
                 url=without_tracking(source.url),
+                kind=classify_source(
+                    source.url, source.title, DEFAULT_BOOKING_DOMAINS_LIST
+                ),
             )
             for source in research.sources
         ],
@@ -584,6 +633,10 @@ async def _complete_option(
             cities=[city.city for city in option.cities],
             period=option.start_date.strftime("%B %Y"),
             origins=origins,
+            travelers=Counter(
+                member.departure_city.strip().casefold()
+                for member in generation.members
+            ),
         ),
         settings,
     )

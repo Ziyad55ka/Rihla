@@ -16,7 +16,6 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
 
 import httpx2 as httpx
 from google import genai
@@ -34,6 +33,7 @@ from app.services.flight_prices import (
     format_duration,
     get_flight_provider,
 )
+from app.services.source_policy import on_domain
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ UnavailableReason = Literal[
     "rejected_wrong_topic",
     "rejected_currency_unverified",
     "no_sar_conversion",
+    "rejected_not_booking_source",
 ]
 FieldKind = Literal["text", "duration", "price"]
 
@@ -154,7 +155,11 @@ For every price field also give estimate_sar: your general knowledge of the typi
 price in SAR, per person or per night. This is the only use of your own knowledge.
 For a name or mode, value must appear word for word in the quote.
 Status: Sourced = stated directly. Estimated = approximate or typical.
-Unconfirmed = suggested but unclear. Not available = not stated; leave the rest null."""
+Unconfirmed = suggested but unclear. Not available = not stated; leave the rest null.
+A hotel name or price must come from its group's approved booking sites. If one fits a
+suggested area from the ideas group, prefer it. The ideas group gives only an area:
+never take a hotel name or a price from it. If no booking result names a hotel, return
+Not available."""
 
 
 class ResearchError(Exception):
@@ -221,6 +226,10 @@ class ResearchCost(BaseModel):
 class ResearchResult(BaseModel):
     # Live fares by departure-city position.
     fares: dict[int, FlightFare] = {}
+    # Positions whose search for everyone from that city returned no trip.
+    no_group_fare: list[int] = []
+    # The airports searched, by the same position.
+    airports: dict[int, tuple[str, str]] = {}
     fields: list[VerifiedField]
     sources: list[ResearchSource]
     cost: ResearchCost
@@ -234,6 +243,8 @@ class ResearchRequest(BaseModel):
     country: str | None = None
     # Every member departure city, sent to Tavily without any member identity.
     origins: list[str] = []
+    # How many travel from each city, by casefolded name. Goes only to the fare search.
+    travelers: dict[str, int] = {}
     # For live fares. Without these, flights come from the web search.
     arrival_airport: str | None = None
     departure_date: date | None = None
@@ -257,6 +268,8 @@ class SearchGroup:
     sources: list[ResearchSource] = field(default_factory=list)
     # When set, sources that clearly describe another country are dropped.
     country: str | None = None
+    # When set, the search covers only these sites.
+    booking_only: bool = False
 
 
 def build_search_plan(request: ResearchRequest) -> list[SearchGroup]:
@@ -293,12 +306,29 @@ def build_search_plan(request: ResearchRequest) -> list[SearchGroup]:
         )
         for index, origin in enumerate(origins.values())
     ]
+    # One ideas search for the whole trip keeps Tavily use close to what it was.
+    places = " and ".join(request.cities)
+    plan.append(
+        SearchGroup(
+            f"best neighbourhoods and areas to stay in {places}, {country}",
+            country=country,
+            fields=[
+                FieldSpec(
+                    f"cities.{index}.hotel_area",
+                    "hotel_area",
+                    f"A suggested area to stay in {city}, or Not available",
+                    "text",
+                )
+                for index, city in enumerate(request.cities)
+            ],
+        )
+    )
     for index, city in enumerate(request.cities):
         plan.append(
             SearchGroup(
-                f"well-known central hotels in {city}, {country} "
-                f"price per night {request.period}",
+                f"central hotels in {city}, {country} price per night {request.period}",
                 country=country,
+                booking_only=True,
                 fields=[
                     FieldSpec(
                         f"cities.{index}.hotel_name",
@@ -391,9 +421,7 @@ class SearchCache:
             connection.close()
 
 
-def _on_domain(url: str, domains: tuple[str, ...]) -> bool:
-    host = (urlsplit(url).hostname or "").casefold()
-    return any(host == domain or host.endswith(f".{domain}") for domain in domains)
+_on_domain = on_domain
 
 
 def _rank_sources(sources: list[ResearchSource]) -> list[ResearchSource]:
@@ -428,13 +456,15 @@ async def search_sources(
     settings: Settings,
     transport: httpx.AsyncBaseTransport | None = None,
     cost: ResearchCost | None = None,
+    include_domains: list[str] | None = None,
 ) -> tuple[list[ResearchSource], bool]:
     """Return sources for a query and whether they came from the cache."""
     cost = cost if cost is not None else ResearchCost()
     depth = settings.tavily_search_depth
     limit = settings.tavily_max_results
     normalized = " ".join(query.lower().split())
-    key = hashlib.sha256(f"{depth}|{limit}|{normalized}".encode()).hexdigest()
+    sites = ",".join(sorted(include_domains or []))
+    key = hashlib.sha256(f"{depth}|{limit}|{sites}|{normalized}".encode()).hexdigest()
     cache = SearchCache(
         settings.search_cache_db, settings.search_cache_ttl_hours * 3600
     )
@@ -458,6 +488,7 @@ async def search_sources(
                     "max_results": limit,
                     "include_usage": True,
                     "exclude_domains": list(BLOCKED_DOMAINS),
+                    **({"include_domains": include_domains} if include_domains else {}),
                 },
             )
     except httpx.RequestError as error:
@@ -549,12 +580,26 @@ def _unavailable(spec: FieldSpec, reason: UnavailableReason) -> VerifiedField:
 
 
 def verify_field(
-    spec: FieldSpec, fact: ExtractedFact | None, sources: list[ResearchSource]
+    spec: FieldSpec,
+    fact: ExtractedFact | None,
+    sources: list[ResearchSource],
+    booking_domains: list[str] | None = None,
 ) -> VerifiedField:
     """Verify a fact. A price with no usable evidence falls back to the estimate."""
     result = _verify_with_evidence(spec, fact, sources)
+    is_stay = spec.category in {"hotel_name", "hotel_price"}
+    if is_stay and booking_domains is not None and result.evidence:
+        known = {item.id: item.url for item in sources}
+        if not any(
+            on_domain(known.get(item.source_id, ""), booking_domains)
+            for item in result.evidence
+        ):
+            return _unavailable(spec, "rejected_not_booking_source")
     estimate = fact.estimate_sar if fact else None
-    if spec.kind != "price" or result.amount_sar is not None or not estimate:
+    # A stay's name and price come from booking sites only, so no general estimate.
+    if (is_stay and booking_domains is not None) or (
+        spec.kind != "price" or result.amount_sar is not None or not estimate
+    ):
         return result
     if not 0 < estimate < MAX_ESTIMATE_SAR:
         return result
@@ -793,7 +838,7 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
     origins = list(
         {item.strip().casefold(): item.strip() for item in request.origins}.values()
     )
-    fares = await _find_fares(request, origins, settings, cost)
+    fares, no_group_fare = await _find_fares(request, origins, settings, cost)
     # Flight groups come first in the plan, one per origin in this same order.
     groups = [
         group
@@ -814,7 +859,10 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         fare_fields += _fare_fields(index, fare, source)
 
     for group in groups:
-        found, _ = await search_sources(group.query, settings, cost=cost)
+        extra = (
+            {"include_domains": settings.booking_domains} if group.booking_only else {}
+        )
+        found, _ = await search_sources(group.query, settings, cost=cost, **extra)
         for source in found:
             if group.country and describes_other_country(source, group.country):
                 continue
@@ -835,7 +883,9 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
     facts = await extract_facts(searched, settings, cost) if searched else []
     by_field = {fact.field_id: fact for fact in facts}
     fields = [
-        verify_field(spec, by_field.get(spec.id), group.sources)
+        verify_field(
+            spec, by_field.get(spec.id), group.sources, settings.booking_domains
+        )
         for group in groups
         for spec in group.fields
     ]
@@ -844,6 +894,11 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         sources=public_sources,
         cost=cost,
         fares={index: fare for index, (_, fare) in fares.items()},
+        no_group_fare=no_group_fare,
+        airports={
+            index: (query.origin_airport, query.destination_airport)
+            for index, (query, _) in fares.items()
+        },
     )
 
 
@@ -852,15 +907,16 @@ async def _find_fares(
     origins: list[str],
     settings: Settings,
     cost: ResearchCost,
-) -> dict[int, tuple[FlightQuery, FlightFare]]:
+) -> tuple[dict[int, tuple[FlightQuery, FlightFare]], list[int]]:
     """Live fares by origin position; an origin left out falls back to web search."""
     if not (request.arrival_airport and request.departure_date and request.return_date):
-        return {}
+        return {}, []
     cache = SearchCache(
         settings.search_cache_db, settings.search_cache_ttl_hours * 3600
     )
     provider = get_flight_provider(settings, cache)
     fares: dict[int, tuple[FlightQuery, FlightFare]] = {}
+    no_group: list[int] = []
     for index, origin in enumerate(origins):
         airport = airport_for_city(origin)
         if airport is None or airport == request.arrival_airport:
@@ -870,12 +926,15 @@ async def _find_fares(
             request.arrival_airport,
             request.departure_date,
             request.return_date,
+            max(request.travelers.get(origin.casefold(), 1), 1),
         )
         fare = await provider.find(query)
         if fare is not None and _fare_in_sar(fare) is not None:
             fares[index] = (query, fare)
+        elif query.adults > 1 and query in getattr(provider, "no_itinerary", ()):
+            no_group.append(index)
     cost.ignav_requests += provider.requests_made
-    return fares
+    return fares, no_group
 
 
 def sar_amount(value: str | None, currency: str | None) -> Decimal | None:
