@@ -238,6 +238,10 @@ class Proposal(StrictModel):
     option_number: int = Field(ge=1, le=3)
     # A general title with no private details. Example: "Nile Heritage Experience".
     title: str = Field(min_length=1, max_length=150)
+    # The title in Arabic, or null on older proposals. The page then shows `title`.
+    title_ar: str | None = Field(default=None, min_length=1, max_length=150)
+    # The title in English, or null on older proposals. The page then shows `title`.
+    title_en: str | None = Field(default=None, min_length=1, max_length=150)
     # The place shown to users. Example: "Cairo".
     destination: str = Field(min_length=1, max_length=100)
     # The first day. JSON sends YYYY-MM-DD. Example: "2026-12-13".

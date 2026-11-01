@@ -1,5 +1,6 @@
 import { authenticatedRequest } from './http'
-import type { BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, StoredProposals } from '../types/proposal'
+import type { Language } from './language'
+import type { BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -35,6 +36,39 @@ export const budgetStatusLabels: Record<BudgetStatus, string> = {
   within_group_budget: 'Within the group budget',
   includes_unconfirmed: 'Within budget, with unconfirmed prices',
   over_group_budget: 'Over the group budget',
+}
+
+export const statusLabels: Record<InfoStatus, string> = {
+  Sourced: 'From a source',
+  Estimated: 'Estimated',
+  Unconfirmed: 'Unconfirmed · Check before booking',
+  'Not available': 'Not available',
+}
+
+export function proposalTitle(proposal: Proposal, language: Language): string {
+  return (language === 'ar' ? proposal.title_ar : proposal.title_en) ?? proposal.title
+}
+
+// Saved data comes from outside services, so only web addresses become links.
+export function safeLink(url: string | null): string | null {
+  return url && /^https?:\/\//i.test(url) ? url : null
+}
+
+function addDays(day: string, count: number): string {
+  const date = new Date(`${day}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + count)
+  return date.toISOString().slice(0, 10)
+}
+
+/** Each stay's check-in and check-out, counted from the trip's first day. */
+export function stayDates(proposal: Proposal): { start: string; end: string }[] {
+  let start = proposal.start_date
+  return proposal.cities.map((stay) => {
+    const end = addDays(start, stay.nights)
+    const dates = { start, end }
+    start = end
+    return dates
+  })
 }
 
 export function canPressGenerate(conflicts: GroupConflicts | null, generating: boolean): boolean {

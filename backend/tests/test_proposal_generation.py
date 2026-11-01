@@ -80,6 +80,8 @@ def option(
 ) -> PlannedOption:
     return PlannedOption(
         title=title,
+        title_ar=None,
+        title_en=None,
         destination=destination,
         country=destination,
         arrival_airport=None,
@@ -639,6 +641,36 @@ def test_unconfirmed_price_can_still_exceed_the_budget(
 
     assert "Costly" not in {p.destination for p in result.proposals}
     assert result.complete
+
+
+def test_titles_in_both_languages_are_saved_and_blank_ones_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    named = option("Baku")
+    named.title_ar = "\u0631\u062d\u0644\u0629 \u0647\u0627\u062f\u0626\u0629"
+    named.title_en = "  "
+    fake_planner(monkeypatch, [named, option("Tbilisi"), option("Yerevan")])
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    first = run(group(), tmp_path).proposals[0]
+
+    assert first.title_ar == named.title_ar
+    assert first.title_en is None
+
+
+def test_private_detail_in_a_translated_title_rejects_the_option(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    leaky = option("Baku")
+    leaky.title_ar = "Trip under 5000"
+    fake_planner(
+        monkeypatch, [leaky, option("Tbilisi"), option("Yerevan")], [option("Doha")]
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+
+    result = run(group(), tmp_path)
+
+    assert "Baku" not in {item.destination for item in result.proposals}
 
 
 def test_hotel_link_uses_hotel_city_country_dates_and_group_size() -> None:

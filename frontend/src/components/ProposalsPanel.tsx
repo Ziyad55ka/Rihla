@@ -1,9 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { useLanguage } from '../lib/language'
+import { navigate } from '../lib/navigation'
 import { calendarDate } from '../lib/planning'
-import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, reviewMessages } from '../lib/proposals'
-import type { GroupConflicts, StoredProposals } from '../types/proposal'
+import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, proposalTitle, reviewMessages } from '../lib/proposals'
+import type { GroupConflicts, Proposal, StoredProposals } from '../types/proposal'
 import '../proposals.css'
+
+const proposalPath = (proposal: Proposal) => `/trips/${proposal.trip_id}/proposals/${proposal.id}`
+
+function openProposal(event: MouseEvent, proposal: Proposal) {
+  // Keeps open-in-new-tab working for modified clicks.
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+  event.preventDefault()
+  navigate(proposalPath(proposal))
+}
 
 type ViewProps = {
   isAdmin: boolean
@@ -16,7 +26,7 @@ type ViewProps = {
 }
 
 export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate }: ViewProps) {
-  const { t, locale } = useLanguage()
+  const { t, locale, language } = useLanguage()
   const generating = busy || stored?.generating === true
   const enabled = canPressGenerate(conflicts, generating)
   const proposals = stored?.proposals ?? []
@@ -41,10 +51,11 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
     {proposals.length > 0 ? <ol className="proposals-list">
       {proposals.map((proposal) => <li className="proposals-card" key={proposal.id}>
         <p className="trip-eyebrow">{t('Option {number}', { number: proposal.option_number.toLocaleString(locale) })}</p>
-        <h3>{proposal.title}</h3>
+        <h3><a href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}><bdi>{proposalTitle(proposal, language)}</bdi></a></h3>
         <p className="proposals-destination">{proposal.destination}</p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
+        <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
       </li>)}
     </ol> : !generating && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}
   </section>

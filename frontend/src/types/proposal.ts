@@ -154,6 +154,10 @@ export interface Proposal {
   option_number: 1 | 2 | 3
   /** A general title with no private details. Example: `"Nile Heritage Experience"`. */
   title: string
+  /** The title in Arabic, or absent on older proposals. Show `title` then. */
+  title_ar?: string | null
+  /** The title in English, or absent on older proposals. Show `title` then. */
+  title_en?: string | null
   /** The place shown to users. Example: `"Cairo"`. */
   destination: string
   /** The first day, YYYY-MM-DD. Example: `"2026-12-13"`. */

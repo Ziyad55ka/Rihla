@@ -91,7 +91,17 @@ One generation for one departure city uses at least 4 Gemini requests including 
 - **Conflicts Gemini finds are not shown early.** A doubtful destination conflict passes stage 1, so the trip page shows no conflict until someone generates.
 - **Departure cities can be learned by experiment.** A member who changes their city to another member's city receives that city's flights, which shows someone departs from there, but not who. The team accepted this.
 - **Quota.** At 20 Gemini requests a day, few generations fit. `MAX_GEMINI_CALLS_PER_GENERATION` (default 7) limits the requests a generation starts; one provider retry can pass it by one.
+- **Older proposals have no change signal.** Proposals saved before the `20261102000300` migration keep only the departure city check until the next generation.
+- **Older proposals have one title.** Without `title_ar` and `title_en`, the page shows `title` in either language. Other generated text, such as hotel names and adjustment explanations, stays as Gemini wrote it.
 - **Free-plan privacy.** Google may use data sent on Gemini's free plan, and the lowest budget, preference text and departure cities are sent to it without names. Production needs a paid account. Check Google's current terms.
+
+## Booking and payment are out of scope
+
+Rihla ends at the Final Plan defined in Sprint 0. It does not book or take payment. Flight and hotel links only redirect to outside sites, open in a new tab, and send nothing back; Rihla saves nothing about a booking.
+
+## Regeneration signal
+
+`needs_regeneration` is true when any member joins, leaves or changes generation inputs after generation, or when the caller's departure city has no flights. The database compares a fingerprint saved at generation with the current one. The fingerprint is never returned, and the page shows only a general message.
 
 ## Real trial, 2 November 2026
 

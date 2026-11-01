@@ -219,6 +219,16 @@ class Proposal(StrictModel):
 5. شغّلوا الاختبارات قبل أي commit: `uv run pytest` في `backend`، و`npm run typecheck` في `frontend`.
 6. أي تغيير لحقل موجود أو حذفه، نسقوه مع Eyad أول.
 
+## صفحة التفاصيل
+
+الرابط: `/trips/:tripId/proposals/:proposalId`. الصفحة [ProposalDetailPage.tsx](../frontend/src/pages/ProposalDetailPage.tsx) تركّب الأقسام فقط، وكل قسم له ملف داخل `frontend/src/components/proposal-details/`.
+
+- **Developer 2 (الأنشطة):** عدّلوا `CityActivities.tsx` فقط. يظهر داخل بطاقة كل مدينة، ويستقبل `stay`، فاقرؤوا `stay.activities`.
+- **Developer 3 (التكاليف والتوافق):** عدّلوا `CostsAndCompatibility.tsx` فقط. يظهر قبل المصادر، ويستقبل `proposal`.
+- **المصادر:** قائمة بسيطة في `SourcesSection.tsx`. طوروها في نفس الملف بدل قسم ثانٍ.
+- **القيم:** استخدموا `InfoValue` و`PriceValue` و`BookingLink` من `values.tsx`، فتطلع الحالات وتحذير الروابط بنفس الشكل.
+- **النصوص:** كل نص جديد في `frontend/src/lib/translations.ts`، والأنماط في `frontend/src/proposal-details.css`.
+
 ## قواعد لازم تلتزمون فيها
 
 1. **الخصوصية:** ما يظهر في أي نص ميزانية عضو، ولا مدينته، ولا اسمه، ولا تفضيلاته. يعني العناوين والشروحات عامة، مثل "مناسب لميزانية المجموعة".

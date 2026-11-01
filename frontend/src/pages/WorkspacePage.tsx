@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase'
 import type { TripDetail, TripSummary } from '../types/trips'
 import { TripDetailPage } from './TripDetailPage'
 import { PreferencesPage } from './PreferencesPage'
+import { ProposalDetailPage } from './ProposalDetailPage'
 import '../workspace.css'
 
 export function WorkspacePage({ route, initialInvitation, onInvitationHandled }: {
@@ -27,7 +28,7 @@ export function WorkspacePage({ route, initialInvitation, onInvitationHandled }:
   const [attempt, setAttempt] = useState(0)
   const [notice, setNotice] = useState('')
   const mainRef = useRef<HTMLElement>(null)
-  const selected = 'tripId' in route ? route.tripId : ''
+  const selected = 'proposalId' in route ? route.proposalId : 'tripId' in route ? route.tripId : ''
 
   useEffect(() => { mainRef.current?.focus({ preventScroll: true }); window.scrollTo(0, 0) }, [route.page, selected])
   useEffect(() => {
@@ -69,6 +70,7 @@ export function WorkspacePage({ route, initialInvitation, onInvitationHandled }:
         : route.page === 'join' ? <JoinTripForm key={initialInvitation ?? 'manual-invitation'} initialInvitation={initialInvitation} onBack={() => { onInvitationHandled(); back() }} onJoined={(trip, already) => { onInvitationHandled(); openTrip(trip, already ? 'You’re already part of this trip. Welcome back.' : 'You’re in. Welcome to the group!') }} />
         : route.page === 'detail' ? <TripDetailPage key={selected} tripId={selected} notice={notice} onBack={back} onPreferences={() => { setNotice(''); navigate(`/trips/${selected}/preferences`) }} />
         : route.page === 'preferences' ? <PreferencesPage key={selected} tripId={selected} onBack={() => navigate(`/trips/${selected}`)} onSaved={() => { setNotice('Your preferences have been saved.'); navigate(`/trips/${selected}`) }} />
+        : route.page === 'proposal' ? <ProposalDetailPage key={selected} tripId={route.tripId} proposalId={route.proposalId} onBack={() => navigate(`/trips/${route.tripId}`)} />
         : route.page === 'account' ? <div className="trip-account-page"><button className="trip-back" type="button" onClick={back}>← {t('Back to your trips')}</button><AccountPanel /></div>
         : <>
           <section className="trip-dashboard-hero"><div><p className="trip-eyebrow"><span className="workspace-live-dot" /> {t('YOUR SHARED TRAVEL WORKSPACE')}</p><h1>{t('A little planning.')}<br /><span>{t('A lot to look forward to.')}</span></h1><p className="trip-intro-copy">{t('Your people, your preferences, your next great escape.')}<br />{t('Let’s bring it all together.')}</p></div><div className="dashboard-actions"><button className="trip-primary" type="button" onClick={() => navigate('/trips/new')}>{t('Create a trip')} <span aria-hidden="true">↗</span></button><button className="trip-secondary" type="button" onClick={() => navigate('/trips/join')}>{t('Join a trip')} <span aria-hidden="true">+</span></button></div></section>
