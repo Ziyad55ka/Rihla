@@ -106,7 +106,7 @@ export interface FlightFacts {
 
 export interface FlightAlternative extends FlightFacts {
   /** gone: already saved in place of the old flight. The others are suggestions. */
-  reason: 'gone' | 'no_link' | 'cheaper'
+  reason: 'gone' | 'no_link' | 'cheaper' | 'agent'
   within_budget: boolean | null
 }
 

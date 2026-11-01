@@ -70,32 +70,54 @@ function Alternative({ result }: { result: FlightCheckResult }) {
   const found = result.alternative
   if (!found) return null
   const link = safeLink(found.url)
-  const titles = { gone: 'The original flight is gone. We found a replacement.', no_link: 'This flight can’t be opened directly. This one can.', cheaper: 'A cheaper option you can book directly' }
+  const titles = { gone: 'The original flight is gone. We found a replacement.', no_link: 'This flight can’t be opened directly. This one can.', cheaper: 'A cheaper option you can book directly', agent: 'Cheaper through a travel agent, for the same flight' }
   return <div className="details-alternative">
     <p className="details-alternative-title"><SwapIcon /> {t(titles[found.reason])}</p>
     <ChosenFlight facts={found} />
     {found.price_sar && <p className="details-alternative-price">{t('From {amount}', { amount: sar(found.price_sar) })} <span className="details-hint">{t('per person')}</span></p>}
     {found.seller && <p className="details-hint">{t('Sold by {seller}', { seller: airlineName(found.seller, language) })}</p>}
+    {found.reason === 'agent' && <p className="details-hint">{t('This is an agent, not the airline, so check its fees and terms before paying.')}</p>}
     {found.within_budget === false && <p className="proposals-review">{t('This option is over the group budget.')}</p>}
     {link && found.reason !== 'gone' && <a className="trip-secondary" href={link} target="_blank" rel="noopener noreferrer">{t('Open this flight')} <span aria-hidden="true">↗</span></a>}
   </div>
 }
 
-export function BookResultView({ result, onRecheck, now }: { result: FlightCheckResult; onRecheck?: () => void; now?: number }) {
+/** What to do on the seller's page, since airlines show the outbound price first. */
+function BookGuide({ result, leg }: { result: FlightCheckResult; leg: BookLeg }) {
+  const { t, language } = useLanguage()
+  const sar = useSar()
+  const flightText = (direction: 'outbound' | 'return') => {
+    const item = result.flights.find((flight) => flight.direction === direction)
+    if (!item?.flight_number) return null
+    const time = clock(item.departure_time)
+    return time ? t('{flight} at {time}', { flight: item.flight_number, time }) : item.flight_number
+  }
+  const notes = result.airline_fares
+  const fare = result.fare_name ?? (notes.length === 1 ? (language === 'ar' ? notes[0].fare_ar : notes[0].fare_en) : null)
+  const price = result.price_sar ? sar(result.price_sar) : null
+  const outbound = flightText('outbound')
+  const back = flightText('return')
+  if (!price) return null
+  if (leg === 'round_trip' && outbound && back) return <p className="details-guide">{t(fare ? 'Choose the outbound {outbound}, then the return {back}, in the {fare} fare, and check the total is close to {price}.' : 'Choose the outbound {outbound}, then the return {back}, and check the total is close to {price}.', { outbound, back, price, fare: fare ?? '' })}</p>
+  const flight = leg === 'inbound' ? back : outbound
+  if (leg === 'round_trip' || !flight) return null
+  return <p className="details-guide">{t('Choose flight {flight}, and check the price is close to {price}.', { flight, price })}</p>
+}
+
+export function BookResultView({ result, leg = 'round_trip', onRecheck, now }: { result: FlightCheckResult; leg?: BookLeg; onRecheck?: () => void; now?: number }) {
   const { t, language, locale } = useLanguage()
   const ticking = useNow(!result.fallback && Boolean(result.checked_at))
   const left = linkMinutesLeft(result.checked_at, result.link_valid_minutes, now ?? ticking)
   const expired = !result.fallback && left === 0
   const link = safeLink(result.url)
-  const first = result.flights[0]
-  const time = clock(first?.departure_time)
   return <div className="details-book-result">
     <PriceChange result={result} />
     {result.fallback && <p>{t(fallbackMessages[result.fallback])}</p>}
     {!result.fallback && <>
       <FareLine facts={result} />
       <p className="details-fact"><InfoIcon /> <span>{t(sourceLabel({ ...result, price_source: result.seller_type ? 'seller' : 'search' }))}{result.seller && <> · {t('Sold by {seller}', { seller: airlineName(result.seller, language) })}</>}</span></p>
-      {!result.exact_flight && <p className="proposals-review">{first?.flight_number && time ? t('This is a results page. Choose flight {flight} at {time}.', { flight: first.flight_number, time }) : t('This is a results page. Choose the same flight there.')}</p>}
+      {!result.exact_flight && <p className="details-hint">{t('This is a results page, so choose the flight yourself.')}</p>}
+      <BookGuide result={result} leg={leg} />
     </>}
     {expired
       ? <><p className="proposals-review" role="status"><ClockIcon /> {t('This link may have expired. Check again.')}</p>{onRecheck && <button type="button" className="trip-secondary" onClick={onRecheck}>{t('Check again')}</button>}</>
@@ -140,7 +162,7 @@ export function BookFlight({ tripId, proposalId, leg, label, cooldownMinutes, on
     {!result && !busy && waitMinutes > 0 && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
     <BookSteps busy={busy} result={result} />
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
-    {result && <BookResultView result={result} onRecheck={waitMinutes > 0 ? undefined : () => { void check() }} />}
+    {result && <BookResultView result={result} leg={leg} onRecheck={waitMinutes > 0 ? undefined : () => { void check() }} />}
     {!result && !busy && <p className="details-hint">{t('We check the flight when you press, then give you the seller’s page.')}</p>}
   </div>
 }

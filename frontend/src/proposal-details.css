@@ -81,6 +81,7 @@
 .details-parts { margin:0; padding:10px 14px; background:var(--rihla-bg); border-radius:10px; font-size:14px; font-weight:600; line-height:1.6; font-variant-numeric:tabular-nums; }
 .details-fact--soft { color:var(--rihla-muted); }
 .details-fare-notes { display:grid; gap:4px; }
+.details-guide { margin:0; padding:10px 12px; background:var(--rihla-paper); border-inline-start:3px solid var(--rihla-green); border-radius:6px; font-size:13px; line-height:1.7; }
 @media (max-width:640px) {
   .details-steps { flex-direction:column; }
   .details-alternative a { width:100%; }

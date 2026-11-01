@@ -186,8 +186,23 @@ describe('ProposalDetailView', () => {
     expect(late).toContain('Check again')
     expect(late).not.toContain('href="https://air.example/new"')
   })
-  it('names the flight and time when the link is a results page', () => {
-    expect(pure(<BookResultView result={checked({ exact_flight: false })} />)).toContain('Choose flight GF 162 at 06:50.')
+  const back = { direction: 'return' as const, airline: 'طيران الخليج', flight_number: 'GF 163', departure_time: '2026-11-30T09:35:00', arrival_time: '2026-11-30T11:00:00' }
+  const note = { code: 'GF', name_en: 'Gulf Air', name_ar: 'طيران الخليج', fare_en: 'Economy Light', fare_ar: 'السياحية الخفيفة', checked_kg: 25 }
+  it('says which flights and fare to choose, and the total to expect', () => {
+    const both = checked({ exact_flight: false, price_sar: '1614', flights: [checked().flights[0], back], airline_fares: [note] })
+    const html = pure(<BookResultView result={both} />)
+    expect(html).toContain('This is a results page')
+    expect(html).toContain('Choose the outbound GF 162 at 06:50, then the return GF 163 at 09:35, in the Economy Light fare, and check the total is close to 1,614 SAR.')
+    expect(pure(<BookResultView result={{ ...both, airline_fares: [] }} />)).toContain('then the return GF 163 at 09:35, and check the total')
+    localStorage.setItem('rihla-language', 'ar')
+    const arabic = pure(<BookResultView result={both} />)
+    expect(arabic).toContain('اختر الذهاب GF 162 الساعة 06:50')
+    expect(arabic).toContain('بفئة السياحية الخفيفة')
+    localStorage.clear?.()
+  })
+  it('guides one direction of separate bookings', () => {
+    const both = checked({ price_sar: '615', flights: [checked().flights[0], back] })
+    expect(pure(<BookResultView result={both} leg="inbound" />)).toContain('Choose flight GF 163 at 09:35, and check the price is close to 615 SAR.')
   })
   it('shows the fare and bag, or says the bag may not be included', () => {
     const unknown = pure(<BookResultView result={checked()} />)
@@ -215,6 +230,13 @@ describe('ProposalDetailView', () => {
     const html = pure(<BookResultView result={checked({ alternative: found })} />)
     expect(html).toContain('A cheaper option you can book directly')
     expect(html).toContain('https://www.flynas.com/b')
+  })
+  it('says plainly when the cheaper option is an agent', () => {
+    const found = { ...checked(), url: 'https://agent.example/x', reason: 'agent' as const, within_budget: true, seller: 'Mock Agent', price_sar: '900.00' }
+    const html = pure(<BookResultView result={checked({ alternative: found })} />)
+    expect(html).toContain('Cheaper through a travel agent, for the same flight')
+    expect(html).toContain('This is an agent, not the airline')
+    expect(html).toContain('Mock Agent')
   })
   it('explains every search link, and never says a failed check means gone', () => {
     const base = { url: 'https://www.google.com/travel/flights', exact_flight: false, price_sar: null, checked_at: null }
