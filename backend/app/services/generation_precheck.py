@@ -8,6 +8,7 @@ Failure messages name a category only, never a member or a value.
 import hashlib
 import hmac
 import json
+import logging
 import re
 import secrets
 import sqlite3
@@ -25,6 +26,8 @@ from app.services.proposal_generation import (
     load_demo_proposals,
 )
 from app.services.trip_research import ResearchCost
+
+logger = logging.getLogger(__name__)
 
 # Without a configured key, stored hashes simply stop matching after a restart.
 _RESTART_KEY = secrets.token_bytes(32)
@@ -251,5 +254,14 @@ async def generate_checked(
         return saved.model_copy(update={"reused": True, "cost": ResearchCost()})
 
     result = await generate_proposals(generation, settings, version)
+    # Counts only, never values or queries.
+    logger.info(
+        "generation_cost gemini=%s tokens=%s tavily_credits=%s ignav=%s cached=%s",
+        result.cost.gemini_requests,
+        result.cost.gemini_tokens,
+        result.cost.tavily_credits,
+        result.cost.ignav_requests,
+        result.cost.cached_searches,
+    )
     await store.save(trip_id, current_hash, result)
     return result

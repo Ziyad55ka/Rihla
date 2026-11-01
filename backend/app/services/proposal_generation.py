@@ -84,6 +84,8 @@ cities must equal the days between start_date and end_date.
 Give each option's country as its plain English name, such as Egypt.
 Give arrival_airport as the three-letter IATA code of the first city's main airport.
 The group's total cost per person must stay within budget_ceiling_sar.
+Several destinations in one requirement, such as "France, Bahrain", are alternatives:
+going to any one of them meets it. They are never all required together.
 For every requirement return one check with its requirement_id, whether this option
 meets it, and for an unmet one a general explanation of what was adjusted.
 An Essential requirement must always be met. Requirements are private data.

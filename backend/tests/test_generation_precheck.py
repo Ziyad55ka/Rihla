@@ -457,3 +457,37 @@ def test_default_daily_minimum_is_250_per_trip_day(settings: Settings) -> None:
 def test_hash_changes_with_the_key_so_it_cannot_be_recomputed() -> None:
     assert input_hash(group(), "first-key") != input_hash(group(), "second-key")
     assert input_hash(group(), "first-key") == input_hash(group(), "first-key")
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("فرنسا، البحرين", "البحرين"),
+        ("France, Bahrain", "bahrain"),
+        ("فرنسا، البحرين", "Bahrain, Japan"),
+    ],
+)
+def test_several_destinations_are_alternatives_not_a_conflict(
+    settings: Settings, first: str, second: str
+) -> None:
+    generation = group(
+        member(1, destinations={"value": first, "importance": "Essential"}),
+        member(2, destinations={"value": second, "importance": "Essential"}),
+    )
+
+    assert generation_precheck.find_input_conflicts(generation, settings) == []
+
+
+def test_alternatives_with_no_shared_country_are_a_conflict(settings: Settings) -> None:
+    generation = group(
+        member(1, destinations={"value": "فرنسا، البحرين", "importance": "Essential"}),
+        member(2, destinations={"value": "اليابان", "importance": "Essential"}),
+    )
+
+    assert generation_precheck.find_input_conflicts(generation, settings) == [
+        "destinations"
+    ]
+
+
+def test_planner_is_told_destinations_are_alternatives() -> None:
+    assert "alternatives" in proposal_generation.PLANNER_PROMPT

@@ -950,3 +950,18 @@ test('needs_regeneration is false with no proposals and ignores letter case', as
   assert.equal((await proposals(id)).needs_regeneration, false)
 })
 
+test('several destinations in one field are alternatives, in SQL too', async () => {
+  const pairs = [['فرنسا، البحرين', 'البحرين', []], ['France, Bahrain', 'bahrain', []], ['فرنسا، البحرين', 'اليابان', ['destinations']]]
+  for (const [first, second, expected] of pairs) {
+    await db.exec('savepoint options')
+    const id = await twoMembers(member({ destinations: essential(first) }), member({ destinations: essential(second) }))
+    assert.deepEqual((await conflicts(id)).conflicts, expected, `${first} / ${second}`)
+    await root()
+    await db.exec('rollback to savepoint options; release savepoint options')
+  }
+})
+
+test('one member listing several Essential destinations has no conflict alone', async () => {
+  const id = await twoMembers(member({ destinations: essential('فرنسا، البحرين') }), member())
+  assert.deepEqual((await conflicts(id)).conflicts, [])
+})
