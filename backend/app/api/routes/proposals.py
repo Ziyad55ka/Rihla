@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict
 
 from app.core.auth import CurrentIdentity
 from app.schemas.planning import GroupConflicts
-from app.schemas.proposals import Proposal
+from app.schemas.proposals import AirlineFareNote, Proposal
+from app.services.airline_fares import fare_notes
 from app.services.flight_refresh import (
     BookLeg,
     FlightChecker,
@@ -106,6 +107,7 @@ class FlightFacts(BaseModel):
     carry_on_bags: int | None
     # Flight numbers and local times in the order shown, so a person can find it.
     flights: list[FlightSummary]
+    airline_fares: list[AirlineFareNote]
 
 
 class AlternativeResponse(FlightFacts):
@@ -159,6 +161,7 @@ def _check_response(result, settings) -> FlightCheckResponse:
         checked_bags=route.checked_bags if route else None,
         carry_on_bags=route.carry_on_bags if route else None,
         flights=_summaries(route),
+        airline_fares=fare_notes(route) if route else [],
         updated=result.updated,
         fallback=result.fallback,
         alternative=AlternativeResponse(
@@ -174,6 +177,7 @@ def _check_response(result, settings) -> FlightCheckResponse:
             checked_bags=alternative.flights.checked_bags,
             carry_on_bags=alternative.flights.carry_on_bags,
             flights=_summaries(alternative.flights),
+            airline_fares=fare_notes(alternative.flights),
             reason=alternative.reason,
             within_budget=alternative.within_budget,
         )
@@ -206,6 +210,17 @@ async def _save_check(
             raise HTTPException(
                 503, "Flight checks are temporarily unavailable."
             ) from error
+
+
+def _with_fare_notes(proposal: Proposal) -> Proposal:
+    return proposal.model_copy(
+        update={
+            "flights": [
+                route.model_copy(update={"airline_fares": fare_notes(route)})
+                for route in proposal.flights
+            ]
+        }
+    )
 
 
 def _with_group_totals(proposal: Proposal, group: FlightGroup) -> Proposal:
@@ -250,8 +265,10 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
     return stored.model_copy(
         update={
             "proposals": [
-                _with_group_totals(
-                    apply_source_policy(item, settings.booking_domains), group
+                _with_fare_notes(
+                    _with_group_totals(
+                        apply_source_policy(item, settings.booking_domains), group
+                    )
                 )
                 for item in proposals
             ],

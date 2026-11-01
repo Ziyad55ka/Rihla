@@ -1,6 +1,6 @@
 import { authenticatedRequest } from './http'
 import type { Language } from './language'
-import type { BudgetStatus, CityStay, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
+import type { AirlineFareNote, BudgetStatus, CityStay, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -101,6 +101,7 @@ export interface FlightFacts {
   checked_bags: number | null
   carry_on_bags: number | null
   flights: FlightSummary[]
+  airline_fares: AirlineFareNote[]
 }
 
 export interface FlightAlternative extends FlightFacts {

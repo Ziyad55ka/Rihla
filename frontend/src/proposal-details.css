@@ -78,6 +78,9 @@
 .details-photo--hero::after { content:""; position:absolute; inset:0; background:linear-gradient(180deg,#2d4a39d9,#2d4a39f2); pointer-events:none; }
 .details-photo--hero figcaption { position:absolute; inset-block-end:6px; inset-inline-end:12px; z-index:1; padding:0; color:#d4dece; }
 .details-hero--photo { padding-block-end:40px; }
+.details-parts { margin:0; padding:10px 14px; background:var(--rihla-bg); border-radius:10px; font-size:14px; font-weight:600; line-height:1.6; font-variant-numeric:tabular-nums; }
+.details-fact--soft { color:var(--rihla-muted); }
+.details-fare-notes { display:grid; gap:4px; }
 @media (max-width:640px) {
   .details-steps { flex-direction:column; }
   .details-alternative a { width:100%; }

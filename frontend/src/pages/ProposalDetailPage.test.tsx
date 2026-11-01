@@ -157,7 +157,7 @@ describe('ProposalDetailView', () => {
     url: 'https://air.example/new', seller: 'طيران الخليج', seller_type: 'airline', provider: 'ignav', exact_flight: true, price_sar: '998.50', previous_price_sar: null,
     cabin_class: 'economy', fare_name: null, checked_bags: null, carry_on_bags: null,
     flights: [{ direction: 'outbound', airline: 'طيران الخليج', flight_number: 'GF 162', departure_time: '2026-11-20T06:50:00', arrival_time: '2026-11-20T08:10:00' }],
-    updated: true, fallback: null, alternative: null, now_over_budget: false, checked_at: new Date().toISOString(), link_valid_minutes: 15, next_refresh_seconds: 120, ...extra,
+    airline_fares: [], updated: true, fallback: null, alternative: null, now_over_budget: false, checked_at: new Date().toISOString(), link_valid_minutes: 15, next_refresh_seconds: 120, ...extra,
   })
   it('shows the old and new price with the difference, and opens in a new tab', () => {
     const html = pure(<BookResultView result={checked({ previous_price_sar: '900' })} />)
@@ -255,11 +255,35 @@ describe('ProposalDetailView', () => {
     expect(reload).toHaveBeenCalledTimes(1)
     expect(page(proposal({ flights: [flights({ price_per_person: price('998.50', 'Sourced') })] }))).toContain('From 998.5 SAR')
   })
+  it('breaks the price down only when each direction has its own price', () => {
+    const parted = flights({ price_per_person: price('1614', 'Sourced'), legs: [leg('outbound', 'https://a.example/x', price('999')), leg('return', 'https://a.example/x', price('615'))] })
+    const html = page(proposal({ flights: [parted] }))
+    expect(html).toContain('Outbound 999 SAR + return 615 SAR = 1,614 SAR per person')
+    expect(html).not.toContain('may show the outbound price first')
+    expect(page()).not.toContain('Outbound 900')
+    localStorage.setItem('rihla-language', 'ar')
+    const arabic = page(proposal({ flights: [parted] }))
+    expect(arabic).toContain('الذهاب')
+    expect(arabic).toContain('الإجمالي')
+  })
+  it('shows the general fare and bag, or says to check, in the page language', () => {
+    const note = { code: 'GF', name_en: 'Gulf Air', name_ar: 'طيران الخليج', fare_en: 'Economy Light', fare_ar: 'السياحية الخفيفة', checked_kg: 25 }
+    const unknown = { ...note, code: 'SV', name_en: 'Saudia', fare_en: 'Guest Saver', checked_kg: null }
+    const html = page(proposal({ flights: [flights({ airline_fares: [note, unknown] })] }))
+    expect(html).toContain('Economy Light')
+    expect(html).toContain('Checked bag 25 kg')
+    expect(html).toContain('Check the bag on the airline’s site')
+    expect(html).toContain('not a promise for your ticket')
+    expect(page(proposal({ flights: [flights({ airline_fares: [{ ...note, checked_kg: 0 }] })] }))).toContain('No checked bag')
+    expect(page(proposal({ flights: [flights({ airline_fares: [note], checked_bags: 2 })] }))).toContain('2 checked bags')
+    localStorage.setItem('rihla-language', 'ar')
+    expect(page(proposal({ flights: [flights({ airline_fares: [note] })] }))).toContain('السياحية الخفيفة')
+  })
   it('shows the notice beside flights and stays, and a from price on every flight', () => {
     const html = page()
     expect(count(html, 'Prices and seats change from time to time.')).toBe(2)
     expect(html).toContain('From 900 SAR')
-    expect(html).toContain('This price covers both directions.')
+    expect(html).toContain('may show the outbound price first')
   })
   it('shows one line for a city with no hotel, not a repeated label', () => {
     const html = page(proposal({ flights: [], sources: [], cities: [{ ...stay, hotel_name: { value: null, status: 'Not available', evidence: [] }, hotel_price_per_night: none }] }))

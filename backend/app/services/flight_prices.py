@@ -569,7 +569,7 @@ def _leg(
     price_is_total: bool = False,
     priced_by: dict | None = None,
 ) -> FareLeg:
-    price = ((link or priced_by) or {}).get("price") if priced else None
+    price = ((priced_by or link) or {}).get("price") if priced else None
     segments = _segments(part)
     return FareLeg(
         direction=direction,
@@ -623,13 +623,37 @@ def fare_from_itinerary(
     source: Literal["seller", "search"] = "search"
     if whole:
         trip_type = "round_trip"
-        legs = (
-            _leg("outbound", query.departure_date, outbound, whole, False),
-            _leg("return", query.return_date, inbound, whole, False),
-        )
         seller_price = _link_amount(whole, currency)
         if seller_price:
             amount, source = seller_price, "seller"
+        # Only when a seller states each direction and they add up. Never divided.
+        out_part = _any_price(options, "outbound")
+        back_part = _any_price(options, "inbound")
+        parts_known = [
+            _link_amount(out_part, currency),
+            _link_amount(back_part, currency),
+        ]
+        adds_up = all(parts_known) and abs(sum(parts_known) - amount) <= 1
+        legs = (
+            _leg(
+                "outbound",
+                query.departure_date,
+                outbound,
+                whole,
+                adds_up,
+                *extra,
+                priced_by=out_part,
+            ),
+            _leg(
+                "return",
+                query.return_date,
+                inbound,
+                whole,
+                adds_up,
+                *extra,
+                priced_by=back_part,
+            ),
+        )
     elif inbound:
         trip_type = "split"
         legs = (
@@ -640,7 +664,7 @@ def fare_from_itinerary(
                 out_link,
                 True,
                 *extra,
-                priced_by=_any_price(options, "outbound"),
+                priced_by=None if out_link else _any_price(options, "outbound"),
             ),
             _leg(
                 "return",
@@ -649,7 +673,7 @@ def fare_from_itinerary(
                 back_link,
                 True,
                 *extra,
-                priced_by=_any_price(options, "inbound"),
+                priced_by=None if back_link else _any_price(options, "inbound"),
             ),
         )
         both = [_link_amount(out_link, currency), _link_amount(back_link, currency)]

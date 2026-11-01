@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { airlineName } from '../../lib/airlines'
 import { useLanguage } from '../../lib/language'
+import type { AirlineFareNote } from '../../types/proposal'
 import { bookFlight, checkAndReload, type BookLeg, type FlightCheckResult, type FlightFacts, type FlightFallback, linkMinutesLeft, priceChange, refreshFlights, safeLink, sourceLabel } from '../../lib/proposals'
 import { BagIcon, CheckIcon, ClockIcon, InfoIcon, SwapIcon } from './icons'
 import { useSar } from './useSar'
@@ -27,16 +28,20 @@ function useNow(active: boolean): number {
   return now
 }
 
-export function FareLine({ facts }: { facts: Pick<FlightFacts, 'cabin_class' | 'fare_name' | 'checked_bags'> }) {
-  const { t } = useLanguage()
+/** The source's own fare and bag first, then what is generally known of the airline. */
+export function FareLine({ facts }: { facts: Pick<FlightFacts, 'cabin_class' | 'fare_name' | 'checked_bags'> & { airline_fares?: AirlineFareNote[] } }) {
+  const { t, language } = useLanguage()
   const cabin = facts.fare_name ?? (facts.cabin_class ? t(cabinLabels[facts.cabin_class] ?? 'Economy') : null)
   const bags = facts.checked_bags
-  return <p className="details-fact">
-    <BagIcon />
-    {bags === null || bags === undefined
-      ? <span>{cabin && <><bdi>{cabin}</bdi> · </>}{t('The price is for the cheapest fare available, and may not include a bag.')}</span>
-      : <span>{cabin && <><bdi>{cabin}</bdi> · </>}{bags === 0 ? t('No checked bag') : t('{count} checked bags', { count: String(bags) })}</span>}
-  </p>
+  if (bags !== null && bags !== undefined) return <p className="details-fact"><BagIcon /> <span>{cabin && <><bdi>{cabin}</bdi> · </>}{bags === 0 ? t('No checked bag') : t('{count} checked bags', { count: String(bags) })}</span></p>
+  const notes = facts.airline_fares ?? []
+  if (notes.length === 0) return <p className="details-fact"><BagIcon /> <span>{cabin && <><bdi>{cabin}</bdi> · </>}{t('The price is for the cheapest fare available, and may not include a bag.')}</span></p>
+  return <div className="details-fare-notes">
+    {notes.map((note) => <p className="details-fact" key={note.code}><BagIcon /> <span>
+      <bdi>{language === 'ar' ? note.name_ar : note.name_en}</bdi>: <bdi>{language === 'ar' ? note.fare_ar : note.fare_en}</bdi> · {note.checked_kg === null || note.checked_kg === undefined ? t('Check the bag on the airline’s site') : note.checked_kg === 0 ? t('No checked bag') : t('Checked bag {kg} kg', { kg: note.checked_kg.toLocaleString() })}
+    </span></p>)}
+    <p className="details-hint">{t('General information about the airline’s cheapest fare, not a promise for your ticket.')}</p>
+  </div>
 }
 
 function ChosenFlight({ facts }: { facts: FlightFacts }) {

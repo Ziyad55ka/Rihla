@@ -128,6 +128,8 @@ export interface Flights {
   solo_saving_sar?: string | null
   /** Sent only when the whole trip departs from one city. */
   group_total_sar?: string | null
+  /** Added when reading. */
+  airline_fares?: AirlineFareNote[]
   /** Which source gave this price. Example: "ignav". */
   provider?: string | null
   /** airline, third_party, or null when unknown. */
@@ -140,6 +142,17 @@ export interface Flights {
   /** Allowance per person, or null when the source does not say. */
   checked_bags?: number | null
   carry_on_bags?: number | null
+}
+
+/** General facts about an airline's cheapest fare, never a promise for a ticket. */
+export interface AirlineFareNote {
+  code: string
+  name_en: string
+  name_ar: string
+  fare_en: string
+  fare_ar: string
+  /** The usual checked bag: 0 is none, and null is not confirmed. */
+  checked_kg?: number | null
 }
 
 /** A free photo with its credit. Added when reading, and never saved. */

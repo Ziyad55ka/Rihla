@@ -39,6 +39,17 @@ function Leg({ leg, proposal, separate, cooldownMinutes, onChanged }: { leg: Fli
   </div>
 }
 
+/** Each direction and the total, in the airlines' order. Never made by dividing. */
+function PriceParts({ route }: { route: Flights }) {
+  const { t } = useLanguage()
+  const sar = useSar()
+  const [outbound, back] = route.legs
+  const total = route.price_per_person.amount_sar
+  if (route.trip_type === 'one_way') return null
+  if (outbound.price.amount_sar && back?.price.amount_sar && total) return <p className="details-parts">{t('Outbound {outbound} + return {back} = {total} per person', { outbound: sar(outbound.price.amount_sar), back: sar(back.price.amount_sar), total: sar(total) })}</p>
+  return <p className="details-fact details-fact--soft"><InfoIcon /> <span>{t('The airline’s site may show the outbound price first, then add the return. The final total appears after you choose both flights.')}</span></p>
+}
+
 function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; allSameCity: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t, language } = useLanguage()
   const sar = useSar()
@@ -58,8 +69,8 @@ function Route({ route, proposal, allSameCity, limits, cooldownMinutes, onChange
       <div className="details-value details-price-row"><PriceValue price={route.price_per_person} startsFrom /><PriceAgeBadge pricedAt={route.priced_at} limits={limits} canRefresh /></div>
       <RefreshFlights tripId={proposal.trip_id} proposalId={proposal.id} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
       {allSameCity && route.group_total_sar && <p className="details-hint">{t('{amount} for the whole group', { amount: sar(route.group_total_sar) })}</p>}
-      {route.trip_type !== 'one_way' && <p className="details-fact"><InfoIcon /> <span>{t('This price covers both directions. Some airline sites show the whole trip’s price from the first step.')}</span></p>}
-      <FareLine facts={{ cabin_class: route.cabin_class ?? null, fare_name: route.fare_name ?? null, checked_bags: route.checked_bags ?? null }} />
+      <PriceParts route={route} />
+      <FareLine facts={{ cabin_class: route.cabin_class ?? null, fare_name: route.fare_name ?? null, checked_bags: route.checked_bags ?? null, airline_fares: route.airline_fares }} />
       {route.provider && <p className="details-hint">{t(sourceLabel(route))}</p>}
       {route.fare_basis === 'solo' && route.solo_saving_sar && <p className="proposals-review" role="status">{t('The price shown is for each person booking alone.')} {t('It could be {amount} per person cheaper if each person books alone, but you may not be on the same flight.', { amount: sar(route.solo_saving_sar) })}</p>}
       {route.trip_type === 'round_trip' && <BookFlight tripId={proposal.trip_id} proposalId={proposal.id} leg="round_trip" label={t('Book the trip')} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />}

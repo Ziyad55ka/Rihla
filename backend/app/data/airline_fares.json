@@ -1,0 +1,51 @@
+{
+  "_note": "General facts about each airline's cheapest fare, never a promise for a ticket. Edit freely. checked_kg null means not confirmed, so the page says to check the airline's site. Add a value only from the airline's own site or a manual check.",
+  "GF": {
+    "name_en": "Gulf Air", "name_ar": "طيران الخليج",
+    "fare_en": "Economy Light", "fare_ar": "السياحية الخفيفة",
+    "checked_kg": 25,
+    "source": "Manual check on gulfair.com, RUH to BAH, November 2026. Other routes may differ."
+  },
+  "FZ": {
+    "name_en": "flydubai", "name_ar": "فلاي دبي",
+    "fare_en": "Lite", "fare_ar": "لايت",
+    "checked_kg": 0,
+    "source": "https://www.flydubai.com/en/flying-with-us/baggage/hand-baggage"
+  },
+  "XY": {
+    "name_en": "flynas", "name_ar": "طيران ناس",
+    "fare_en": "Light", "fare_ar": "لايت",
+    "checked_kg": null,
+    "source": "https://www.flynas.com/booking-flynas/fare-types. Varies by route."
+  },
+  "SV": {
+    "name_en": "Saudia", "name_ar": "الخطوط السعودية",
+    "fare_en": "Guest Saver", "fare_ar": "جيست سيفر",
+    "checked_kg": null,
+    "source": "Name from third-party guides. The official page was not reachable."
+  },
+  "F3": {
+    "name_en": "flyadeal", "name_ar": "طيران أديل",
+    "fare_en": "fly", "fare_ar": "فلاي",
+    "checked_kg": null,
+    "source": "Name from third-party guides. The official page was not reachable."
+  },
+  "EK": {
+    "name_en": "Emirates", "name_ar": "طيران الإمارات",
+    "fare_en": "Economy Special", "fare_ar": "الاقتصادية الخاصة",
+    "checked_kg": null,
+    "source": "Third-party sources disagree (15 or 20 kg), and it varies by route."
+  },
+  "QR": {
+    "name_en": "Qatar Airways", "name_ar": "الخطوط الجوية القطرية",
+    "fare_en": "Economy Lite", "fare_ar": "الاقتصادية لايت",
+    "checked_kg": null,
+    "source": "The official page gave no Economy Lite figure for Saudi routes."
+  },
+  "G9": {
+    "name_en": "Air Arabia", "name_ar": "العربية للطيران",
+    "fare_en": "Basic", "fare_ar": "بيسك",
+    "checked_kg": null,
+    "source": "Third-party guides say none. The official page was not reachable."
+  }
+}

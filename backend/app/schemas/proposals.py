@@ -134,7 +134,8 @@ class FlightLeg(StrictModel):
     airline: InfoField
     # The flight time for this direction. Example value: "3h 20m".
     duration: InfoField
-    # On a round_trip the price is on the whole trip, so this is Not available.
+    # On a round_trip, set only when the seller states each direction's price itself.
+    # It is never worked out by dividing the total.
     price: SarPrice
     # A link saved at generation. It can expire, so the page asks for a fresh one.
     booking_url: BookingUrl
@@ -148,6 +149,19 @@ class FlightLeg(StrictModel):
     stops: int | None = Field(default=None, ge=0)
     # Who sells this leg, or null. It can differ from the airline. Example: "Saudia".
     seller: str | None = None
+
+
+# General facts about an airline's cheapest fare, never a promise for a ticket.
+class AirlineFareNote(StrictModel):
+    # Two characters. Example: "GF".
+    code: str
+    name_en: str
+    name_ar: str
+    # The fare's name. Example: "Economy Light".
+    fare_en: str
+    fare_ar: str
+    # The usual checked bag: 0 is none, and null is not confirmed.
+    checked_kg: int | None = Field(default=None, ge=0)
 
 
 # The flights from one departure city.
@@ -192,6 +206,8 @@ class Flights(StrictModel):
     # Allowance per person, or null when the source does not say.
     checked_bags: int | None = Field(default=None, ge=0)
     carry_on_bags: int | None = Field(default=None, ge=0)
+    # Added on reading, never saved: what is generally known of these airlines' fares.
+    airline_fares: list[AirlineFareNote] = []
     # Added on reading, never saved, and only when the whole trip departs from one city.
     group_total_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
 
