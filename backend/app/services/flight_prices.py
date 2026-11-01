@@ -217,6 +217,15 @@ def _url_date(url: str, parameter: str) -> date | None:
     return None
 
 
+def without_tracking(url: str) -> str:
+    """Remove ad-click ids. The fragment holds real booking details on some sites."""
+    cleaned = re.sub(
+        r"(?<=[?&])(?:gclid|gclsrc)=[^&#]*&?", "", url, flags=re.IGNORECASE
+    )
+    # A removed last parameter can leave a dangling ? or & before the fragment.
+    return re.sub(r"[?&]+(?=#|$)", "", cleaned)
+
+
 def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
     """Reject a link whose own parameters contradict its direction or dates."""
     if not url.startswith("https://") or len(url) > MAX_BOOKING_URL_LENGTH:
@@ -266,7 +275,7 @@ def _leg(
         duration_minutes=part.get("duration_minutes"),
         amount=str(price["amount"]) if price else None,
         currency=str(price["currency"]).upper() if price else None,
-        booking_url=str(link["url"]) if link else None,
+        booking_url=without_tracking(str(link["url"])) if link else None,
     )
 
 

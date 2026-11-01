@@ -22,6 +22,7 @@ from app.services.flight_prices import (
     fare_from_itinerary,
     get_flight_provider,
     link_matches,
+    without_tracking,
 )
 from app.services.trip_research import ResearchRequest, ResearchSource, research
 
@@ -378,3 +379,30 @@ def test_exact_flight_link_is_preferred() -> None:
     }
 
     assert classify(links).legs[0].booking_url == "https://a.example/exact"
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        (
+            "https://air.example/?gclid=abc&gclsrc=gf#/book?origin=RUH&flightMode=round",
+            "https://air.example/#/book?origin=RUH&flightMode=round",
+        ),
+        ("https://a.example/?x=1&gclid=abc&y=2", "https://a.example/?x=1&y=2"),
+        ("https://a.example/?x=1&GCLID=abc", "https://a.example/?x=1"),
+        ("https://a.example/#/b?gclsrc=gf&z=3", "https://a.example/#/b?z=3"),
+        ("https://a.example/?notgclid=keep", "https://a.example/?notgclid=keep"),
+        ("https://a.example/book", "https://a.example/book"),
+    ],
+)
+def test_tracking_ids_are_removed_and_the_rest_is_kept(url: str, expected: str) -> None:
+    assert without_tracking(url) == expected
+
+
+def test_new_fares_have_clean_booking_links() -> None:
+    url = "https://air.example/?gclid=abc&gclsrc=gf#/book?flightMode=round"
+
+    found = classify({"booking_options": [option(["outbound", "inbound"], url)]})
+
+    assert found.legs[0].booking_url == "https://air.example/#/book?flightMode=round"
+    assert found.source_url == "https://air.example/#/book?flightMode=round"
