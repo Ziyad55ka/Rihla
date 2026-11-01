@@ -32,13 +32,14 @@ As a trip member, I want to select or remove suggested activities so that the pl
 
 ## التعارضات مع `sprint-2/ai-proposals`
 
-`git merge-tree` يبيّن 3 ملفات فقط. والحلول مقترحة، وما طبقنا شي:
+`git merge-tree` يبيّن 4 ملفات فقط. والحلول مقترحة، وما طبقنا شي:
 
 | الملف | السبب | الحل المقترح |
 | --- | --- | --- |
 | `backend/app/schemas/proposals.py` | كلانا أضاف حقولًا في `CityStay` وفي الملف | احتفظ بالجهتين: `activities` مع `image` و`labels_en` وغيرها |
 | `frontend/src/components/ProposalsPanel.tsx` | أضفت `ActivitiesPanel` تحت القائمة، وأنا أضفت الصور وحالة التوليد | احتفظ بالجهتين، أو الأفضل انقل `ActivitiesPanel` لصفحة التفاصيل (تحت) |
 | `docs/proposal-schema-handoff.md` | تعديلان على نفس الفقرات | احتفظ بالجهتين |
+| `supabase/tests/database.test.mjs` | اختباراتك تضاف بعد أدوات Sprint 2 المساعدة، وهي الآن في `proposals.test.mjs` | انقل اختباراتك لملف خاص |
 
 - **migration:** ملفك `20261103000100_activity_selections.sql` يتطبق بعد `20261102000100_ai_proposals.sql`، وما فيه تعارض. والخمسة القديمة اندمجت في ملف واحد.
 - **حساب التكلفة:** `activity_estimate.py` يفترض غرفة لكل شخص، وصفحتي تعرض افتراضيًا غرفًا مشتركة، فالرقمان ممكن يختلفان. هذي نقطة نقاش مع Developer 3.
@@ -106,7 +107,6 @@ As a trip member, I want to select or remove suggested activities so that the pl
 | ملاحظة الأسعار | `PriceNotice` في `values.tsx` |
 | الأزرار | كلاسا `trip-primary` و`trip-secondary` |
 | الصور | `PlacePhoto.tsx`: تحميل ناعم، وتصميم بديل، والصورة تفتح مصدرها |
-| الملصقات | كلاس `details-labels` |
 | الأيقونات | `icons.tsx`: كلها من Lucide بوزن واحد. لا إيموجي ولا رموز نصية، لأنها تطلع مربعات |
 | شرح قصير عند الطلب | `Hint.tsx` |
 | عنوان القسم بأيقونة | `SectionTitle.tsx` |
