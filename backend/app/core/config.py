@@ -1,15 +1,16 @@
-from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from app.core.proposal_settings import ProposalSettings
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
-class Settings(BaseSettings):
+class Settings(ProposalSettings):
     """Read backend/.env consistently, with environment variables taking priority."""
 
     model_config = SettingsConfigDict(
@@ -29,32 +30,7 @@ class Settings(BaseSettings):
     # Optional for /health; required by authenticated account/profile endpoints.
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
-    # Bypasses Row Level Security. Used only by services/generation_inputs.py.
-    supabase_secret_key: str | None = Field(default=None, repr=False)
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
-    # Keys the stored inputs hash, so budgets cannot be guessed from it.
-    proposals_hash_key: str | None = Field(default=None, repr=False)
-    # Serve saved proposals instead of calling Gemini and Tavily.
-    proposals_demo_mode: bool = False
-    proposals_demo_file: Path = BACKEND_DIR / "app" / "data" / "demo_proposals.json"
-    # Optional for the API; required only by trip research.
-    # ignav: live fares, falling back to web search. tavily: web search only.
-    flight_price_provider: Literal["ignav", "tavily"] = "ignav"
-    ignav_api_key: str | None = None
-    # Below this per trip day, generation stops before any outside request.
-    min_budget_sar_per_day: Decimal = Field(default=Decimal(250), gt=0)
-    generation_store_db: Path = BACKEND_DIR / ".local" / "generations.sqlite3"
-    saved_proposals_ttl_hours: int = Field(default=24, ge=1)
-    # Generation stops here and returns the proposals that already passed.
-    max_gemini_calls_per_generation: int = Field(default=7, ge=1)
-    gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3-flash-preview"
-    gemini_retry_delay_seconds: float = Field(default=20, ge=0)
-    tavily_api_key: str | None = None
-    tavily_search_depth: Literal["basic", "advanced"] = "basic"
-    tavily_max_results: int = Field(default=5, ge=1, le=20)
-    search_cache_db: Path = BACKEND_DIR / ".local" / "search-cache.sqlite3"
-    search_cache_ttl_hours: int = Field(default=24, ge=1)
 
     @field_validator("supabase_url")
     @classmethod

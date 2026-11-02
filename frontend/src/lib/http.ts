@@ -7,7 +7,7 @@ export class ApiError extends Error {
 
 export async function authenticatedRequest<T>(
   path: `/api/${string}`,
-  { method = 'GET', body, signal, timeoutMs = 15000 }: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown; signal?: AbortSignal; timeoutMs?: number } = {},
+  { method = 'GET', body, signal }: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
   if (!supabase) throw new Error('Supabase is not configured.')
   const { data, error } = await supabase.auth.getSession()
@@ -19,7 +19,7 @@ export async function authenticatedRequest<T>(
       headers: { Accept: 'application/json', Authorization: `Bearer ${data.session.access_token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       cache: 'no-store',
-      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
     })
   } catch (err) {
     if (signal?.aborted) throw err

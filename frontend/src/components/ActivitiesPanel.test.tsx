@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { LanguageProvider } from '../lib/language'
 import { ActivitiesPanel } from './ActivitiesPanel'
-import data from '../data/activities.mock.json'
+import data from '../test-fixtures/activities.json'
 import type { Proposal, ProposalSet } from '../types/proposal'
 
 const proposal = (data as ProposalSet).proposals[0]

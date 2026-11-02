@@ -1,14 +1,27 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
+import { GENERATE_STEP_MS, generateMessages } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
+import { navigate } from '../lib/navigation'
 import { calendarDate } from '../lib/planning'
-import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, reviewMessages } from '../lib/proposals'
-import type { GroupConflicts, StoredProposals } from '../types/proposal'
+import { placeName } from '../lib/places'
+import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, proposalTitle, reviewMessages } from '../lib/proposals'
+import type { GroupConflicts, Proposal, StoredProposals } from '../types/proposal'
+import { AiStatus } from './AiStatus'
+import { PlacePhoto } from './proposal-details/PlacePhoto'
 import '../proposals.css'
-import type { SelectionStore } from '../lib/activities'
-import { ActivitiesPanel } from './ActivitiesPanel'
+import '../proposal-details.css'
+import '../proposal-fonts'
+
+const proposalPath = (proposal: Proposal) => `/trips/${proposal.trip_id}/proposals/${proposal.id}`
+
+function openProposal(event: MouseEvent, proposal: Proposal) {
+  // Keeps open-in-new-tab working for modified clicks.
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+  event.preventDefault()
+  navigate(proposalPath(proposal))
+}
 
 type ViewProps = {
-  selectionStore?: SelectionStore
   isAdmin: boolean
   conflicts: GroupConflicts | null
   stored: StoredProposals | null
@@ -18,19 +31,17 @@ type ViewProps = {
   onGenerate: (regenerate: boolean) => void
 }
 
-export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate, selectionStore }: ViewProps) {
-  const { t, locale } = useLanguage()
-  const [activeId, setActiveId] = useState<string | null>(null)
+export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate }: ViewProps) {
+  const { t, locale, language } = useLanguage()
   const generating = busy || stored?.generating === true
   const enabled = canPressGenerate(conflicts, generating)
   const proposals = stored?.proposals ?? []
-  const active = proposals.find(proposal => proposal.id === activeId) ?? proposals[0]
   return <section className="proposals-panel" aria-labelledby="proposals-title">
     <div className="proposals-heading">
       <div><p className="trip-eyebrow">{t('TRIP PROPOSALS')}</p><h2 id="proposals-title">{t('Three ways to go.')}</h2></div>
       {isAdmin && <div className="proposals-actions">
         <button type="button" className="trip-primary" disabled={!enabled} onClick={() => onGenerate(proposals.length > 0)}>
-          {generating ? t('Generating proposals…') : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
+          {generating ? <AiStatus messages={generateMessages} stepMs={GENERATE_STEP_MS} /> : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
         </button>
       </div>}
     </div>
@@ -38,26 +49,22 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
       {conflicts.conflicts.map((category) => <li key={category}>{t(conflictMessages[category])}</li>)}
     </ul>}
     {conflicts?.own_review.map((category) => reviewMessages[category] && <p className="proposals-review" key={category}>{t(reviewMessages[category])}</p>)}
-    {generating && <p className="proposals-note" role="status">{t('This can take a few minutes. You can stay on this page.')}</p>}
+    {generating && <p className="proposals-note">{t('This can take a few minutes. You can stay on this page.')}</p>}
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
-    {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'These proposals have no flights from your departure city. Generate them again to include it.' : 'These proposals have no flights from your departure city. The administrator needs to generate them again.')}</p>}
+    {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
     {stored && stored.version !== null && !stored.complete && <p className="proposals-note">{t('Some proposals could not pass the checks, so fewer than three are shown.')}</p>}
     {proposals.length > 0 ? <ol className="proposals-list">
-      {proposals.map((proposal) => <li className={`proposals-card${active?.id === proposal.id ? ' proposals-card--active' : ''}`} key={proposal.id}>
+      {proposals.map((proposal) => <li className="proposals-card" key={proposal.id}>
+        <PlacePhoto image={proposal.image} place={placeName(proposal.destination, language, proposal.destination_ar)} />
         <p className="trip-eyebrow">{t('Option {number}', { number: proposal.option_number.toLocaleString(locale) })}</p>
-        <h3>{proposal.title}</h3>
-        <p className="proposals-destination">{proposal.destination}</p>
+        <h3><a href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}><bdi>{proposalTitle(proposal, language)}</bdi></a></h3>
+        <p className="proposals-destination"><bdi>{placeName(proposal.destination, language, proposal.destination_ar)}</bdi></p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
-        <small className="proposal-base-budget-note">{t('Before selected activities')}</small>
-        <button className="trip-secondary proposal-activities-button" type="button" aria-pressed={active?.id === proposal.id} onClick={() => setActiveId(proposal.id)}>{t('View activities')}</button>
+        <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
       </li>)}
     </ol> : !generating && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}
-    {active && <div className="proposal-activity-detail">
-      <p className="trip-eyebrow">{active.destination}</p>
-      <ActivitiesPanel key={`${active.id}:${active.version}`} proposal={active} store={selectionStore} />
-    </div>}
   </section>
 }
 

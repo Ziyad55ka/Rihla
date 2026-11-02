@@ -187,16 +187,9 @@ https://www.booking.com/searchresults.html?ss=Mock+Hotel%2C+Cairo%2C+Egypt&check
 
 ```python
 class Activity(StrictModel):
-    id: UUID
-    category: Literal["activity", "attraction", "restaurant"] = "activity"
     name: InfoField
-    description: InfoField
-    location: InfoField
-    duration: InfoField
-    scheduled_date: InfoField
-    price_per_person: ActivityPrice  # SarPrice status rules; zero is allowed
+    price_per_person: SarPrice
     booking_url: BookingUrl
-    image_url: BookingUrl
 
 class CityStay(StrictModel):
     activities: list[Activity] = Field(default_factory=list)
@@ -226,6 +219,44 @@ class Proposal(StrictModel):
 5. شغّلوا الاختبارات قبل أي commit: `uv run pytest` في `backend`، و`npm run typecheck` في `frontend`.
 6. أي تغيير لحقل موجود أو حذفه، نسقوه مع Eyad أول.
 
+## صفحة التفاصيل
+
+الرابط: `/trips/:tripId/proposals/:proposalId`. الصفحة [ProposalDetailPage.tsx](../frontend/src/pages/ProposalDetailPage.tsx) تركّب الأقسام فقط، وكل قسم له ملف داخل `frontend/src/components/proposal-details/`.
+
+- **Developer 2 (الأنشطة):** عدّلوا `CityActivities.tsx` فقط. يظهر داخل بطاقة كل مدينة، ويستقبل `stay`، فاقرؤوا `stay.activities`.
+- **Developer 3 (التكاليف والتوافق):** عدّلوا `CostsAndCompatibility.tsx` فقط. يظهر قبل المصادر، ويستقبل `proposal`.
+- **المصادر:** قسم المصادر انحذف من الصفحة، والبيانات باقية في `sources` في الـ API. فأي مصدر تحتاجون تذكرونه، اذكروه جنب قيمته.
+- **القيم:** استخدموا `InfoValue` و`PriceValue` و`PriceAgeBadge` من `values.tsx`.
+- **النصوص:** كل نص جديد في `frontend/src/lib/translations.ts`، والأنماط في `frontend/src/proposal-details.css`.
+
+### حقول جديدة (كلها اختيارية، والعروض القديمة ما فيها)
+
+| الحقل | وين | المعنى |
+| --- | --- | --- |
+| `title_ar`, `title_en`, `destination_ar` | `Proposal` | العنوان باللغتين والوجهة بالعربي. والبديل `title` و`destination` |
+| `city_ar`, `area` | `CityStay` | اسم المدينة بالعربي، ومنطقة مقترحة |
+| `priced_at` | `Flights` و`CityStay` | وقت فحص السعر |
+| `flight_number`, `departure_time`, `arrival_time`, `stops`, `seller` | `FlightLeg` | تفاصيل الرحلة والبائع |
+| `origin_airport`, `destination_airport` | `Flights` | رموز المطارات |
+| `group_availability` | `Flights` | `available` أو `not_found` أو `unknown`. Ignav ما يعطي عدد مقاعد، فما فيه حقل عدد |
+| `fare_basis`, `solo_saving_sar` | `Flights` | هل السعر لحجز جماعي أو منفرد، والفرق للشخص |
+| `provider`, `seller_type`, `price_source` | `Flights` | مصدر السعر، ونوع البائع، وهل السعر من البائع أو من البحث |
+| `cabin_class`, `fare_name`, `checked_bags`, `carry_on_bags` | `Flights` | الفئة والشنط إذا المصدر رجعها |
+| `airline_fares` | `Flights` | معلومة عامة عن أرخص فئة لكل شركة: `fare_en` و`fare_ar` و`checked_kg`. تنضاف عند القراءة وما تنحفظ، وتنعدل في `app/data/airline_fares.json` |
+| `price` | `FlightLeg` | على round_trip موجود بس إذا البائع ذكر سعر كل اتجاه. لا تقسموا الإجمالي أبدًا |
+| `stop_airports` | `FlightLeg` | مطارات التوقف، مثل `["ATH"]`. فاضية في العروض القديمة |
+| `hotel_url`, `hotel_source` | `CityStay` | صفحة الفندق نفسه واسم المصدر. يظهر زر "احجز هذا الفندق" إذا موجودة |
+| `image` | `Proposal` و`CityStay` | صورة مع `url` و`source_url` و`artist` و`license`. تنضاف عند القراءة وما تنحفظ |
+| `from_station`, `to_station` | `IntercityTransfer` | أسماء المحطات. جاهزة في العرض، وما فيه شي يعبّيها حاليًا |
+| `kind` | `ProposalSource` | `booking` أو `ideas` أو `flight` |
+
+### تغييرات لازم تنتبهون لها
+
+- **ما فيه "عرض الدليل":** `evidence` يبقى في البيانات للتحقق، بس لا تعرضون الاقتباسات ولا مصادر `flight` للمستخدم.
+- **لا تستخدمون `booking_url` للطيران:** الرابط المحفوظ ممكن ينتهي. زر الحجز يطلب رابطًا جديدًا عبر `book-flight`.
+- **الفنادق:** الاسم والسعر يجون من مصادر الحجز المعتمدة بس، وغيرها يظهر `Not available`.
+- **`over_group_budget` ممكن يظهر الحين:** تحديث سعر الطيران ممكن يخلي عرضًا محفوظًا فوق الميزانية.
+
 ## قواعد لازم تلتزمون فيها
 
 1. **الخصوصية:** ما يظهر في أي نص ميزانية عضو، ولا مدينته، ولا اسمه، ولا تفضيلاته. يعني العناوين والشروحات عامة، مثل "مناسب لميزانية المجموعة".
@@ -242,5 +273,33 @@ class Proposal(StrictModel):
 - [docs/examples/proposals.mock.json](examples/proposals.mock.json): ٣ عروض وهمية للتطوير
 - [docs/ai-proposals.md](ai-proposals.md): كيف يشتغل التوليد، والخصوصية، وسياسة الأسعار
 
+### الصور والأسعار (لـ Developer 2 و 3)
 
-US-11/12 implementation and local mock demo: [activities.md](activities.md).
+- **الصور:** استخدموا `PlacePhoto` من `components/proposal-details/PlacePhoto.tsx`. يعرض ذكر المصدر والرخصة، ولوحة بديلة إذا ما فيه صورة.
+- **أسعار الطيران:** مرروا `startsFrom` إلى `PriceValue` حتى يظهر "يبدأ من". والملاحظة الثابتة هي `PriceNotice`.
+- **التكاليف (Developer 3):** استخدموا `price_per_person`، فهو نفس الرقم اللي يدخل في `budget_status`.
+- **الحجز:** `book-flight` صار `POST`، لأنه يحفظ السعر الجديد.
+
+### الأنشطة (لـ Developer 2)
+
+التفاصيل كاملة في [developer-2-handoff.md](developer-2-handoff.md)، ومنها اقتراح قسم "وش يصير في [المدينة] خلال أيام رحلتكم": فعاليات وأماكن مشهورة في تواريخ الرحلة، بحقوله ووين ينعرض. وTrip.com تم تقييمه واستبعاده، فلا تعتمدوا على `searchAttractionAndActivity`.
+
+
+## US-11/US-12 integration addendum
+
+The Ziyad integration retains all main fields and adds `CityStay.activities`
+(default empty). Activity fields: UUID id, activity/attraction/restaurant category,
+cited name/description/location/duration/scheduled_date, nonnegative Estimated or
+Unconfirmed price, optional HTTPS source link and image. Activity dates are checked
+against the city stay. `Proposal.activity_research_status` is not_requested or ready
+for live research (unavailable is reserved for failure reporting). Sources for all
+activity evidence are retained when member flight sources are filtered.
+
+POST `/api/trips/{trip}/proposals/{proposal}/activities/suggestions` takes the
+proposal version, reads stored cities, and persists verified provider results once.
+GET/PUT `.../activities/selection` read/save the signed-in member's choices.
+The existing proposal response's `costs` includes those choices, and
+`activities_selected` documents this in cost assumptions.
+
+See [activity integration](activities.md) for migrations, environment setup and
+pending live verification. There is no application mock fallback.

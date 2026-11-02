@@ -2,7 +2,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-from test_proposals_schema import mock_data
+from activity_fixture import mock_data
 
 from app.schemas.proposals import Proposal
 from app.services.activity_estimate import proposal_estimate

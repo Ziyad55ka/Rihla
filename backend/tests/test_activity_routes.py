@@ -27,9 +27,11 @@ def activity_api():
         },
     }
     app = create_app(Settings(_env_file=None, app_env="test"))
+    app.state.settings.place_images_enabled = False
     proposal = json.loads(
         (
-            Path(__file__).resolve().parents[2] / "docs/examples/proposals.mock.json"
+            Path(__file__).resolve().parents[2]
+            / "backend/tests/fixtures/activities.json"
         ).read_text(encoding="utf-8")
     )["proposals"][0]
     proposal.update(id=PROPOSAL, trip_id=TRIP)
@@ -46,6 +48,23 @@ def activity_api():
                     },
                 )
             calls.append((request.url.path, json.loads(request.content)))
+            if request.url.path.endswith("/rihla_get_activity_costs"):
+                return httpx.Response(
+                    200,
+                    json={
+                        "proposals": [
+                            {
+                                "id": PROPOSAL,
+                                "activity_ids": [ACTIVITY],
+                                "group_cost": {
+                                    "amount_sar": "85.50",
+                                    "status": "Estimated",
+                                    "partial": False,
+                                },
+                            }
+                        ]
+                    },
+                )
             if request.url.path.endswith("/rihla_get_proposals"):
                 return httpx.Response(
                     200,
@@ -89,6 +108,97 @@ def test_read_and_save_forward_only_verified_identity(activity_api):
     estimate = response.json()["estimate"]
     assert estimate["activities"]["known_amount_sar"] == "85.50"
     assert estimate["total"]["known_amount_sar"] == "3085.50"
+
+
+def test_main_proposal_response_includes_saved_activity_costs(activity_api):
+    client, _, _ = activity_api
+    response = client.get(f"/api/trips/{TRIP}/proposals")
+    assert response.status_code == 200
+    costs = response.json()["costs"][0]
+    assert "activities_selected" in costs["assumptions"]
+    activity_line = next(
+        part
+        for part in costs["scenarios"][0]["lines"]
+        if part["category"] == "activities"
+    )
+    assert activity_line["counted"]
+    assert activity_line["per_person"]["amount_sar"] == "85.50"
+
+
+def test_real_suggestions_require_provider_setup_and_verified_session(activity_api):
+    client, _, _ = activity_api
+    endpoint = URL.replace("/selection", "/suggestions")
+    assert client.post(endpoint, json={"version": 1}).status_code == 503
+    client.headers.pop("Authorization")
+    assert client.post(endpoint, json={"version": 1}).status_code == 401
+
+
+def test_cached_suggestions_do_not_spend_provider_requests(activity_api, monkeypatch):
+    from app.api.routes import activity_suggestions as routes
+
+    client, _, _ = activity_api
+    client.app.state.settings.gemini_api_key = "test"
+    client.app.state.settings.tavily_api_key = "test"
+    calls = []
+
+    async def rpc(name, args, settings, transport):
+        calls.append((name, args))
+        return httpx.Response(200, json={"ready": True, "started": False})
+
+    monkeypatch.setattr(routes, "_secret_rpc", rpc)
+    endpoint = URL.replace("/selection", "/suggestions")
+    assert client.post(endpoint, json={"version": 1}).json() == {"ready": True}
+    assert len(calls) == 1
+    assert calls[0][1]["p_user_id"] == "11111111-1111-4111-8111-111111111111"
+    assert (
+        client.post(endpoint, json={"version": 1, "p_user_id": TRIP}).status_code == 422
+    )
+
+
+def test_suggestions_save_checked_data_and_release_failed_jobs(
+    activity_api, monkeypatch
+):
+    from activity_fixture import mock_data
+
+    from app.api.routes import activity_suggestions as routes
+    from app.schemas.proposals import Proposal
+    from app.services.trip_research import ResearchError
+
+    client, _, _ = activity_api
+    client.app.state.settings.gemini_api_key = "test"
+    client.app.state.settings.tavily_api_key = "test"
+    calls = []
+    proposal = mock_data()["proposals"][0]
+
+    async def rpc(name, args, settings, transport):
+        calls.append((name, args))
+        return httpx.Response(
+            200, json={"ready": False, "started": True, "proposal": proposal}
+        )
+
+    async def find(p, settings):
+        return Proposal.model_validate(p.model_dump())
+
+    monkeypatch.setattr(routes, "_secret_rpc", rpc)
+    monkeypatch.setattr(routes, "find_activities", find)
+    endpoint = URL.replace("/selection", "/suggestions")
+    assert client.post(endpoint, json={"version": 1}).status_code == 200
+    assert [c[0] for c in calls] == [
+        "rihla_begin_activity_research",
+        "rihla_finish_activity_research",
+        "rihla_fail_activity_research",
+    ]
+
+    async def fail(p, settings):
+        raise ResearchError("model_quota", "Quota reached")
+
+    calls.clear()
+    monkeypatch.setattr(routes, "find_activities", fail)
+    assert client.post(endpoint, json={"version": 1}).status_code == 503
+    assert [c[0] for c in calls] == [
+        "rihla_begin_activity_research",
+        "rihla_fail_activity_research",
+    ]
 
 
 def test_anonymous_and_forged_owner_requests_cannot_save(activity_api):

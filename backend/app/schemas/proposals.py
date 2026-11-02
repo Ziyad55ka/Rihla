@@ -6,7 +6,7 @@ Sample data: docs/examples/proposals.mock.json.
 """
 
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
@@ -119,6 +119,12 @@ class ProposalSource(StrictModel):
     title: str = Field(min_length=1, max_length=300)
     # The page address. Example: "https://example.com/istanbul".
     url: str = Field(pattern=r"^https?://", max_length=2000)
+    # booking: an approved booking site. ideas: gives ideas only. flight: a fare note,
+    # never listed to users. Set when reading. Older data has none.
+    kind: Literal["booking", "ideas", "flight"] | None = None
+    # When this source was read for the proposal. Null on older proposals, which then
+    # use the generation time. US-14.
+    retrieved_at: datetime | None = None
 
 
 # One direction of a flight trip.
@@ -131,10 +137,36 @@ class FlightLeg(StrictModel):
     airline: InfoField
     # The flight time for this direction. Example value: "3h 20m".
     duration: InfoField
-    # On a round_trip the price is on the whole trip, so this is Not available.
+    # On a round_trip, set only when the seller states each direction's price itself.
+    # It is never worked out by dividing the total.
     price: SarPrice
-    # The link for this direction, or null. Both legs share one link on a round_trip.
+    # A link saved at generation. It can expire, so the page asks for a fresh one.
     booking_url: BookingUrl
+    # Null on older proposals. Example: "SV 1020". Connections: "SV 1020, SV 45".
+    flight_number: str | None = None
+    # Local airport time, or null on older proposals. Example: "2026-12-13T08:30".
+    departure_time: str | None = None
+    # Local airport time, or null on older proposals.
+    arrival_time: str | None = None
+    # 0 is nonstop. Null on older proposals.
+    stops: int | None = Field(default=None, ge=0)
+    # Where those stops are, or empty on older proposals. Example: ["ATH"].
+    stop_airports: list[str] = []
+    # Who sells this leg, or null. It can differ from the airline. Example: "Saudia".
+    seller: str | None = None
+
+
+# General facts about an airline's cheapest fare, never a promise for a ticket.
+class AirlineFareNote(StrictModel):
+    # Two characters. Example: "GF".
+    code: str
+    name_en: str
+    name_ar: str
+    # The fare's name. Example: "Economy Light".
+    fare_en: str
+    fare_ar: str
+    # The usual checked bag: 0 is none, and null is not confirmed.
+    checked_kg: int | None = Field(default=None, ge=0)
 
 
 # The flights from one departure city.
@@ -153,6 +185,34 @@ class Flights(StrictModel):
     # The whole trip's cost. On one_way, the return is not counted.
     # Sourced only for a verified round_trip fare in SAR.
     price_per_person: SarPrice
+    # When this price was checked, or null on older proposals.
+    priced_at: datetime | None = None
+    # Three-letter codes, or null on older proposals. Example: "RUH".
+    origin_airport: str | None = None
+    destination_airport: str | None = None
+    # available: the search for everyone from this city found this flight.
+    # not_found: it found none, so they may need different flights.
+    # unknown: not checked. Never holds a seat count or a traveller count.
+    group_availability: Literal["available", "not_found", "unknown"] = "unknown"
+    # group: priced as one booking for everyone from this city. solo: each person
+    # booking alone was cheaper, so price_per_person is that price. Null when older.
+    fare_basis: Literal["group", "solo"] | None = None
+    # With solo: how much less per person than one booking together.
+    solo_saving_sar: Decimal | None = Field(default=None, gt=0, decimal_places=2)
+    # Which source gave this price. Example: "ignav". Null on older proposals.
+    provider: str | None = None
+    # airline: sold by the airline itself. third_party: an agent. Null when unknown.
+    seller_type: str | None = None
+    # seller: the seller's own price. search: the search result's. Null when older.
+    price_source: Literal["seller", "search"] | None = None
+    # Null when the source does not say. Examples: "economy" and "Main Cabin".
+    cabin_class: str | None = None
+    fare_name: str | None = None
+    # Allowance per person, or null when the source does not say.
+    checked_bags: int | None = Field(default=None, ge=0)
+    carry_on_bags: int | None = Field(default=None, ge=0)
+    # Added on reading, never saved: what is generally known of these airlines' fares.
+    airline_fares: list[AirlineFareNote] = []
 
     @model_validator(mode="after")
     def legs_match_trip_type(self):
@@ -168,6 +228,18 @@ class Flights(StrictModel):
         elif self.price_per_person.status == "Sourced":
             raise ValueError("Only a round_trip fare can be Sourced.")
         return self
+
+
+# A free photo with its credit. Added on reading, never saved.
+class PlaceImage(StrictModel):
+    # The picture itself. Example: "https://upload.wikimedia.org/x.jpg".
+    url: str = Field(pattern=r"^https://", max_length=2000)
+    # The picture's page, with its full licence.
+    source_url: str = Field(pattern=r"^https://", max_length=2000)
+    # Who made it, as plain text, or null. Example: "A. Photographer".
+    artist: str | None = Field(default=None, max_length=200)
+    # Example: "CC BY-SA 4.0".
+    license: str = Field(min_length=1, max_length=100)
 
 
 def unavailable_info() -> InfoField:
@@ -213,6 +285,8 @@ class CityStay(StrictModel):
     order: int = Field(ge=1)
     # The city name. Example: "Cairo".
     city: str = Field(min_length=1, max_length=100)
+    # The city in Arabic, or null on older proposals.
+    city_ar: str | None = Field(default=None, min_length=1, max_length=100)
     # Nights here. All stays must add up to the trip dates. Example: 4.
     nights: int = Field(ge=0)
     # A suggested hotel. Example value: "Mock Hotel".
@@ -221,6 +295,16 @@ class CityStay(StrictModel):
     hotel_price_per_night: SarPrice
     # A Booking.com search, or null. It does not confirm availability or price.
     booking_url: BookingUrl
+    # A suggested area from idea sources, or null. Example: "Le Marais".
+    area: str | None = Field(default=None, max_length=150)
+    # When this price was checked, or null on older proposals.
+    priced_at: datetime | None = None
+    # A page for this hotel itself, as its source gave it, or null. Example: Trip.com.
+    hotel_url: BookingUrl = None
+    # Who gave the hotel and price when it was a live source. Example: "Trip.com".
+    hotel_source: str | None = Field(default=None, max_length=50)
+    # A photo of this city, or null.
+    image: PlaceImage | None = None
 
     activities: list[Activity] = Field(default_factory=list, max_length=100)
 
@@ -242,6 +326,9 @@ class IntercityTransfer(StrictModel):
     duration: InfoField
     # The price for one person. It cannot be Sourced. Example amount: "53.00".
     price_per_person: SarPrice
+    # Station names, or null. Nothing fills these yet. Example: "Paris Gare de l'Est".
+    from_station: str | None = Field(default=None, max_length=100)
+    to_station: str | None = Field(default=None, max_length=100)
 
     @field_validator("price_per_person")
     @classmethod
@@ -265,6 +352,34 @@ class FlexibleAdjustment(StrictModel):
         return value
 
 
+# US-15: how a proposal matches the group's requirements, by topic only. It never
+# holds requirement text, a member or a count, so it is safe to show any member.
+# met: the backend checked it in code.
+# unverified: only the AI reported it as met; the backend could not check it.
+# unmet: not met. A Flexible one is explained in flexible_adjustments.
+CompatibilityStatus = Literal["met", "unverified", "unmet"]
+# The preference categories, plus the group budget and the shared dates.
+CompatibilityTopic = Literal[
+    "destinations", "interests", "flights", "accommodation", "budget", "dates"
+]
+
+
+class CompatibilityCheck(StrictModel):
+    # See CompatibilityTopic. Example: "accommodation".
+    topic: CompatibilityTopic
+    # Essential or Flexible for a preference. Required for budget and dates.
+    importance: Literal["Essential", "Flexible", "Required"]
+    # See CompatibilityStatus. Example: "unverified".
+    status: CompatibilityStatus
+
+    @model_validator(mode="after")
+    def importance_fits_topic(self):
+        required = self.topic in {"budget", "dates"}
+        if required != (self.importance == "Required"):
+            raise ValueError("Only budget and dates are Required checks.")
+        return self
+
+
 # One complete trip option.
 class Proposal(StrictModel):
     # This proposal's own id, a UUID.
@@ -277,8 +392,14 @@ class Proposal(StrictModel):
     option_number: int = Field(ge=1, le=3)
     # A general title with no private details. Example: "Nile Heritage Experience".
     title: str = Field(min_length=1, max_length=150)
+    # The title in Arabic, or null on older proposals. The page then shows `title`.
+    title_ar: str | None = Field(default=None, min_length=1, max_length=150)
+    # The title in English, or null on older proposals. The page then shows `title`.
+    title_en: str | None = Field(default=None, min_length=1, max_length=150)
     # The place shown to users. Example: "Cairo".
     destination: str = Field(min_length=1, max_length=100)
+    # The place in Arabic, or null on older proposals.
+    destination_ar: str | None = Field(default=None, min_length=1, max_length=100)
     # The first day. JSON sends YYYY-MM-DD. Example: "2026-12-13".
     start_date: date
     # The last day. JSON sends YYYY-MM-DD. Example: "2026-12-17".
@@ -295,6 +416,20 @@ class Proposal(StrictModel):
     budget_status: BudgetStatus
     # Every source cited by Evidence in this proposal.
     sources: list[ProposalSource]
+    # A photo of the destination, or null.
+    image: PlaceImage | None = None
+    activity_research_status: Literal["not_requested", "ready", "unavailable"] = (
+        "not_requested"
+    )
+    # US-15. Empty on proposals generated before this field existed.
+    compatibility: list[CompatibilityCheck] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def one_check_per_requirement_kind(self):
+        kinds = [(item.topic, item.importance) for item in self.compatibility]
+        if len(set(kinds)) != len(kinds):
+            raise ValueError("Each topic and importance can appear once.")
+        return self
 
     @model_validator(mode="after")
     def consistent_itinerary(self):

@@ -67,11 +67,6 @@ function CurrentPage() {
     onBack={() => { rememberReturnPath(null); navigate('/') }} />
 }
 
-const ActivitiesDemo = lazy(() => import('./pages/ActivitiesDemo').then(module => ({ default: module.ActivitiesDemo })))
-
 export default function App() {
-  if (import.meta.env.DEV && window.location.pathname === '/demo/activities') {
-    return <LanguageProvider><Suspense fallback={null}><ActivitiesDemo /></Suspense></LanguageProvider>
-  }
   return <LanguageProvider><AuthProvider><CurrentPage /><PageMotion /></AuthProvider></LanguageProvider>
 }

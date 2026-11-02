@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { activityProposalEstimate, isActivitySuitable, mockSelectionStore, selectedActivityCost, validateSelection } from './activities'
-import data from '../data/activities.mock.json'
-import type { ProposalSet } from '../types/proposal'
+import { activityProposalEstimate, isActivitySuitable, selectedActivityCost, validateSelection } from './activities'
+import data from '../test-fixtures/activities.json'
+import type { Proposal, ProposalSet, ActivitySelections } from '../types/proposal'
 
 const [proposal, other] = (data as ProposalSet).proposals
 const activities = proposal.cities[0].activities!
@@ -72,3 +72,23 @@ describe('US-12 proposal estimate integration', () => {
     expect(() => validateSelection(changed, [event.id])).toThrow()
   })
 })
+
+export function mockSelectionStore(storage: Pick<Storage, 'getItem' | 'setItem'>) {
+  const key = (p: Proposal) => `rihla.demo.activities:${p.trip_id}:${p.id}:${p.version}`
+  const result = (p: Proposal, ids: string[]): ActivitySelections => ({ proposal_id: p.id, version: p.version, activity_ids: ids, estimate: activityProposalEstimate(p, ids) })
+  return {
+    async load(p: Proposal) {
+      const raw = storage.getItem(key(p))
+      if (raw === null) return result(p, [])
+      const ids: unknown = JSON.parse(raw)
+      if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string')) throw new Error('Could not load activity selections.')
+      return result(p, validateSelection(p, ids))
+    },
+    async save(p: Proposal, ids: string[]) {
+      validateSelection(p, ids)
+      storage.setItem(key(p), JSON.stringify(ids))
+      return result(p, ids)
+    },
+  }
+}
+

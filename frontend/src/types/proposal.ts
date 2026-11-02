@@ -70,6 +70,10 @@ export interface ProposalSource {
   title: string
   /** The page address. Example: `"https://example.com/istanbul"`. */
   url: string
+  /** `booking`: an approved booking site. `ideas`: ideas only. `flight`: never listed. */
+  kind?: 'booking' | 'ideas' | 'flight' | null
+  /** When this source was read (US-14). Absent on older proposals: use `generated_at`. */
+  retrieved_at?: string | null
 }
 
 /** One direction of a flight trip. */
@@ -84,8 +88,20 @@ export interface FlightLeg {
   duration: InfoField
   /** On a round_trip the price is on the whole trip, so this is `Not available`. */
   price: SarPrice
-  /** The link for this direction, or null. Both legs share one link on a round_trip. */
+  /** A link saved at generation. It can expire, so the page asks for a fresh one. */
   booking_url: string | null
+  /** Null on older proposals. Example: `"SV 1020"`. Connections: `"SV 1020, SV 45"`. */
+  flight_number?: string | null
+  /** Local airport time, or null on older proposals. Example: `"2026-12-13T08:30"`. */
+  departure_time?: string | null
+  /** Local airport time, or null on older proposals. */
+  arrival_time?: string | null
+  /** 0 is nonstop. Null on older proposals. */
+  stops?: number | null
+  /** Who sells this leg, or null. It can differ from the airline. */
+  seller?: string | null
+  /** Where the stops are, or empty on older proposals. Example: ["ATH"]. */
+  stop_airports?: string[]
 }
 
 /** The flights from one departure city. */
@@ -102,9 +118,56 @@ export interface Flights {
   duration: InfoField
   /** The whole trip's cost. On one_way, the return is not counted. */
   price_per_person: SarPrice
+  /** When this price was checked, or null on older proposals. */
+  priced_at?: string | null
+  /** Three-letter code, or null on older proposals. Example: `"RUH"`. */
+  origin_airport?: string | null
+  /** Three-letter code, or null on older proposals. */
+  destination_airport?: string | null
+  /** Whether the search for everyone from this city found the flight. Never a count. */
+  group_availability?: 'available' | 'not_found' | 'unknown'
+  /** solo: each person booking alone was cheaper, and the price shown is that one. */
+  fare_basis?: 'group' | 'solo' | null
+  /** With solo: how much less per person than one booking together. */
+  solo_saving_sar?: string | null
+  /** Added when reading. */
+  airline_fares?: AirlineFareNote[]
+  /** Which source gave this price. Example: "ignav". */
+  provider?: string | null
+  /** airline, third_party, or null when unknown. */
+  seller_type?: string | null
+  /** seller: the seller's own price. search: the search result's. */
+  price_source?: 'seller' | 'search' | null
+  /** Null when the source does not say. */
+  cabin_class?: string | null
+  fare_name?: string | null
+  /** Allowance per person, or null when the source does not say. */
+  checked_bags?: number | null
+  carry_on_bags?: number | null
 }
 
-/** Stable within a saved proposal; selections are scoped to its version. */
+/** General facts about an airline's cheapest fare, never a promise for a ticket. */
+export interface AirlineFareNote {
+  code: string
+  name_en: string
+  name_ar: string
+  fare_en: string
+  fare_ar: string
+  /** The usual checked bag: 0 is none, and null is not confirmed. */
+  checked_kg?: number | null
+}
+
+/** A free photo with its credit. Added when reading, and never saved. */
+export interface PlaceImage {
+  url: string
+  /** The picture's page, with its full licence. */
+  source_url: string
+  artist?: string | null
+  /** Example: "CC BY-SA 4.0". */
+  license: string
+}
+
+/** A stay in one city. */
 export type ActivityCategory = 'activity' | 'attraction' | 'restaurant'
 
 export interface Activity {
@@ -150,12 +213,13 @@ export interface ActivitySelections {
 
 /** A stay in one city. */
 export interface CityStay {
-  /** Absent on legacy saved data. Treat it as an empty list. */
   activities?: Activity[]
   /** The position in the route, counting up from 1. Example: `1`. */
   order: number
   /** The city name. Example: `"Cairo"`. */
   city: string
+  /** The city in Arabic, or null on older proposals. */
+  city_ar?: string | null
   /** Nights here. All stays add up to the trip dates. Example: `4`. */
   nights: number
   /** A suggested hotel. Example value: `"Mock Hotel"`. */
@@ -164,6 +228,16 @@ export interface CityStay {
   hotel_price_per_night: SarPrice
   /** A Booking.com search, or null. It does not confirm availability or price. */
   booking_url: string | null
+  /** A suggested area from idea sources, or null. Example: `"Le Marais"`. */
+  area?: string | null
+  /** When this price was checked, or null on older proposals. */
+  priced_at?: string | null
+  /** A page for this hotel itself, as its source gave it. */
+  hotel_url?: string | null
+  /** Who gave the hotel and price when it was a live source. Example: "Trip.com". */
+  hotel_source?: string | null
+  /** A photo of this city, or null. */
+  image?: PlaceImage | null
 }
 
 /** Travel between two consecutive cities. */
@@ -178,6 +252,9 @@ export interface IntercityTransfer {
   duration: InfoField
   /** The price for one person. It is never `Sourced`. Example amount: `"53.00"`. */
   price_per_person: SarPrice
+  /** Station names, or null. Nothing fills these yet. */
+  from_station?: string | null
+  to_station?: string | null
 }
 
 /** Explains a Flexible preference that this proposal could not meet. */
@@ -190,6 +267,7 @@ export interface FlexibleAdjustment {
 
 /** One complete trip option. */
 export interface Proposal {
+  activity_research_status?: 'not_requested' | 'ready' | 'unavailable'
   /** This proposal's own id, a UUID. */
   id: string
   /** The trip it belongs to, a UUID. */
@@ -200,8 +278,14 @@ export interface Proposal {
   option_number: 1 | 2 | 3
   /** A general title with no private details. Example: `"Nile Heritage Experience"`. */
   title: string
+  /** The title in Arabic, or absent on older proposals. Show `title` then. */
+  title_ar?: string | null
+  /** The title in English, or absent on older proposals. Show `title` then. */
+  title_en?: string | null
   /** The place shown to users. Example: `"Cairo"`. */
   destination: string
+  /** The place in Arabic, or null on older proposals. */
+  destination_ar?: string | null
   /** The first day, YYYY-MM-DD. Example: `"2026-12-13"`. */
   start_date: string
   /** The last day, YYYY-MM-DD. Example: `"2026-12-17"`. */
@@ -218,6 +302,73 @@ export interface Proposal {
   budget_status: BudgetStatus
   /** Every source cited by Evidence in this proposal. */
   sources: ProposalSource[]
+  /** A photo of the destination, or null. */
+  image?: PlaceImage | null
+  /** US-15: how this proposal matches the group's requirements. Empty on older proposals. */
+  compatibility?: CompatibilityCheck[]
+}
+
+/**
+ * US-15. `met`: checked by the backend. `unverified`: only the AI reported it met.
+ * `unmet`: not met; a Flexible one is explained in `flexible_adjustments`.
+ */
+export type CompatibilityStatus = 'met' | 'unverified' | 'unmet'
+/** The preference categories, plus the group budget and the shared dates. */
+export type CompatibilityTopic = PreferenceCategory | 'budget' | 'dates'
+
+/** One result per topic and importance. Never holds requirement text or a member. */
+export interface CompatibilityCheck {
+  topic: CompatibilityTopic
+  /** Essential or Flexible for a preference. Required for budget and dates. */
+  importance: 'Essential' | 'Flexible' | 'Required'
+  status: CompatibilityStatus
+}
+
+/** US-13 cost categories. */
+export type CostCategory = 'flights' | 'accommodation' | 'transport' | 'activities' | 'meals'
+/** `single`: one person per room. `shared`: two per room, split evenly. */
+export type RoomPlan = 'single' | 'shared'
+/** The caller's own budget, as a label only. */
+export type OwnBudget = 'within' | 'over' | 'unconfirmed' | 'unknown'
+export type CostAssumption =
+  | 'rooms_single' | 'rooms_shared' | 'flights_own_city' | 'flights_one_way' | 'flights_missing'
+  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'group_total_all_cities'
+  | 'group_total_unavailable' | 'prices_may_change'
+
+export interface CostAmount {
+  /** The sum of the known parts, as a string such as `"3750.00"`, or null. */
+  amount_sar: string | null
+  /** The weakest status among the known parts. */
+  status: PriceStatus
+  /** True when a part is Not available, so the amount is too low. */
+  partial: boolean
+}
+
+export interface CostLine {
+  category: CostCategory
+  per_person: CostAmount
+  /** False for information only, such as activities not added yet. */
+  counted: boolean
+}
+
+export interface CostScenario {
+  rooms: RoomPlan
+  lines: CostLine[]
+  per_person_total: CostAmount
+  /** Null when the backend could not read the group. */
+  group_total: CostAmount | null
+  own_budget: OwnBudget
+  /** Only when `own_budget` is `over`, for this member alone. */
+  over_by_sar: string | null
+}
+
+/** The signed-in member's cost breakdown for one proposal. Worked out on reading. */
+export interface ProposalCosts {
+  proposal_id: string
+  days: number
+  nights: number
+  scenarios: CostScenario[]
+  assumptions: CostAssumption[]
 }
 
 /** A general conflict category. It never names a member or a value. */
@@ -243,10 +394,18 @@ export interface StoredProposals {
   generated_at: string | null
   /** True while a generation is running for this trip. */
   generating: boolean
-  /** True when proposals exist but none has flights from this member's city. */
+  /** True when members or preferences changed after generation, or none has this member's city. */
   needs_regeneration: boolean
   /** Up to three proposals, by option number. Can be empty. */
   proposals: Proposal[]
+  /** A price is fresh below this many hours. Set by the backend. */
+  price_fresh_hours?: number
+  /** A price is old above this many hours. Set by the backend. */
+  price_stale_hours?: number
+  /** Minutes before the flight price can be refreshed again. */
+  refresh_cooldown_minutes?: number
+  /** US-13: the caller's own costs for each proposal. Absent from older backends. */
+  costs?: ProposalCosts[]
 }
 
 /** The response of `POST /api/trips/{trip_id}/proposals`, administrator only. */
@@ -259,7 +418,7 @@ export interface GeneratedProposals extends StoredProposals {
   demo: boolean
 }
 
-/** Exactly three different proposals, as in the mock and demo files. */
+
 export interface ProposalSet {
   /** Options 1, 2 and 3. */
   proposals: Proposal[]

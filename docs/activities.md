@@ -1,96 +1,72 @@
-# US-11 and US-12 — Ziyad
+# US-11/US-12 integration
 
-## Local demo
+Integrated against main `0ac74999bc8869bb60cddd3e33b54c0d0c1c5bb5`.
+No changes are made to main or teammates' branches.
 
-From `frontend`, run `npm ci`, then `npm run dev`. Open
-`http://localhost:5173/demo/activities`.
+## Flow
 
-This development-only page needs no login, Supabase credentials, AI key, or backend.
-It uses synthetic proposals from `src/data/activities.mock.json`. Select activities,
-save, refresh, switch proposals, and remove selections. Demo selections live only
-in this browser and are isolated by trip, proposal and generation version.
-An unavailable price remains unknown rather than becoming zero; a free activity
-has an explicit zero price. The saved activity subtotal is included in the relevant per-person proposal estimate. The original budget label is marked as applying before selected activities.
+1. Open a real proposal from the trip workspace.
+2. In its existing details page, choose **Find activity suggestions**.
+3. The authenticated backend reads that proposal's stored cities and dates.
+   Tavily searches public city/date information; Gemini extracts cited suggestions.
+   No member budgets, preferences or departure cities enter activity search prompts.
+4. Names, locations, durations, descriptions and dates must match a quoted source.
+   Fabricated quotes and source ids are rejected. Prices require a stated amount
+   and currency; converted prices are Estimated, missing prices stay unknown.
+   Events outside the city's stay are omitted. Missing images use a placeholder.
+5. Suggestions are saved once for the proposal. A database lease prevents duplicate
+   paid searches, and cached results are shared across trip members. Failed jobs
+   can retry after a short backoff; regenerated proposals invalidate old jobs.
+6. Each member selects/removes activities and presses **Save activities**.
+   No day or time assignment is required. Choices persist in Supabase per member.
+7. Saving refreshes Developer 3's existing cost section. It adds that member's
+   saved activities and uses the sum of each member's actual choices for the group.
+   Unknown costs make totals partial; one member's choices are not multiplied by
+   the group size. Other members' choices and budgets are not exposed.
 
-## Shared schema additions
+The previous `/demo/activities` page and browser-localStorage mock adapter are
+removed from the application. Synthetic activity examples exist only under test
+fixtures. Developer 1's existing general proposal demo mode remains unchanged;
+activity research itself never substitutes demo results.
 
-`CityStay.activities` defaults to an empty list, preserving saved proposals without
-activities. Each activity has a UUID, a category (activity, attraction or restaurant), name, description, location, duration,
-scheduled date, price per person, optional HTTPS booking link, and optional HTTPS
-image URL. Text and date fields use `InfoField`; the price retains `SarPrice`'s
-status and evidence contract, with zero permitted only by `ActivityPrice`.
-Activity prices cannot be `Sourced`, preserving the team's live-flight-only rule.
+## Deployment prerequisites
 
-Dates use ISO calendar dates and must fit the activity's city stay. Activity UUIDs
-must be unique within the proposal. `evidence_fields()` includes every activity
-field so source validation and source pruning continue to work.
-The Python and TypeScript definitions, shared mock, and frontend mock are updated.
-The AI generation pipeline is unchanged: Developer 1 must supply the activities
-according to this schema when enabling real activity generation.
+This checkout has **no live credentials**. Local tests stub external services;
+passing them does not establish that production keys, quotas or cloud migrations
+are configured. No migration has been applied to the shared cloud database here.
 
-## Main design reference
+Use the team's normal `backend/.env` and `frontend/.env.local` files, keeping all
+secret keys out of GitHub and out of the frontend. Required variables already
+appear in the main branch's environment examples:
 
-The supplied main archive's `styles.css`, `workspace.css`, `navbar.css` and
-`planning.css` were compared byte-for-byte with the Sprint 2 base: they match.
-Those CSS files and the original LandingPage are unchanged. The demo reuses `Brand`, `LanguageSwitcher`, the original landing shell, `rihla-navbar`, `ProposalsView`, `trip-primary`,
-`trip-secondary`, and `planning-member-card` from that design. Added activity CSS
-uses the existing `--rihla-*` variables, card borders, spacing and type treatment.
-The activities appear below the selected proposal, rather than squeezing three
-activity panels inside the three proposal summary cards. Arabic and English are
-supported; generated/mock content remains in its supplied language.
+- Backend: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`,
+  `GEMINI_API_KEY`, `TAVILY_API_KEY`, and the team's `PROPOSALS_HASH_KEY`.
+- Frontend: `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
-## Real persistence (prepared, not applied to a cloud database)
+Activity search can reuse existing real proposals; regenerating the entire trip
+is not required. Apply new activity migrations in order through the team's normal
+deployment process, after their existing proposal migration:
 
-New migration: `20261103000100_activity_selections.sql`, after the existing proposal
-migrations. It creates private per-member selections with RLS and no direct browser
-table access. The authenticated RPCs infer the user from the session, check current
-trip membership, verify proposal/version/activity IDs, and reject old proposals.
-Regeneration deletes the old proposal rows and cascades their selections.
-The public proposal ID is inside its JSON; the table row has a different internal
-ID. The RPCs resolve the public ID and use the internal ID for the foreign key.
+1. `20261103000100_activity_selections.sql`
+2. `20261105000100_activity_research.sql`
+3. `20261105000200_activity_costs.sql`
 
-Backend endpoints:
+The existing `20261104000100_proposal_cost_context.sql` is also needed for the
+group total and private budget comparison. Do not reapply or edit teammates'
+existing migrations to add these features.
 
-- `GET /api/trips/{trip_id}/proposals/{proposal_id}/activities/selection`
-- `PUT /api/trips/{trip_id}/proposals/{proposal_id}/activities/selection`
+## Live verification still required
 
-PUT body: `{ "version": 1, "activity_ids": ["uuid"] }`. Send an empty list to
-remove all selections. It replaces only the caller's choices for that proposal.
-The normal proposals UI uses these authenticated endpoints. No cloud migration has been applied. This work is intended for the Ziyad development branch only; main and the teammate branch are unchanged.
+With the team's setup: log in as two trip members, open the same real proposal,
+research its cities, save different selections, reload, remove a selection and
+save again. Confirm each member sees their own choices and that the shared total
+adds both members' costs. Exercise a provider failure, missing prices, expired
+events and regeneration. These live checks are pending credentials and deployment.
 
-## Validation
+## Scope
 
-- Frontend: lint, translation coverage, TypeScript, unit tests, production build.
-- Backend: Ruff and pytest with fake external services.
-- Database: migrations and access-control tests on local PGlite PostgreSQL.
-- Browser: selecting, saving, refreshing, Arabic display and proposal switching.
-
-## Development branch and integration
-
-This implementation is based on the supplied sprint-2/ai-proposals archive,
-matching commit 357ce2218af325df8d87bdaa5c3822bd9ccc20b0. It deliberately does not
-incorporate subsequent teammate changes. Only Ziyad is the upload target.
-
-The explicit Save activities button is retained by the user's preference.
-The latest local revision implements all seven US-11/12 criteria with mock data;
-see [activity-acceptance.md](activity-acceptance.md) for the criterion-by-criterion
-review, tests, scope boundary and the proposal-estimate response contract.
-The user reviewed the local revision and approved updating Ziyad only. No merge into main or teammate branch changes are authorized.
-
-## Visual layout
-
-The page opens with the existing navbar, a short heading, the three proposals,
-and the selected proposal's activities. The large welcome hero and artwork are
-not repeated inside this planning task. The original homepage is unchanged.
-Synthetic example copy is localized without changing activity IDs or selection
-keys. Cards include decorative line art when no photo is supplied. The missing
-price status appears once per field. Lint, translations, TypeScript and the
-production build pass after this layout change.
-
-## Estimate API
-
-Selection reads and saves now return `estimate`, including proposal_id, version,
-currency, flights, accommodation, transport, activities and total. Every component
-has known_amount_sar (decimal string), missing_items, unconfirmed_items and
-estimated_items. The service uses member-filtered proposals and recomputes from
-saved IDs, never request prices. The mock store returns the same contract.
+Only activity browsing, selection persistence, and the US-12-AC03 cost integration
+are added. Existing flights, bookings, rooms, compatibility and sources remain
+Developer 1/3's implementations. The flight-price review findings on PR #2 were
+not fixed by this change.

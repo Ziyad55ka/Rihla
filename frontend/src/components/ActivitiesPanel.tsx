@@ -30,7 +30,7 @@ function ActivityInfo({ label, field, proposal }: { label: string; field: InfoFi
   </dd></div>
 }
 
-export function ActivitiesPanel({ proposal, store = activityApi }: { proposal: Proposal; store?: SelectionStore }) {
+export function ActivitiesPanel({ proposal, store = activityApi, onSaved, showEstimate = true }: { proposal: Proposal; store?: SelectionStore; onSaved?: () => void; showEstimate?: boolean }) {
   const { t, locale } = useLanguage()
   const [ids, setIds] = useState<string[]>([])
   const [saved, setSaved] = useState<string[]>([])
@@ -58,11 +58,12 @@ export function ActivitiesPanel({ proposal, store = activityApi }: { proposal: P
     try {
       const result = await store.save(proposal, ids)
       setSaved(result.activity_ids); setIds(result.activity_ids); setEstimate(result.estimate ?? activityProposalEstimate(proposal, result.activity_ids)); setNotice('Activity selections saved.')
+      onSaved?.()
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save activity selections.') }
     finally { setBusy(false) }
   }
   const loadFailed = error === 'Could not load activity selections.'
-  return <section className="activities-panel" aria-label={t('Activities')}>
+  return <section id="activities-options" className="activities-panel" aria-label={t('Activities')}>
     <h4>{t('Activities and places')}</h4>
     <p className="activity-selection-note">{t('Choose freely. You do not need to assign a day or time.')}</p>
     <div className="activity-filters" role="group" aria-label={t('Suggestion categories')}>
@@ -107,6 +108,6 @@ export function ActivitiesPanel({ proposal, store = activityApi }: { proposal: P
       {dirty && <p>{t('You have unsaved activity changes.')}</p>}
       <button type="button" className="trip-primary" disabled={loading || busy || loadFailed || !dirty} onClick={() => void save()}>{t(busy ? 'Saving activities…' : 'Save activities')}</button>
     </div>
-    {estimate && <ActivityEstimate estimate={estimate} dirty={dirty} />}
+    {showEstimate && estimate && <ActivityEstimate estimate={estimate} dirty={dirty} />}
   </section>
 }

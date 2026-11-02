@@ -3,6 +3,7 @@ import { canPressGenerate, conflictMessages, generateProposals, getConflicts, ge
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./http', () => ({ authenticatedRequest: request }))
+vi.mock('./proposalsHttp', () => ({ longRequest: request }))
 afterEach(() => vi.resetAllMocks())
 
 it('reads conflicts and proposals for the selected trip', async () => {
@@ -15,7 +16,7 @@ it('reads conflicts and proposals for the selected trip', async () => {
 
 it('asks for regeneration explicitly and allows a long wait', async () => {
   await generateProposals('t', true)
-  expect(request).toHaveBeenCalledWith('/api/trips/t/proposals', { method: 'POST', body: { regenerate: true }, timeoutMs: 600000 })
+  expect(request).toHaveBeenCalledWith('/api/trips/t/proposals', { body: { regenerate: true }, timeoutMs: 600000 })
 })
 
 it('allows generating only with no conflicts and no running generation', () => {

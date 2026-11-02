@@ -34,153 +34,7 @@
               }
             ]
           },
-          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Bosphorus+Hotel%2C+Istanbul%2C+Turkey&checkin=2026-11-20&checkout=2026-11-24&group_adults=4",
-          "activities": [
-            {
-              "id": "10000000-0000-4000-8000-000000000001",
-              "name": {
-                "value": "MOCK: Museum visit — Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "85.50",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "attraction"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000002",
-              "name": {
-                "value": "MOCK: City walk — Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "0.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000003",
-              "name": {
-                "value": "MOCK: Evening event — Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": "2026-11-21",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000101",
-              "name": {
-                "value": "MOCK: Local restaurant — Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Istanbul",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "1 hour",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "65.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "restaurant"
-            }
-          ]
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Bosphorus+Hotel%2C+Istanbul%2C+Turkey&checkin=2026-11-20&checkout=2026-11-24&group_adults=4"
         }
       ],
       "flights": [
@@ -268,12 +122,36 @@
         {
           "id": 1,
           "title": "Mock hotel guide",
-          "url": "https://example.com/mock-hotels"
+          "url": "https://example.com/mock-hotels",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 2,
           "title": "Mock flight guide",
-          "url": "https://example.com/mock-flights"
+          "url": "https://example.com/mock-flights",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Essential",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "met"
         }
       ]
     },
@@ -306,153 +184,7 @@
             "status": "Unconfirmed",
             "evidence": []
           },
-          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Old+Town+Hotel%2C+Tbilisi%2C+Georgia&checkin=2026-11-20&checkout=2026-11-23&group_adults=4",
-          "activities": [
-            {
-              "id": "10000000-0000-4000-8000-000000000004",
-              "name": {
-                "value": "MOCK: Museum visit — Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "85.50",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "attraction"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000005",
-              "name": {
-                "value": "MOCK: City walk — Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "0.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000006",
-              "name": {
-                "value": "MOCK: Evening event — Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": "2026-11-21",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000102",
-              "name": {
-                "value": "MOCK: Local restaurant — Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Tbilisi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "1 hour",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "65.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "restaurant"
-            }
-          ]
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Old+Town+Hotel%2C+Tbilisi%2C+Georgia&checkin=2026-11-20&checkout=2026-11-23&group_adults=4"
         },
         {
           "order": 2,
@@ -468,153 +200,7 @@
             "status": "Not available",
             "evidence": []
           },
-          "booking_url": "https://www.booking.com/searchresults.html?ss=Batumi%2C+Georgia&checkin=2026-11-23&checkout=2026-11-24&group_adults=4",
-          "activities": [
-            {
-              "id": "10000000-0000-4000-8000-000000000007",
-              "name": {
-                "value": "MOCK: Museum visit — Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "85.50",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "attraction"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000008",
-              "name": {
-                "value": "MOCK: City walk — Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "0.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000009",
-              "name": {
-                "value": "MOCK: Evening event — Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": "2026-11-24",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000103",
-              "name": {
-                "value": "MOCK: Local restaurant — Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Batumi",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "1 hour",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "65.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "restaurant"
-            }
-          ]
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Batumi%2C+Georgia&checkin=2026-11-23&checkout=2026-11-24&group_adults=4"
         }
       ],
       "flights": [
@@ -732,17 +318,47 @@
         {
           "id": 1,
           "title": "Mock Tbilisi guide",
-          "url": "https://example.com/mock-tbilisi"
+          "url": "https://example.com/mock-tbilisi",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 2,
           "title": "Mock route page",
-          "url": "https://example.com/mock-route"
+          "url": "https://example.com/mock-route",
+          "retrieved_at": "2026-11-02T00:00:00Z"
         },
         {
           "id": 3,
           "title": "Mock rail guide",
-          "url": "https://example.com/mock-rail"
+          "url": "https://example.com/mock-rail",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Essential",
+          "status": "met"
+        },
+        {
+          "topic": "interests",
+          "importance": "Flexible",
+          "status": "unverified"
+        },
+        {
+          "topic": "accommodation",
+          "importance": "Flexible",
+          "status": "unmet"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     },
@@ -780,153 +396,7 @@
               }
             ]
           },
-          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Caspian+Hotel%2C+Baku%2C+Azerbaijan&checkin=2026-11-20&checkout=2026-11-24&group_adults=4",
-          "activities": [
-            {
-              "id": "10000000-0000-4000-8000-000000000010",
-              "name": {
-                "value": "MOCK: Museum visit — Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "85.50",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "attraction"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000011",
-              "name": {
-                "value": "MOCK: City walk — Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "0.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000012",
-              "name": {
-                "value": "MOCK: Evening event — Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic activity for testing only.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "2 hours",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": "2026-11-21",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "activity"
-            },
-            {
-              "id": "10000000-0000-4000-8000-000000000104",
-              "name": {
-                "value": "MOCK: Local restaurant — Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "description": {
-                "value": "Synthetic restaurant suggestion; an estimated meal per person.",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "location": {
-                "value": "Baku",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "duration": {
-                "value": "1 hour",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "scheduled_date": {
-                "value": null,
-                "status": "Not available",
-                "evidence": []
-              },
-              "price_per_person": {
-                "amount_sar": "65.00",
-                "status": "Unconfirmed",
-                "evidence": []
-              },
-              "booking_url": null,
-              "image_url": null,
-              "category": "restaurant"
-            }
-          ]
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Mock+Caspian+Hotel%2C+Baku%2C+Azerbaijan&checkin=2026-11-20&checkout=2026-11-24&group_adults=4"
         }
       ],
       "flights": [
@@ -999,7 +469,30 @@
         {
           "id": 1,
           "title": "Mock Baku guide",
-          "url": "https://example.com/mock-baku"
+          "url": "https://example.com/mock-baku",
+          "retrieved_at": "2026-11-02T00:00:00Z"
+        }
+      ],
+      "compatibility": [
+        {
+          "topic": "destinations",
+          "importance": "Flexible",
+          "status": "met"
+        },
+        {
+          "topic": "accommodation",
+          "importance": "Essential",
+          "status": "unverified"
+        },
+        {
+          "topic": "dates",
+          "importance": "Required",
+          "status": "met"
+        },
+        {
+          "topic": "budget",
+          "importance": "Required",
+          "status": "unverified"
         }
       ]
     }

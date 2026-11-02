@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { LanguageProvider } from '../lib/language'
 import { activityProposalEstimate } from '../lib/activities'
 import { ActivityEstimate } from './ActivityEstimate'
-import data from '../data/activities.mock.json'
+import data from '../test-fixtures/activities.json'
 import type { ProposalSet } from '../types/proposal'
 
 const proposal = (data as ProposalSet).proposals[0]

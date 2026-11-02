@@ -2,8 +2,8 @@ from copy import deepcopy
 from datetime import timedelta
 
 import pytest
+from activity_fixture import mock_data
 from pydantic import ValidationError
-from test_proposals_schema import mock_data
 
 from app.schemas.activities import SelectionRequest
 from app.schemas.proposals import Proposal

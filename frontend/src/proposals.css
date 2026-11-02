@@ -9,5 +9,7 @@ html[dir='rtl'] .proposals-conflicts { padding:14px 34px 14px 18px; }
 .proposals-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin:20px 0 0; padding:0; list-style:none; }
 .proposals-card { min-width:0; padding:20px; background:#f7f8f1; border:1px solid #dfe3d6; border-radius:14px; }
 .proposals-card h3 { margin:6px 0 4px; font-size:18px; overflow-wrap:anywhere; }
+.proposals-card h3 a { color:inherit; }
+.proposals-open { display:flex; width:fit-content; min-height:40px; margin-top:14px; padding:9px 14px; }
 .proposals-destination, .proposals-dates { margin:0 0 8px; color:#5d6b5f; font-size:13px; overflow-wrap:anywhere; }
 @media (max-width:640px) { .proposals-panel { padding:22px 18px; } }

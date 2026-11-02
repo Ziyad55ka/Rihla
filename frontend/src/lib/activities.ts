@@ -21,26 +21,6 @@ export const activityApi: SelectionStore = {
   }),
 }
 
-// Demo-only browser storage. No real users, tokens, AI calls or database writes.
-export function mockSelectionStore(storage: Pick<Storage, 'getItem' | 'setItem'>): SelectionStore {
-  const key = (p: Proposal) => `rihla.demo.activities:${p.trip_id}:${p.id}:${p.version}`
-  const result = (p: Proposal, ids: string[]): ActivitySelections => ({ proposal_id: p.id, version: p.version, activity_ids: ids, estimate: activityProposalEstimate(p, ids) })
-  return {
-    async load(p) {
-      const raw = storage.getItem(key(p))
-      if (raw === null) return result(p, [])
-      const ids: unknown = JSON.parse(raw)
-      if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string')) throw new Error('Could not load activity selections.')
-      return result(p, validateSelection(p, ids))
-    },
-    async save(p, ids) {
-      validateSelection(p, ids)
-      storage.setItem(key(p), JSON.stringify(ids))
-      return result(p, ids)
-    },
-  }
-}
-
 export function isActivitySuitable(proposal: Proposal, city: CityStay, activity: Activity): boolean {
   const value = activity.scheduled_date.value
   if (value === null) return true
