@@ -3,12 +3,14 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from app.core.proposal_settings import ProposalSettings
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
-class Settings(BaseSettings):
+class Settings(ProposalSettings):
     """Read backend/.env consistently, with environment variables taking priority."""
 
     model_config = SettingsConfigDict(

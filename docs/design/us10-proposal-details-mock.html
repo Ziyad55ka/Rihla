@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Rihla — تفاصيل العرض (محاكاة US-10)</title>
+<style>
+  :root{--bg:#e8e7df;--card:#f5f5ef;--green:#35523f;--ink:#17261d;--muted:#6b7268;--line:#d9dbcf;
+        --ok:#e3eedc;--okt:#2f5a33;--warn:#f6ecd5;--warnt:#8a5a12;--neu:#ecebe4;--neut:#5f6359}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:var(--ink)}
+  .frame{border:12px solid #2c4434;min-height:100vh;padding:28px 64px 60px}
+  nav{background:#fff;border-radius:40px;display:flex;align-items:center;justify-content:space-between;padding:16px 28px;max-width:1100px;margin:0 auto}
+  .brand{font-weight:700;font-size:28px;letter-spacing:-1px;direction:ltr} .links{display:flex;gap:28px;font-size:15px}
+  .out{background:#14231a;color:#fff;border-radius:30px;padding:12px 22px;font-size:14px}
+  main{max-width:1100px;margin:0 auto}
+  .back{margin:38px 0 22px;color:var(--muted);font-size:14px}
+  .hero{background:var(--green);color:#f3f2ea;border-radius:22px;padding:34px 40px}
+  .eyebrow{font-size:12px;letter-spacing:2px;opacity:.8;font-weight:600}
+  .hero h1{font-size:44px;font-weight:400;margin:12px 0 6px}
+  .sub{opacity:.85;font-size:16px} .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center}
+  .badge{font-size:12px;border-radius:7px;padding:5px 10px;border:1px solid transparent;white-space:nowrap}
+  .b-ok{background:var(--ok);color:var(--okt);border-color:#c8dcbd}
+  .b-warn{background:var(--warn);color:var(--warnt);border-color:#ead6a8}
+  .b-neu{background:var(--neu);color:var(--neut);border-color:#d6d5cb}
+  .hero .b-warn{background:#f6ecd5}
+  .note{margin-top:18px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:12px 16px;font-size:14px}
+  h2{font-size:26px;font-weight:400;margin:44px 0 6px} .h2sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px 28px}
+  .route{display:flex;gap:16px;align-items:stretch}
+  .city{flex:1;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px;position:relative}
+  .num{display:inline-block;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;text-align:center;line-height:26px;font-size:13px;margin-left:8px}
+  .city h3{display:inline;font-size:22px;font-weight:500} .nights{color:var(--muted);font-size:14px;margin-top:6px}
+  .hotel{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px}
+  .lbl{font-size:11px;letter-spacing:1.5px;color:var(--muted);font-weight:700}
+  .hname{font-size:17px;margin:6px 0} .price{font-size:15px}
+  .btn{display:inline-block;margin-top:12px;border:1px solid var(--green);color:var(--green);border-radius:10px;padding:9px 16px;font-size:14px}
+  .btn.solid{background:var(--green);color:#fff}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  .slot{margin-top:14px;border:1.5px dashed #b9bfae;border-radius:12px;padding:10px 14px;font-size:12px;color:#7d846f;background:#fbfbf7}
+  .arrow{align-self:center;font-size:24px;color:var(--muted)}
+  .leg{display:grid;grid-template-columns:70px 1fr auto;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);align-items:center;font-size:15px}
+  .leg:last-of-type{border-bottom:0} .dir{font-weight:600;color:var(--green)}
+  .total{display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:10px}
+  .big{font-size:24px} .ev{font-size:13px;color:var(--green);text-decoration:underline;margin-right:8px}
+  .transfer{display:flex;justify-content:space-between;align-items:center;font-size:15px;flex-wrap:wrap;gap:10px}
+  .src li{margin:8px 0;font-size:14px} .src a{color:var(--green)}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted);align-items:center}
+  .tag{position:fixed;top:20px;left:20px;background:#b5442a;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="tag">محاكاة للتصميم — بيانات توضيحية</div>
+<div class="frame">
+<nav><div class="brand">✈ rihla.</div><div class="links"><span>رحلاتي</span><span>حسابك</span></div><div class="out">تسجيل الخروج ↗</div></nav>
+<main>
+  <div class="back">→ الرجوع للرحلة</div>
+
+  <section class="hero">
+    <div class="eyebrow">العرض ١ من ٢</div>
+    <h1>جولة ثقافية في فرنسا</h1>
+    <div class="sub">فرنسا · ٢٠ – ٣٠ نوفمبر ٢٠٢٦ · ١٠ ليالٍ · مدينتان</div>
+    <div class="row">
+      <span class="badge b-warn">ضمن الميزانية، مع أسعار غير مؤكدة</span>
+    </div>
+    <div class="note">↺ <b>تنازل:</b> اخترنا رحلة بتوقف بدل الرحلة المباشرة لتبقى التكلفة مناسبة لميزانية المجموعة.</div>
+  </section>
+
+  <h2>المدن والإقامة</h2>
+  <div class="h2sub">بالترتيب، مع الفندق المقترح في كل مدينة</div>
+  <div class="route">
+    <div class="city">
+      <span class="num">١</span><h3>باريس</h3>
+      <div class="nights">٦ ليالٍ · ٢٠ – ٢٦ نوفمبر</div>
+      <div class="hotel">
+        <div class="lbl">الفندق</div>
+        <div class="hname"><bdi>Novotel Paris Les Halles</bdi> <span class="badge b-ok">من مصدر</span></div>
+        <div class="price">حوالي <b>١١٧٥ ر.س</b> / الليلة <span class="badge b-neu">تقديري</span><a class="ev">عرض الدليل</a></div>
+        <a class="btn">ابحث في Booking.com ↗</a>
+        <div class="hint">صفحة بحث بالتواريخ وعدد الأعضاء. السعر والتوفر يتأكدان هناك.</div>
+      </div>
+      <div class="slot">＋ مكان الأنشطة والمطاعم والمعالم — Developer 2 (US-11/12)</div>
+    </div>
+    <div class="arrow">←</div>
+    <div class="city">
+      <span class="num">٢</span><h3>ستراسبورغ</h3>
+      <div class="nights">٤ ليالٍ · ٢٦ – ٣٠ نوفمبر</div>
+      <div class="hotel">
+        <div class="lbl">الفندق</div>
+        <div class="hname">— <span class="badge b-neu">غير متوفر</span></div>
+        <div class="price">حوالي <b>٧٥٠ ر.س</b> / الليلة <span class="badge b-warn">غير مؤكد · تأكد قبل الحجز</span></div>
+        <a class="btn">ابحث عن فنادق في ستراسبورغ ↗</a>
+      </div>
+      <div class="slot">＋ مكان الأنشطة والمطاعم والمعالم — Developer 2 (US-11/12)</div>
+    </div>
+  </div>
+
+  <h2>التنقل بين المدن</h2>
+  <div class="card transfer">
+    <div><b>باريس ← ستراسبورغ</b> · قطار · ساعة و٤٨ دقيقة <span class="badge b-ok">من مصدر</span></div>
+    <div>حوالي <b>٢٦٠ ر.س</b> للشخص <span class="badge b-neu">تقديري</span></div>
+  </div>
+
+  <h2>الطيران من مدينتك</h2>
+  <div class="h2sub">تشوف رحلات مدينة انطلاقك فقط</div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div style="font-size:19px"><b>الرياض ← باريس</b></div>
+      <span class="badge b-ok">🔁 ذهاب وعودة · حجز واحد</span>
+    </div>
+    <div style="margin-top:10px">
+      <div class="leg"><span class="dir">ذهاب</span><span>٢٠ نوفمبر · طيران الخليج · توقف في البحرين</span><span>٨س ١٥د</span></div>
+      <div class="leg"><span class="dir">عودة</span><span>٣٠ نوفمبر · طيران الخليج · توقف في البحرين</span><span>٨س ٤٠د</span></div>
+    </div>
+    <div class="total">
+      <div><span class="big">٢٤٩٠ ر.س</span> للشخص <span class="badge b-ok">من مصدر</span><a class="ev">عرض الدليل</a></div>
+      <div><a class="btn solid">احجز الرحلة ↗</a></div>
+    </div>
+    <div class="hint">ينقلك لموقع البائع. تأكد من الرحلة والسعر قبل الدفع.</div>
+  </div>
+
+  <div class="slot" style="margin-top:34px;padding:22px;font-size:14px;text-align:center">＋ التكاليف التفصيلية والإجمالي، والتوافق مع المتطلبات الإلزامية — Developer 3 (US-13/15)</div>
+
+  <h2>المصادر</h2>
+  <div class="card">
+    <ol class="src">
+      <li><a>Ignav — Riyadh to Paris round trip</a></li>
+      <li><a>Booking.com — Hotels in Paris</a></li>
+      <li><a>SNCF — Paris to Strasbourg trains</a></li>
+    </ol>
+    <div class="legend">دليل الحالات:
+      <span class="badge b-ok">من مصدر</span><span class="badge b-neu">تقديري</span>
+      <span class="badge b-warn">غير مؤكد</span><span class="badge b-neu">غير متوفر</span></div>
+  </div>
+</main>
+</div>
+</body>
+</html>

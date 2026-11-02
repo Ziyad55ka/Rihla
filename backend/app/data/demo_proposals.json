@@ -1,0 +1,478 @@
+{
+  "proposals": [
+    {
+      "id": "647c7fad-10bb-46aa-b5a0-9e4d27010116",
+      "trip_id": "00000000-0000-4000-8000-0000000000dd",
+      "version": 1,
+      "option_number": 1,
+      "title": "Nile Heritage Experience",
+      "destination": "Cairo",
+      "start_date": "2026-12-13",
+      "end_date": "2026-12-17",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Cairo",
+          "nights": 4,
+          "hotel_name": {
+            "value": null,
+            "status": "Not available",
+            "evidence": []
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "375.00",
+            "status": "Unconfirmed",
+            "evidence": []
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Cairo%2C+Egypt&checkin=2026-12-13&checkout=2026-12-17&group_adults=2"
+        }
+      ],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "trip_type": "split",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-12-13",
+              "airline": {
+                "value": "طيران ناس",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "duration": {
+                "value": "3h 0m",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+            },
+            {
+              "direction": "return",
+              "date": "2026-12-17",
+              "airline": {
+                "value": "النيل للطيران",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "duration": {
+                "value": "2h 35m",
+                "status": "Unconfirmed",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": null
+            }
+          ],
+          "airline": {
+            "value": "طيران ناس",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "duration": {
+            "value": "3h 0m",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "729.00",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 729.0 SAR round trip, RUH-CAI, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          }
+        }
+      ],
+      "intercity_transport": [],
+      "flexible_adjustments": [],
+      "budget_status": "includes_unconfirmed",
+      "sources": [
+        {
+          "id": 1,
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=CAI&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F13%2F2026&flightMode=oneway&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+        }
+      ]
+    },
+    {
+      "id": "d7061010-5d20-4ab2-9421-d36f82592d2d",
+      "trip_id": "00000000-0000-4000-8000-0000000000dd",
+      "version": 1,
+      "option_number": 2,
+      "title": "Bosphorus Cultural Gateway",
+      "destination": "Istanbul",
+      "start_date": "2026-12-13",
+      "end_date": "2026-12-17",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Istanbul",
+          "nights": 4,
+          "hotel_name": {
+            "value": "Seres Hotel",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 4,
+                "quote": "It is part of the Seres Hotel which was how we discovered it."
+              }
+            ]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "472.50",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 4,
+                "quote": "Price: $126 per night"
+              }
+            ]
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Seres+Hotel%2C+Istanbul%2C+Turkey&checkin=2026-12-13&checkout=2026-12-17&group_adults=2"
+        }
+      ],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "trip_type": "round_trip",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-12-13",
+              "airline": {
+                "value": "طيران ناس",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "duration": {
+                "value": "4h 15m",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+            },
+            {
+              "direction": "return",
+              "date": "2026-12-17",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+            }
+          ],
+          "airline": {
+            "value": "طيران ناس",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "duration": {
+            "value": "4h 15m",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "918.00",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 918.0 SAR round trip, RUH-IST, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          }
+        }
+      ],
+      "intercity_transport": [],
+      "flexible_adjustments": [],
+      "budget_status": "within_group_budget",
+      "sources": [
+        {
+          "id": 1,
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=IST&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+        },
+        {
+          "id": 4,
+          "title": "Where To Stay In Istanbul in 2026 - Best Areas & Hotels - GlobeTrove",
+          "url": "https://www.globetrove.com/where-to-stay-in-istanbul-turkey"
+        }
+      ]
+    },
+    {
+      "id": "8b6d99ca-bde2-4928-abfa-9ed5892b4a1b",
+      "trip_id": "00000000-0000-4000-8000-0000000000dd",
+      "version": 1,
+      "option_number": 3,
+      "title": "Jordanian Landmark Expedition",
+      "destination": "Amman and the Dead Sea",
+      "start_date": "2026-12-13",
+      "end_date": "2026-12-17",
+      "cities": [
+        {
+          "order": 1,
+          "city": "Amman",
+          "nights": 2,
+          "hotel_name": {
+            "value": "InterContinental Amman",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "Around the Third Circle, prices begin with 116 € at the InterContinental Amman and 141 € at the Grand Hyatt Amman."
+              }
+            ]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "486.04",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 2,
+                "quote": "Around the Third Circle, prices begin with 116 € at the InterContinental Amman and 141 € at the Grand Hyatt Amman."
+              }
+            ]
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=InterContinental+Amman%2C+Amman%2C+Jordan&checkin=2026-12-13&checkout=2026-12-15&group_adults=2"
+        },
+        {
+          "order": 2,
+          "city": "Dead Sea",
+          "nights": 2,
+          "hotel_name": {
+            "value": "Hilton Dead Sea Resort & Spa",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 10,
+                "quote": "From $126 per night Hilton Dead Sea Resort & Spa"
+              }
+            ]
+          },
+          "hotel_price_per_night": {
+            "amount_sar": "472.50",
+            "status": "Estimated",
+            "evidence": [
+              {
+                "source_id": 10,
+                "quote": "From $126 per night Hilton Dead Sea Resort & Spa"
+              }
+            ]
+          },
+          "booking_url": "https://www.booking.com/searchresults.html?ss=Hilton+Dead+Sea+Resort+%26+Spa%2C+Dead+Sea%2C+Jordan&checkin=2026-12-15&checkout=2026-12-17&group_adults=2"
+        }
+      ],
+      "flights": [
+        {
+          "origin": "Riyadh",
+          "trip_type": "round_trip",
+          "legs": [
+            {
+              "direction": "outbound",
+              "date": "2026-12-13",
+              "airline": {
+                "value": "طيران ناس",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "duration": {
+                "value": "2h 30m",
+                "status": "Sourced",
+                "evidence": [
+                  {
+                    "source_id": 1,
+                    "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+                  }
+                ]
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+            },
+            {
+              "direction": "return",
+              "date": "2026-12-17",
+              "airline": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "duration": {
+                "value": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "price": {
+                "amount_sar": null,
+                "status": "Not available",
+                "evidence": []
+              },
+              "booking_url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+            }
+          ],
+          "airline": {
+            "value": "طيران ناس",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "duration": {
+            "value": "2h 30m",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "818.00",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 1,
+                "quote": "طيران ناس: 818.0 SAR round trip, RUH-AMM, 2026-12-13 to 2026-12-17, via Ignav."
+              }
+            ]
+          }
+        }
+      ],
+      "intercity_transport": [
+        {
+          "from_city": "Amman",
+          "to_city": "Dead Sea",
+          "mode": {
+            "value": "JETT Bus",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 12,
+                "quote": "JETT Bus (Amman) | 1.5 hours | 10 JOD (one way) / 15 JOD (return) | Budget travelers, day-trippers"
+              }
+            ]
+          },
+          "duration": {
+            "value": "1.5 hours",
+            "status": "Sourced",
+            "evidence": [
+              {
+                "source_id": 12,
+                "quote": "JETT Bus (Amman) | 1.5 hours | 10 JOD (one way) / 15 JOD (return) | Budget travelers, day-trippers"
+              }
+            ]
+          },
+          "price_per_person": {
+            "amount_sar": "53.00",
+            "status": "Unconfirmed",
+            "evidence": []
+          }
+        }
+      ],
+      "flexible_adjustments": [],
+      "budget_status": "includes_unconfirmed",
+      "sources": [
+        {
+          "id": 1,
+          "title": "Ignav booking link: طيران ناس",
+          "url": "https://booking.flynas.com/#/booking/search-redirect?origin=RUH&destination=AMM&origin1=&destination1=&currency=SAR&departureDate=12%2F13%2F2026&returnDate=12%2F17%2F2026&flightMode=round&adultCount=1&childCount=0&infantCount=0&promoCode=&culture=en-GB&reference=GOOGLE"
+        },
+        {
+          "id": 2,
+          "title": "The 7 Best Luxury Hotels in Amman – 5-Star Hotels (2026)",
+          "url": "https://suitespot.com/en-US/luxury-hotels/jordan/amman"
+        },
+        {
+          "id": 10,
+          "title": "Dead Sea Travel Guide: Places to Visit, Things to Do & Hotels | Destina Holidays",
+          "url": "https://www.destinaholidays.com/destinations/jordan/dead-sea"
+        },
+        {
+          "id": 12,
+          "title": "Getting to the Dead Sea: Routes from Amman, Petra & Aqaba - Travel Tour Shop",
+          "url": "https://traveltourshop.com/blog/dead-sea-jordan-transport-guide"
+        }
+      ]
+    }
+  ]
+}
