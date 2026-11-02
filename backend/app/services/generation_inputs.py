@@ -16,6 +16,7 @@ from pydantic import BaseModel, ValidationError
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
 from app.schemas.proposals import BudgetStatus, Flights, Proposal
+from app.services.proposal_costs import CostContext
 
 
 class GenerationInputsError(Exception):
@@ -93,6 +94,25 @@ async def fetch_flight_context(
     )
     try:
         return FlightContext.model_validate_json(response.content)
+    except ValidationError as error:
+        raise GenerationInputsError("invalid_response") from error
+
+
+async def fetch_cost_context(
+    trip_id: UUID,
+    member_id: UUID,
+    settings: Settings,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> CostContext:
+    """US-13: the member's own budget and the group's flights, for totals only."""
+    response = await _secret_rpc(
+        "rihla_cost_context",
+        {"p_trip_id": str(trip_id), "p_user_id": str(member_id)},
+        settings,
+        transport,
+    )
+    try:
+        return CostContext.model_validate_json(response.content)
     except ValidationError as error:
         raise GenerationInputsError("invalid_response") from error
 

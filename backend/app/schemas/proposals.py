@@ -122,6 +122,9 @@ class ProposalSource(StrictModel):
     # booking: an approved booking site. ideas: gives ideas only. flight: a fare note,
     # never listed to users. Set when reading. Older data has none.
     kind: Literal["booking", "ideas", "flight"] | None = None
+    # When this source was read for the proposal. Null on older proposals, which then
+    # use the generation time. US-14.
+    retrieved_at: datetime | None = None
 
 
 # One direction of a flight trip.
@@ -310,6 +313,34 @@ class FlexibleAdjustment(StrictModel):
         return value
 
 
+# US-15: how a proposal matches the group's requirements, by topic only. It never
+# holds requirement text, a member or a count, so it is safe to show any member.
+# met: the backend checked it in code.
+# unverified: only the AI reported it as met; the backend could not check it.
+# unmet: not met. A Flexible one is explained in flexible_adjustments.
+CompatibilityStatus = Literal["met", "unverified", "unmet"]
+# The preference categories, plus the group budget and the shared dates.
+CompatibilityTopic = Literal[
+    "destinations", "interests", "flights", "accommodation", "budget", "dates"
+]
+
+
+class CompatibilityCheck(StrictModel):
+    # See CompatibilityTopic. Example: "accommodation".
+    topic: CompatibilityTopic
+    # Essential or Flexible for a preference. Required for budget and dates.
+    importance: Literal["Essential", "Flexible", "Required"]
+    # See CompatibilityStatus. Example: "unverified".
+    status: CompatibilityStatus
+
+    @model_validator(mode="after")
+    def importance_fits_topic(self):
+        required = self.topic in {"budget", "dates"}
+        if required != (self.importance == "Required"):
+            raise ValueError("Only budget and dates are Required checks.")
+        return self
+
+
 # One complete trip option.
 class Proposal(StrictModel):
     # This proposal's own id, a UUID.
@@ -348,6 +379,15 @@ class Proposal(StrictModel):
     sources: list[ProposalSource]
     # A photo of the destination, or null.
     image: PlaceImage | None = None
+    # US-15. Empty on proposals generated before this field existed.
+    compatibility: list[CompatibilityCheck] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def one_check_per_requirement_kind(self):
+        kinds = [(item.topic, item.importance) for item in self.compatibility]
+        if len(set(kinds)) != len(kinds):
+            raise ValueError("Each topic and importance can appear once.")
+        return self
 
     @model_validator(mode="after")
     def consistent_itinerary(self):

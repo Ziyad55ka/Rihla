@@ -38,7 +38,7 @@ export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChan
     <CityStaysSection proposal={proposal} limits={limits} />
     <TransfersSection proposal={proposal} />
     <ActivitiesSection proposal={proposal} />
-    <CostsAndCompatibility proposal={proposal} />
+    <CostsAndCompatibility proposal={proposal} costs={stored.costs?.find((item) => item.proposal_id === proposal.id)} generatedAt={stored.generated_at} />
   </article>
 }
 

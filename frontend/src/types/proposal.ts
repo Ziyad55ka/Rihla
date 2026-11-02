@@ -72,6 +72,8 @@ export interface ProposalSource {
   url: string
   /** `booking`: an approved booking site. `ideas`: ideas only. `flight`: never listed. */
   kind?: 'booking' | 'ideas' | 'flight' | null
+  /** When this source was read (US-14). Absent on older proposals: use `generated_at`. */
+  retrieved_at?: string | null
 }
 
 /** One direction of a flight trip. */
@@ -256,6 +258,71 @@ export interface Proposal {
   sources: ProposalSource[]
   /** A photo of the destination, or null. */
   image?: PlaceImage | null
+  /** US-15: how this proposal matches the group's requirements. Empty on older proposals. */
+  compatibility?: CompatibilityCheck[]
+}
+
+/**
+ * US-15. `met`: checked by the backend. `unverified`: only the AI reported it met.
+ * `unmet`: not met; a Flexible one is explained in `flexible_adjustments`.
+ */
+export type CompatibilityStatus = 'met' | 'unverified' | 'unmet'
+/** The preference categories, plus the group budget and the shared dates. */
+export type CompatibilityTopic = PreferenceCategory | 'budget' | 'dates'
+
+/** One result per topic and importance. Never holds requirement text or a member. */
+export interface CompatibilityCheck {
+  topic: CompatibilityTopic
+  /** Essential or Flexible for a preference. Required for budget and dates. */
+  importance: 'Essential' | 'Flexible' | 'Required'
+  status: CompatibilityStatus
+}
+
+/** US-13 cost categories. */
+export type CostCategory = 'flights' | 'accommodation' | 'transport' | 'activities' | 'meals'
+/** `single`: one person per room. `shared`: two per room, split evenly. */
+export type RoomPlan = 'single' | 'shared'
+/** The caller's own budget, as a label only. */
+export type OwnBudget = 'within' | 'over' | 'unconfirmed' | 'unknown'
+export type CostAssumption =
+  | 'rooms_single' | 'rooms_shared' | 'flights_own_city' | 'flights_one_way' | 'flights_missing'
+  | 'meals_allowance' | 'activities_not_included' | 'group_total_all_cities'
+  | 'group_total_unavailable' | 'prices_may_change'
+
+export interface CostAmount {
+  /** The sum of the known parts, as a string such as `"3750.00"`, or null. */
+  amount_sar: string | null
+  /** The weakest status among the known parts. */
+  status: PriceStatus
+  /** True when a part is Not available, so the amount is too low. */
+  partial: boolean
+}
+
+export interface CostLine {
+  category: CostCategory
+  per_person: CostAmount
+  /** False for information only, such as activities not added yet. */
+  counted: boolean
+}
+
+export interface CostScenario {
+  rooms: RoomPlan
+  lines: CostLine[]
+  per_person_total: CostAmount
+  /** Null when the backend could not read the group. */
+  group_total: CostAmount | null
+  own_budget: OwnBudget
+  /** Only when `own_budget` is `over`, for this member alone. */
+  over_by_sar: string | null
+}
+
+/** The signed-in member's cost breakdown for one proposal. Worked out on reading. */
+export interface ProposalCosts {
+  proposal_id: string
+  days: number
+  nights: number
+  scenarios: CostScenario[]
+  assumptions: CostAssumption[]
 }
 
 /** A general conflict category. It never names a member or a value. */
@@ -291,6 +358,8 @@ export interface StoredProposals {
   price_stale_hours?: number
   /** Minutes before the flight price can be refreshed again. */
   refresh_cooldown_minutes?: number
+  /** US-13: the caller's own costs for each proposal. Absent from older backends. */
+  costs?: ProposalCosts[]
 }
 
 /** The response of `POST /api/trips/{trip_id}/proposals`, administrator only. */

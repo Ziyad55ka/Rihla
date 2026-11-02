@@ -71,7 +71,8 @@ describe('ProposalDetailView', () => {
   it('shows one price badge, not one for each flight field', () => {
     const html = page()
     expect(html).toContain('Confirmed by the seller')
-    expect(count(html, 'Confirmed by the seller')).toBe(1)
+    // The reliability legend in the sources section (US-14) names every label once more.
+    expect(count(html.split('id="details-costs"')[0], 'Confirmed by the seller')).toBe(1)
   })
   it('shows Estimated with About', () => {
     const html = page()
@@ -396,16 +397,15 @@ describe('ProposalDetailView', () => {
     expect(page()).not.toContain('Book this hotel')
     expect(page()).toContain('Search on Booking.com')
   })
-  it('shows the parts of the page in the agreed order, with no sources section', () => {
+  it('shows the parts of the page in the agreed order, with sources last (US-14)', () => {
     const second = { ...stay, order: 2, city: 'Luxor', nights: 2 }
     const html = page(proposal({ cities: [{ ...stay, nights: 2 }, second], intercity_transport: [{ from_city: 'Cairo', to_city: 'Luxor', mode: info('Train'), duration: info('9h'), price_per_person: price('200') }] }))
-    const order = ['details-hero', 'id="details-flights"', 'id="details-cities"', 'id="details-transfers"']
+    const order = ['details-hero', 'id="details-flights"', 'id="details-cities"', 'id="details-transfers"', 'id="details-costs"', 'id="details-match"', 'id="details-sources"']
     const places = order.map((part) => html.indexOf(part))
     expect(places.every((place) => place >= 0)).toBe(true)
     expect([...places].sort((x, y) => x - y)).toEqual(places)
-    expect(html).not.toContain('details-sources')
+    // A source with no kind may name an internal service, so it is never listed.
     expect(html).not.toContain('Mock source')
-    expect(html).not.toContain('Sources')
   })
   const twoCities = (extra = {}) => proposal({
     cities: [{ ...stay, city: 'Paris', nights: 2 }, { ...stay, order: 2, city: 'Strasbourg', nights: 2 }],
@@ -554,9 +554,9 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('This proposal has been replaced.')
     expect(html).not.toContain('Main title')
   })
-  it('shows the Flexible adjustment and a general note after changes', () => {
+  it('shows the Flexible adjustment as a trade-off (US-15) and a general note after changes', () => {
     const html = page(proposal({ flexible_adjustments: [{ category: 'flights', explanation: 'A stop was added.' }] }), false, 'p1', { needs_regeneration: true })
-    expect(html).not.toContain('A stop was added.')
+    expect(html.indexOf('A stop was added.')).toBeGreaterThan(html.indexOf('Trade-offs'))
     expect(html).toContain('details changed after these proposals')
   })
   it('picks the title by language and falls back to the main title', () => {

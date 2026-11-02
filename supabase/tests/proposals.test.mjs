@@ -533,3 +533,40 @@ test('one member listing several Essential destinations has no conflict alone', 
   const id = await twoMembers(member({ destinations: essential('فرنسا، البحرين') }), member())
   assert.deepEqual((await conflicts(id)).conflicts, [])
 })
+
+// US-13: the cost context, read only by the backend's secret key.
+const costContext = (id, user) => rpc('rihla_cost_context', [id, user])
+
+test('the cost context is closed to browsers and answers only for members', async () => {
+  const id = await savedTrip()
+  await root()
+  const privileges = (await db.query(`select
+    has_function_privilege('authenticated', 'public.rihla_cost_context(uuid,uuid)', 'execute') as browser,
+    has_function_privilege('anon', 'public.rihla_cost_context(uuid,uuid)', 'execute') as anonymous,
+    has_function_privilege('service_role', 'public.rihla_cost_context(uuid,uuid)', 'execute') as backend`)).rows[0]
+  assert.deepEqual(privileges, { browser: false, anonymous: false, backend: true })
+  await role(ALICE)
+  await denied(() => costContext(id, ALICE))
+  await asServiceRole()
+  await denied(() => costContext(id, CAROL))
+  await denied(() => costContext(id, null))
+})
+
+test('the cost context gives the caller own budget, city counts and every route', async () => {
+  const id = await twoMembers(
+    member({ departure_city: 'Riyadh', max_budget_sar: '4500.50' }),
+    member({ departure_city: ' riyadh ', max_budget_sar: '9000' }),
+  )
+  await role(ALICE)
+  await begin(id)
+  await saveAll(id)
+  await asServiceRole()
+  const forAlice = await costContext(id, ALICE)
+  assert.equal(forAlice.member_count, 2)
+  assert.equal(forAlice.own_budget_sar, '4500.50')
+  assert.deepEqual(forAlice.origins, [{ origin: 'riyadh', members: 2 }])
+  assert.deepEqual(forAlice.proposals[0].flights.map((route) => route.origin), ['Riyadh', 'Jeddah'])
+  // Each member gets their own budget, never another member's.
+  assert.equal((await costContext(id, BOB)).own_budget_sar, '9000')
+  assert.ok(!JSON.stringify(forAlice).includes('9000'))
+})

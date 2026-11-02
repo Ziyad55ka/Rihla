@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BedDouble, Bus, Car, Check, ChevronDown, Clock, ExternalLink, Info, Luggage, Plane, RefreshCw, Route, Ship, Sparkles, TrainFront, Users } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BedDouble, Bus, Car, Check, ChevronDown, CircleAlert, CircleCheck, CircleHelp, CircleX, Clock, ExternalLink, Info, Library, ListChecks, Luggage, Plane, RefreshCw, Route, Ship, Sparkles, TrainFront, Users, Wallet } from 'lucide-react'
 
 // One library, one line weight. The words beside each icon carry the meaning.
 const look = { className: 'details-icon', strokeWidth: 1.75, 'aria-hidden': true, focusable: false } as const
@@ -21,6 +21,13 @@ export function PlaneIcon() { return <Plane {...look} size={16} /> }
 export function CarIcon() { return <Car {...look} size={16} /> }
 export function FerryIcon() { return <Ship {...look} size={16} /> }
 export function RouteIcon() { return <Route {...look} size={16} /> }
+export function CostsTitleIcon() { return <Wallet {...look} size={20} /> }
+export function MatchTitleIcon() { return <ListChecks {...look} size={20} /> }
+export function SourcesTitleIcon() { return <Library {...look} size={20} /> }
+export function MetIcon() { return <CircleCheck {...look} size={16} /> }
+export function UnverifiedIcon() { return <CircleHelp {...look} size={16} /> }
+export function UnmetIcon() { return <CircleX {...look} size={16} /> }
+export function WarningIcon() { return <CircleAlert {...look} size={16} /> }
 
 /** Points the way the page reads: left in English and right in Arabic. */
 export function BackIcon({ rtl }: { rtl: boolean }) {

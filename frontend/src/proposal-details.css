@@ -270,3 +270,46 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
   .details-booking, .details-booking a, .details-booking button, .details-refresh, .details-refresh button, .details-refresh a, .details-book-result, .details-book-result a { width:100%; }
   .details-hotel { justify-items:stretch; }
   }
+
+/* Developer 3: costs (US-13), match (US-15) and sources (US-14). */
+.details-costs, .details-match, .details-sources { display:grid; gap:16px; }
+.details-budget { display:flex; align-items:flex-start; gap:8px; margin:0; padding:12px 14px; border-radius:10px; font-size:14px; line-height:1.6; }
+.details-budget--within { color:#3d5f3c; background:#e8efdf; }
+.details-budget--over { color:#91362e; background:#f9e6e2; }
+.details-budget--unconfirmed { color:#786b42; background:#f7f0d8; }
+.details-budget--unknown { color:var(--rihla-muted); background:var(--rihla-bg); }
+.details-budget .details-tip { margin-inline-start:auto; }
+.details-rooms { display:flex; flex-wrap:wrap; gap:8px 18px; margin:0; padding:0; border:0; font-size:14px; }
+.details-rooms legend { padding:0; margin-block-end:6px; color:var(--rihla-muted); font-size:12px; }
+.details-rooms label { display:inline-flex; align-items:center; gap:6px; min-height:32px; cursor:pointer; }
+.details-cost-table { width:100%; border-collapse:collapse; font-size:14px; }
+.details-cost-table caption { padding-block-end:8px; color:var(--rihla-muted); font-size:12px; text-align:start; }
+.details-cost-table th, .details-cost-table td { padding:10px 0; text-align:start; vertical-align:top; border-block-end:1px solid var(--rihla-line); }
+.details-cost-table th { padding-inline-end:12px; font-weight:400; }
+.details-cost-table thead th { color:var(--rihla-muted); font-size:12px; }
+.details-cost-table tfoot th, .details-cost-table tfoot td { font-weight:600; border-block-end:0; }
+.details-cost-table tr.is-muted th { color:var(--rihla-muted); }
+.details-cost-table .details-value .details-hint { flex-basis:100%; }
+.details-assumptions summary { cursor:pointer; font-size:14px; font-weight:600; }
+.details-assumptions ul, .details-tradeoffs { display:grid; gap:6px; margin:8px 0 0; padding-inline-start:20px; color:var(--rihla-ink); font-size:13px; line-height:1.6; }
+.details-match-list, .details-source-list { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+.details-match-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:10px 12px; background:var(--rihla-bg); border-radius:10px; font-size:14px; }
+.details-match-row--met .details-icon { color:#3d5f3c; }
+.details-match-row--unverified .details-icon { color:#786b42; }
+.details-match-row--unmet .details-icon { color:#91362e; }
+.details-match-topic { flex:1 1 140px; }
+.details-match-legend, .details-status-legend { display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; align-items:start; margin:0; font-size:13px; line-height:1.6; }
+.details-match-legend div, .details-status-legend div { display:contents; }
+.details-match-legend dt { font-weight:600; }
+.details-match-legend dd, .details-status-legend dd { margin:0; color:var(--rihla-muted); }
+.proposal-details .details-match-subtitle { margin:4px 0 0; font-size:16px; font-weight:600; }
+.details-source-list li { display:grid; gap:2px; padding-block:8px; border-block-end:1px solid var(--rihla-line); overflow-wrap:anywhere; }
+.details-source-list li:last-child { border-block-end:0; }
+/* A tip at the end of a row opens towards the start, so it stays on screen. */
+.details-budget .details-tip-text { inset-inline-start:auto; inset-inline-end:0; }
+/* Hidden tips must never make the page scroll sideways on a phone. */
+.proposal-details { overflow-x:clip; }
+@media (max-width:560px) {
+  .details-match-legend, .details-status-legend { grid-template-columns:1fr; gap:2px; }
+  .details-match-legend dd, .details-status-legend dd { margin-block-end:8px; }
+}
