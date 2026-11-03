@@ -237,6 +237,9 @@ html[dir='rtl'] .details-metro-icon { animation-name:details-travel-rtl; }
 /* The font, on these pages only. */
 .proposal-details, .proposals-panel { font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
 html[dir] :is(.proposal-details,.proposals-panel) :is(h1,h2,h3,p,label,legend,button,input,a,li,span,bdi,figcaption) { font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
+/* Arabic only: Thmanyah Sans first. English keeps the rules above. */
+html[dir='rtl'] :is(.proposal-details,.proposals-panel) { font-family:'Thmanyah Sans','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
+html[dir='rtl'] :is(.proposal-details,.proposals-panel) :is(h1,h2,h3,p,label,legend,button,input,a,li,span,bdi,figcaption) { font-family:'Thmanyah Sans','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
 html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-panel :is(h2,h3) { letter-spacing:normal; }
 .proposal-details .details-hero h1 { font-weight:500; }
 .proposal-details h2 { font-weight:500; }

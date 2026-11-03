@@ -76,7 +76,7 @@
 
 /* Arabic typography must also override the fonts specified on individual headings. */
 html[dir='rtl'] :is(body, .landing-page, .auth-page, .trip-workspace, .workspace),
-html[dir='rtl'] :is(h1, h2, h3, p, label, legend, button, input, textarea, select) { font-family:Tahoma, Arial, sans-serif; letter-spacing:normal; }
+html[dir='rtl'] :is(h1, h2, h3, p, label, legend, button, input, textarea, select) { font-family:'Thmanyah Sans','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; letter-spacing:normal; }
 html[dir='rtl'] :is(.landing-page, .trip-workspace, .auth-page, .workspace) { text-align:start; }
 html[dir='rtl'] .rihla-navbar :is(.rihla-navbar-links, .auth-header-note, .rihla-navbar-action) { direction:rtl; }
 html[dir='rtl'] .rihla-language-switch { direction:ltr; font-family:Arial,sans-serif; }
