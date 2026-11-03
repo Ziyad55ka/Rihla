@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,6 +10,7 @@ from app.services.activity_research import find_activities
 from app.services.generation_inputs import GenerationInputsError, _secret_rpc
 from app.services.trip_research import ResearchError
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trips", tags=["activities"])
 
 
@@ -60,10 +62,13 @@ async def suggestions(
         )
         return {"ready": True}
     except ResearchError as error:
+        # Codes only: the message and sources may describe the trip.
+        logger.info("activity_search_failed stage=research code=%s", error.code)
         raise HTTPException(
             503, "Activity search is unavailable. Try again later."
         ) from error
     except GenerationInputsError as error:
+        logger.info("activity_search_failed stage=database code=%s", error.code)
         code = (
             403
             if error.code == "access_denied"
