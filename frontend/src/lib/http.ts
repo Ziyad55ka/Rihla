@@ -2,7 +2,8 @@ import { API_BASE_URL } from './api'
 import { supabase } from './supabase'
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); this.name = 'ApiError' }
+  /** detail: the response's structured detail, when the backend sent one. */
+  constructor(message: string, public status: number, public detail?: unknown) { super(message); this.name = 'ApiError' }
 }
 
 export async function authenticatedRequest<T>(

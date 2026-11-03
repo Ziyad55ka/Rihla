@@ -12,11 +12,24 @@ from pydantic import BaseModel
 from app.schemas.generation import GenerationInput
 
 Action = Literal["edit_dates", "edit_preferences", "retry"]
+# The page shows its own translated text for each kind; `text` is the English copy.
+Kind = Literal[
+    "dates_too_soon",
+    "widen_dates",
+    "add_destination",
+    "retry_later",
+    "generate_again",
+    "review_essentials",
+    "wait_and_retry",
+]
 
 
 class Suggestion(BaseModel):
     action: Action
+    kind: Kind
     text: str
+    # Values the text uses, such as {"earliest": "2026-11-06", "days": "3"}.
+    params: dict[str, str] = {}
 
 
 class GenerationNeedsChanges(Exception):
@@ -27,16 +40,19 @@ class GenerationNeedsChanges(Exception):
         code: Literal["no_flights", "no_proposals"],
         message: str,
         suggestions: list[Suggestion],
+        places: list[str] | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.suggestions = suggestions
+        self.places = places or []
 
     def detail(self) -> dict:
         return {
             "code": self.code,
             "message": self.message,
+            "places": self.places,
             "suggestions": [item.model_dump() for item in self.suggestions],
         }
 
@@ -65,6 +81,8 @@ def no_flights_error(
         suggestions.append(
             Suggestion(
                 action="edit_dates",
+                kind="dates_too_soon",
+                params={"earliest": earliest.isoformat(), "days": str(lead_days)},
                 text=(
                     f"Trips need to start at least {lead_days} days from today so "
                     f"seats can still be booked. Move the group's dates to start on "
@@ -77,6 +95,7 @@ def no_flights_error(
         suggestions.append(
             Suggestion(
                 action="edit_dates",
+                kind="widen_dates",
                 text=(
                     "Widen the group's shared dates by a few days, so other departure "
                     "days can be checked."
@@ -86,6 +105,7 @@ def no_flights_error(
     suggestions.append(
         Suggestion(
             action="edit_preferences",
+            kind="add_destination",
             text=(
                 "Add another destination, or mark the destination Flexible, so Rihla "
                 "can suggest places that have flights from every departure city."
@@ -95,10 +115,13 @@ def no_flights_error(
     suggestions.append(
         Suggestion(
             action="retry",
+            kind="retry_later",
             text="Try again later: airlines add and release seats during the day.",
         )
     )
-    return GenerationNeedsChanges("no_flights", message, suggestions)
+    return GenerationNeedsChanges(
+        "no_flights", message, suggestions, list(dict.fromkeys(tried))
+    )
 
 
 def no_proposals_error() -> GenerationNeedsChanges:
@@ -108,10 +131,12 @@ def no_proposals_error() -> GenerationNeedsChanges:
         [
             Suggestion(
                 action="retry",
+                kind="generate_again",
                 text="Generate again: the AI suggests different places each time.",
             ),
             Suggestion(
                 action="edit_preferences",
+                kind="review_essentials",
                 text=(
                     "Review Essential preferences: fewer Essential items give the AI "
                     "more places to choose from."

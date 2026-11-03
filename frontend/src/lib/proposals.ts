@@ -1,7 +1,7 @@
 import { authenticatedRequest } from './http'
 import { longRequest } from './proposalsHttp'
 import type { Language } from './language'
-import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
+import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GenerationIssue, GenerationProgress, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -16,6 +16,26 @@ export const getProposals = (tripId: string, signal?: AbortSignal) =>
 
 export const generateProposals = (tripId: string, regenerate: boolean) =>
   longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
+
+export const getGenerationProgress = (tripId: string, signal?: AbortSignal) =>
+  authenticatedRequest<GenerationProgress | null>(path(tripId, 'proposals/progress'), { signal })
+
+/** How often the page asks for progress while generating. */
+export const PROGRESS_POLL_MS = 2000
+
+/** The structured reason from a failed generation, when the backend sent one. */
+export function generationIssue(detail: unknown): GenerationIssue | null {
+  if (typeof detail !== 'object' || detail === null) return null
+  const value = detail as Partial<GenerationIssue>
+  if (typeof value.code !== 'string' || typeof value.message !== 'string' || !Array.isArray(value.suggestions)) return null
+  return {
+    code: value.code,
+    message: value.message,
+    places: Array.isArray(value.places) ? value.places.filter((item): item is string => typeof item === 'string') : [],
+    suggestions: value.suggestions.filter((item) => typeof item === 'object' && item !== null && typeof item.action === 'string' && typeof item.kind === 'string')
+      .map((item) => ({ ...item, params: item.params ?? {} })),
+  }
+}
 
 // Category messages only. The API never says which member or value caused a conflict.
 export const conflictMessages: Record<ConflictCategory, string> = {

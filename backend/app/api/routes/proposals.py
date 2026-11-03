@@ -471,7 +471,9 @@ async def generate_trip_proposals(
                 "suggestions": [
                     {
                         "action": "retry",
+                        "kind": "wait_and_retry",
                         "text": "Wait a few minutes, then generate again.",
+                        "params": {},
                     }
                 ],
             },

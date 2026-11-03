@@ -423,3 +423,53 @@ export interface ProposalSet {
   /** Options 1, 2 and 3. */
   proposals: Proposal[]
 }
+
+
+/** What a running generation is doing. Holds no private data. */
+export type GenerationStage = 'planning' | 'checking_flights' | 'researching' | 'saving' | 'done' | 'failed'
+export type OptionStage = 'checking_flights' | 'flights_found' | 'dates_moved' | 'no_flights' | 'researching' | 'ready' | 'failed'
+
+export interface OptionProgress {
+  key: string
+  title: string | null
+  title_ar: string | null
+  destination: string | null
+  destination_ar: string | null
+  status: OptionStage
+  start_date: string | null
+  end_date: string | null
+  /** Days the departure moved to find flights: + later, - earlier. */
+  date_shift_days: number
+  hotel_name: string | null
+  /** A decimal string in SAR, or null. */
+  hotel_price_per_night_sar: string | null
+  hotel_source: string | null
+}
+
+export interface GenerationProgress {
+  stage: GenerationStage
+  started_at: string
+  updated_at: string
+  options: OptionProgress[]
+  target: number
+  ready: number
+}
+
+export type SuggestionAction = 'edit_dates' | 'edit_preferences' | 'retry'
+export type SuggestionKind = 'dates_too_soon' | 'widen_dates' | 'add_destination' | 'retry_later' | 'generate_again' | 'review_essentials' | 'wait_and_retry'
+
+export interface GenerationSuggestion {
+  action: SuggestionAction
+  kind: SuggestionKind
+  /** English copy; the page shows its own translation for the kind. */
+  text: string
+  params: Record<string, string>
+}
+
+/** Why generation produced nothing, and what the group can change. */
+export interface GenerationIssue {
+  code: string
+  message: string
+  places: string[]
+  suggestions: GenerationSuggestion[]
+}

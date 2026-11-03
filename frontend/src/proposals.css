@@ -13,3 +13,41 @@ html[dir='rtl'] .proposals-conflicts { padding:14px 34px 14px 18px; }
 .proposals-open { display:flex; width:fit-content; min-height:40px; margin-top:14px; padding:9px 14px; }
 .proposals-destination, .proposals-dates { margin:0 0 8px; color:#5d6b5f; font-size:13px; overflow-wrap:anywhere; }
 @media (max-width:640px) { .proposals-panel { padding:22px 18px; } }
+
+/* Generation progress: each step and destination as it happens (Nielsen 1). */
+.generation-progress { margin:18px 0 0; padding:20px 22px; background:var(--rihla-paper); border:1px solid #dfe3d6; border-radius:14px; }
+.generation-progress-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.generation-progress-head h3 { display:flex; align-items:center; gap:8px; margin:0; font-size:17px; }
+.generation-elapsed { display:inline-flex; align-items:center; gap:6px; margin:0; color:#5d6b5f; font-size:13px; font-variant-numeric:tabular-nums; }
+.generation-steps { display:grid; gap:8px; margin:16px 0 0; padding:0; list-style:none; }
+.generation-step { display:flex; align-items:center; gap:10px; min-height:32px; color:#5d6b5f; font-size:14px; }
+.generation-step-mark { display:inline-grid; place-items:center; flex:none; width:26px; height:26px; border:1.5px solid #c9cfbf; border-radius:50%; font-size:12px; font-weight:600; }
+.generation-step--done { color:var(--rihla-ink); }
+.generation-step--done .generation-step-mark { color:#fff; background:var(--rihla-green); border-color:var(--rihla-green); }
+.generation-step--current { color:var(--rihla-ink); font-weight:600; }
+.generation-step--current .generation-step-mark { color:var(--rihla-green); border-color:var(--rihla-green); box-shadow:0 0 0 4px color-mix(in srgb,var(--rihla-green) 15%,transparent); }
+.generation-summary { margin:16px 0 0; font-size:14px; font-weight:600; }
+.generation-options { display:grid; gap:10px; margin:10px 0 0; padding:0; list-style:none; }
+.generation-option { display:flex; gap:12px; padding:12px 14px; background:#fff; border:1px solid #dfe3d6; border-radius:12px; }
+.generation-option-icon { display:inline-grid; place-items:center; flex:none; width:30px; height:30px; border-radius:50%; color:var(--rihla-green); background:#eef1e7; }
+.generation-option--done .generation-option-icon { color:#fff; background:var(--rihla-green); }
+.generation-option--warn { background:#fbf6ea; border-color:#eadfb8; }
+.generation-option--warn .generation-option-icon { color:#7a5a12; background:#f3e8c6; }
+.generation-option-body { min-width:0; }
+.generation-option-body p { margin:0; overflow-wrap:anywhere; }
+.generation-option-name { font-weight:600; font-size:14px; }
+.generation-option-dates { color:#5d6b5f; font-weight:400; }
+.generation-option-status { margin-top:2px; color:#45524a; font-size:13px; }
+.generation-option-hotel { display:flex; align-items:center; gap:6px; margin-top:4px; color:var(--rihla-ink); font-size:13px; }
+
+/* A failed generation: what happened, then each way forward with a button (Nielsen 9). */
+.generation-issue { margin:18px 0 0; padding:18px 20px; color:#5c2d19; background:#fbf1ea; border:1px solid #efd8c8; border-radius:14px; }
+.generation-issue h3 { display:flex; align-items:center; gap:8px; margin:0 0 6px; font-size:16px; }
+.generation-issue p { margin:0 0 8px; line-height:1.6; font-size:14px; }
+.generation-issue-lead { font-weight:600; }
+.generation-suggestions { display:grid; gap:10px; margin:0; padding:0; list-style:none; }
+.generation-suggestions li { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:10px 12px; background:#fff; border:1px solid #efd8c8; border-radius:10px; font-size:14px; line-height:1.55; }
+.generation-suggestions button { flex:none; min-height:44px; }
+@media (max-width:640px) { .generation-suggestions li { flex-direction:column; align-items:stretch; } }
+.visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+@media (prefers-reduced-motion:reduce) { .generation-progress .ai-status-spark { animation:none; } }

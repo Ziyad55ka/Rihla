@@ -36,6 +36,40 @@ Code: `backend/app/services/proposal_generation.py`, `trip_research.py`, `flight
 
 `PROPOSALS_DEMO_MODE=true` serves `backend/app/data/demo_proposals.json` with no external calls, and marks the result as demo.
 
+## Fare-first generation (3 November 2026)
+
+Used whenever `IGNAV_API_KEY` is set. Without it, the web-search flow above is unchanged.
+
+Problems it fixes: generation took 3-5 minutes, some runs ended with no result, and
+some flights showed a web number with no booking link or a Google Flights search.
+
+1. Gemini suggests `PLANNER_OPTION_COUNT` (5) trips in one request.
+2. Code checks dates, requirements and privacy with no outside request.
+3. Ignav checks each trip from every departure airport at the same time, with everyone
+   from that airport in one search. A day with no fares moves by `FLIGHT_DATE_SHIFTS`
+   (+1, -1, +2, -2), only inside the shared dates and never sooner than
+   `MIN_DEPARTURE_LEAD_DAYS` (3) from today.
+4. The first 3 trips with fares are researched at the same time (Tavily searches,
+   departure cities and hotels also run together). Research is told a departure city
+   with an airport must have a live fare, so a price is never shown without a link.
+5. Fewer than 3: Gemini is asked once more, told those routes had no flights.
+   None: `409` with `code`, `places` and `suggestions` (change dates, open preferences,
+   try again). Messages name places only, never members, budgets or cities.
+
+`GET /api/trips/{id}/proposals/progress` (members only) returns the current step and
+each destination's status, moved dates and hotel price per night. It holds no private
+data and lives in memory, so it needs a single backend process.
+
+Hotel prices: with `SERPAPI_API_KEY`, Google Hotels (SerpApi) gives a 3-4 star hotel
+rated 4.0+ for each city's own nights, priced per night in SAR. One more request opens
+the hotel's page to prefer Booking.com's own price and link. Prices stay Estimated
+because they change by the hour. About 2 requests per city per proposal: the free
+plan (250 a month) covers roughly 30-40 generations.
+
+Rihla does not scrape booking sites. Their terms forbid automated access, and avoiding
+blocks would mean hiding that a bot is asking. Licensed APIs (Ignav, SerpApi) are used
+instead.
+
 ## Privacy decisions
 
 - Budgets and preferences stay in the backend. They never appear in a proposal.
