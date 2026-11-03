@@ -491,6 +491,20 @@ def test_bad_request_is_not_retried(
     assert (models.calls, sleeps) == (1, [])
 
 
+def test_failed_calls_log_status_and_class_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger="app.services.trip_research"):
+        run_gemini(monkeypatch, tmp_path, [api_error(400)])
+        run_gemini(monkeypatch, tmp_path, [ConnectionError("down"), EMPTY_PLAN])
+
+    lines = [m for m in caplog.messages if m.startswith("gemini_call_failed")]
+    assert lines[0].startswith("gemini_call_failed attempt=1 status=400 error=APIError")
+    assert "status=none error=ConnectionError" in lines[1]
+    # A rejected request is told apart from an outage, and no body is logged.
+    assert not any("secret detail" in m or "down" in m for m in caplog.messages)
+
+
 def test_invalid_json_is_reported_without_retry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

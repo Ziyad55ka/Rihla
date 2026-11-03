@@ -787,6 +787,14 @@ async def call_gemini[SchemaT: BaseModel](
                 ),
             )
         except genai_errors.APIError as error:
+            # Status and class only: the body can quote the prompt or the key's project.
+            logger.info(
+                "gemini_call_failed attempt=%s status=%s error=%s model=%s",
+                attempt + 1,
+                error.code,
+                type(error).__name__,
+                settings.gemini_model,
+            )
             if error.code == 429:
                 failure = ResearchError(
                     "model_quota", "The Gemini quota has been reached. Try again later."
@@ -802,6 +810,12 @@ async def call_gemini[SchemaT: BaseModel](
             failure.__cause__ = error
             continue
         except Exception as error:  # The SDK raises its own network error types.
+            logger.info(
+                "gemini_call_failed attempt=%s status=none error=%s model=%s",
+                attempt + 1,
+                type(error).__name__,
+                settings.gemini_model,
+            )
             failure = ResearchError("model_unavailable", "Gemini could not be reached.")
             failure.__cause__ = error
             continue
