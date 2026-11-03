@@ -228,3 +228,66 @@ def test_results_are_capped_per_city_and_in_total(monkeypatch):
     monkeypatch.setattr(ar, "MAX_SUGGESTIONS", 15)
     result = asyncio.run(ar.find_activities(p, settings))
     assert len(result.cities[0].activities) == 15
+
+
+def test_counts_log_holds_only_integers_and_model(monkeypatch, caplog):
+    p = proposal()
+
+    async def search(query, settings, **kwargs):
+        return [
+            ResearchSource(
+                id=1, title="Museum", url="https://museum.example/", content=CONTENT
+            )
+        ], False
+
+    async def extract(contents, prompt, schema, settings, cost):
+        sid = max(s.id for s in p.sources) + 1
+        good = draft().model_dump()
+        for f in [
+            "name",
+            "description",
+            "location",
+            "duration",
+            "scheduled_date",
+            "price",
+        ]:
+            good[f]["source_id"] = sid
+        paraphrased = deepcopy(good)
+        paraphrased["name"]["quote"] = "words not in the page"
+        bad_source = deepcopy(good)
+        bad_source["name"]["source_id"] = 999
+        shop = deepcopy(good)
+        shop["category"] = "shopping"
+        return ar.Suggestions(suggestions=[good, paraphrased, bad_source, shop])
+
+    monkeypatch.setattr(ar.research, "search_sources", search)
+    monkeypatch.setattr(ar.research, "call_gemini", extract)
+    settings = Settings(_env_file=None, tavily_api_key="fake", gemini_api_key="fake")
+    with caplog.at_level("INFO", logger=ar.__name__):
+        asyncio.run(ar.find_activities(p, settings))
+    [line] = [
+        r.getMessage()
+        for r in caplog.records
+        if "activity_research_counts" in r.getMessage()
+    ]
+    fields = dict(part.split("=", 1) for part in line.split()[1:])
+    assert list(fields) == [
+        "raw",
+        "kept",
+        "dropped_category",
+        "dropped_quote",
+        "dropped_source",
+        "dropped_price",
+        "model",
+    ]
+    assert fields.pop("model") == settings.gemini_model
+    assert all(v.isdigit() for v in fields.values())
+    assert fields == {
+        "raw": "4",
+        "kept": "1",
+        "dropped_category": "1",
+        "dropped_quote": "1",
+        "dropped_source": "1",
+        "dropped_price": "0",
+    }
+    assert "Museum" not in line and CONTENT[:20] not in line

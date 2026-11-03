@@ -1,6 +1,7 @@
 """Public city/date research only. No member preferences or mock fallback."""
 
 import json
+import logging
 import re
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -19,6 +20,9 @@ from app.schemas.proposals import (
     unavailable_info,
 )
 from app.services import trip_research as research
+
+logger = logging.getLogger(__name__)
+CATEGORIES = {"activity", "attraction", "restaurant"}
 
 
 class CitedText(BaseModel):
@@ -177,6 +181,8 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
         json.dumps(groups, ensure_ascii=False), PROMPT, Suggestions, settings, cost
     )
     stays, seen, total = [], set(), 0
+    counts = dict.fromkeys(["category", "quote", "source", "price"], 0)
+    counts["category"] = sum(i.category not in CATEGORIES for i in draft.suggestions)
     arrival = proposal.start_date
     for stay in proposal.cities:
         departure = arrival + timedelta(days=stay.nights)
@@ -184,15 +190,12 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
         for item in draft.suggestions:
             if total >= MAX_SUGGESTIONS or len(activities) >= MAX_PER_CITY:
                 break
-            if item.city_order != stay.order or item.category not in {
-                "activity",
-                "attraction",
-                "restaurant",
-            }:
+            if item.city_order != stay.order or item.category not in CATEGORIES:
                 continue
             sources = by_city[stay.order]
             name = _text(item.name, sources)
             if not name.value:
+                counts["source" if item.name.source_id not in sources else "quote"] += 1
                 continue
             key = f"{stay.order}:{name.value.casefold().strip()}"
             if key in seen:
@@ -210,6 +213,9 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
                         continue
                 except ValueError:
                     continue
+            price = _price(item.price, sources)
+            if item.price.amount and price.amount_sar is None:
+                counts["price"] += 1
             seen.add(key)
             total += 1
             activities.append(
@@ -221,12 +227,23 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
                     location=_text(item.location, sources),
                     duration=_text(item.duration, sources),
                     scheduled_date=scheduled,
-                    price_per_person=_price(item.price, sources),
+                    price_per_person=price,
                     booking_url=sources[item.name.source_id].url,
                 )
             )
         stays.append(stay.model_copy(update={"activities": activities}))
         arrival = departure
+    logger.info(
+        "activity_research_counts raw=%d kept=%d dropped_category=%d "
+        "dropped_quote=%d dropped_source=%d dropped_price=%d model=%s",
+        len(draft.suggestions),
+        total,
+        counts["category"],
+        counts["quote"],
+        counts["source"],
+        counts["price"],
+        settings.gemini_model,
+    )
     result = proposal.model_copy(
         update={
             "cities": stays,
