@@ -32,6 +32,7 @@ Assumption = Literal[
     "flights_missing",
     "meals_allowance",
     "activities_not_included",
+    "activities_selected",
     "group_total_all_cities",
     "group_total_unavailable",
     "prices_may_change",

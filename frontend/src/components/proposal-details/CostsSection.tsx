@@ -27,6 +27,7 @@ const assumptionText: Record<CostAssumption, string> = {
   flights_one_way: 'Only the outbound flight is priced. The return flight is not included yet.',
   flights_missing: 'No flights from your departure city were found, so flights are not counted.',
   meals_allowance: 'Meals and small expenses use a general daily allowance per person. It is not from a source.',
+  activities_selected: 'Your saved activities are included. The group total uses each member’s own choices.',
   activities_not_included: 'Selected activities are not added to these totals yet.',
   group_total_all_cities: 'The group total adds every member’s own flights and the shared costs for everyone.',
   group_total_unavailable: 'The group total could not be worked out right now.',

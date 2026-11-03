@@ -36,7 +36,7 @@ STRENGTH: tuple[PriceStatus, ...] = (
     "Unconfirmed",
     "Not available",
 )
-CORE = {"flights", "accommodation", "transport"}
+CORE = {"flights", "accommodation", "transport", "activities"}
 
 
 class RoutePrice(BaseModel):
@@ -130,7 +130,7 @@ def _own_budget(
         line.per_person.partial
         or line.per_person.status in {"Unconfirmed", "Not available"}
         for line in lines
-        if line.category in CORE
+        if line.counted and line.category in CORE
     )
     return ("unconfirmed" if uncertain else "within"), None
 
@@ -156,6 +156,8 @@ def _scenario(
     days: int,
     meals_per_day: Decimal,
     context: CostContext | None,
+    activity_ids: list[UUID] | None = None,
+    activity_group: CostAmount | None = None,
 ) -> CostScenario:
     members = context.member_count if context else 1
     # Shared rooms: two people per room, so a group needs half as many, rounded up.
@@ -193,12 +195,24 @@ def _scenario(
         lines.append(CostLine(category="accommodation", per_person=accommodation))
     if transport:
         lines.append(CostLine(category="transport", per_person=transport))
-    # Activities belong to US-11/12. Shown so the member knows they are not added yet.
+    selected = [
+        a.price_per_person
+        for city in proposal.cities
+        for a in city.activities
+        if activity_ids is not None and a.id in activity_ids
+    ]
+    activity_amount = (
+        _amount([(p, Decimal(1)) for p in selected])
+        if selected
+        else CostAmount(amount_sar=Decimal(0), status="Estimated")
+    )
     lines.append(
         CostLine(
             category="activities",
-            per_person=CostAmount(amount_sar=None, status="Not available"),
-            counted=False,
+            per_person=activity_amount
+            if activity_ids is not None
+            else CostAmount(amount_sar=None, status="Not available"),
+            counted=activity_ids is not None,
         )
     )
     if meals:
@@ -212,12 +226,22 @@ def _scenario(
         shared_parts = [
             line.per_person
             for line in lines
-            if line.counted and line.category != "flights"
+            if line.counted and line.category not in {"flights", "activities"}
         ]
         group = _sum(
             [
                 _group_flights(proposal.id, context),
                 *(_times(part, everyone) for part in shared_parts),
+                *(
+                    [
+                        activity_group
+                        or CostAmount(
+                            amount_sar=None, status="Not available", partial=True
+                        )
+                    ]
+                    if activity_ids is not None
+                    else []
+                ),
             ]
         )
     budget, over_by = _own_budget(
@@ -234,13 +258,37 @@ def _scenario(
 
 
 def proposal_costs(
-    proposal: Proposal, meals_per_day: Decimal, context: CostContext | None
+    proposal: Proposal,
+    meals_per_day: Decimal,
+    context: CostContext | None,
+    activity_ids: list[UUID] | None = None,
+    activity_group: CostAmount | None = None,
 ) -> ProposalCosts:
     days = (proposal.end_date - proposal.start_date).days + 1
     nights = sum(stay.nights for stay in proposal.cities)
-    scenarios = [_scenario("single", proposal, days, meals_per_day, context)]
+    scenarios = [
+        _scenario(
+            "single",
+            proposal,
+            days,
+            meals_per_day,
+            context,
+            activity_ids,
+            activity_group,
+        )
+    ]
     if context and context.member_count > 1 and nights:
-        scenarios.append(_scenario("shared", proposal, days, meals_per_day, context))
+        scenarios.append(
+            _scenario(
+                "shared",
+                proposal,
+                days,
+                meals_per_day,
+                context,
+                activity_ids,
+                activity_group,
+            )
+        )
 
     own_route = proposal.flights[0] if proposal.flights else None
     assumptions: list[Assumption] = []
@@ -255,7 +303,9 @@ def proposal_costs(
         assumptions.append("rooms_shared")
     if meals_per_day > 0:
         assumptions.append("meals_allowance")
-    assumptions.append("activities_not_included")
+    assumptions.append(
+        "activities_selected" if activity_ids is not None else "activities_not_included"
+    )
     assumptions.append(
         "group_total_all_cities" if context else "group_total_unavailable"
     )

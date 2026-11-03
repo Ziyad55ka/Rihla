@@ -495,8 +495,8 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('aria-valuenow="1"')
     expect(pure(<BookSteps busy={false} result={checked()} />)).toContain('aria-valuenow="3"')
   })
-  it('reserves room for the activities with nothing shown', () => {
-    expect(pure(<ActivitiesSection proposal={proposal()} />)).toBe('')
+  it('offers real activity research for a proposal without suggestions', () => {
+    expect(pure(<ActivitiesSection proposal={proposal()} />)).toContain('Find activity suggestions')
   })
   it('makes the photo open nothing, with its credit in a tooltip on the corner icon', () => {
     const image = { url: 'https://upload.wikimedia.org/a.jpg', source_url: 'https://commons.wikimedia.org/a', artist: 'A. Person', license: 'CC BY-SA 4.0' }

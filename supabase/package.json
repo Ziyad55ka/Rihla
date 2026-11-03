@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test tests/database.test.mjs tests/proposals.test.mjs" },
+  "scripts": { "test": "node --test tests/database.test.mjs tests/proposals.test.mjs tests/activities.test.mjs" },
   "engines": { "node": ">=24.13.0 <25" },
   "devDependencies": { "@electric-sql/pglite": "0.5.10" }
 }

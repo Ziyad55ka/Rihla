@@ -283,3 +283,23 @@ class Proposal(StrictModel):
 ### الأنشطة (لـ Developer 2)
 
 التفاصيل كاملة في [developer-2-handoff.md](developer-2-handoff.md)، ومنها اقتراح قسم "وش يصير في [المدينة] خلال أيام رحلتكم": فعاليات وأماكن مشهورة في تواريخ الرحلة، بحقوله ووين ينعرض. وTrip.com تم تقييمه واستبعاده، فلا تعتمدوا على `searchAttractionAndActivity`.
+
+
+## US-11/US-12 integration addendum
+
+The Ziyad integration retains all main fields and adds `CityStay.activities`
+(default empty). Activity fields: UUID id, activity/attraction/restaurant category,
+cited name/description/location/duration/scheduled_date, nonnegative Estimated or
+Unconfirmed price, optional HTTPS source link and image. Activity dates are checked
+against the city stay. `Proposal.activity_research_status` is not_requested or ready
+for live research (unavailable is reserved for failure reporting). Sources for all
+activity evidence are retained when member flight sources are filtered.
+
+POST `/api/trips/{trip}/proposals/{proposal}/activities/suggestions` takes the
+proposal version, reads stored cities, and persists verified provider results once.
+GET/PUT `.../activities/selection` read/save the signed-in member's choices.
+The existing proposal response's `costs` includes those choices, and
+`activities_selected` documents this in cost assumptions.
+
+See [activity integration](activities.md) for migrations, environment setup and
+pending live verification. There is no application mock fallback.

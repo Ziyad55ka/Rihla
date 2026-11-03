@@ -168,7 +168,52 @@ export interface PlaceImage {
 }
 
 /** A stay in one city. */
+export type ActivityCategory = 'activity' | 'attraction' | 'restaurant'
+
+export interface Activity {
+  id: string
+  /** Legacy records without a category are ordinary activities. */
+  category?: ActivityCategory
+  name: InfoField
+  description: InfoField
+  location: InfoField
+  duration: InfoField
+  scheduled_date: InfoField
+  /** Same status rules as hotel prices, with zero allowed for free activities. */
+  price_per_person: SarPrice
+  booking_url: string | null
+  image_url: string | null
+}
+
+export interface EstimateComponent {
+  known_amount_sar: string
+  missing_items: number
+  unconfirmed_items: number
+  estimated_items: number
+}
+
+/** Per-person estimate for the current caller's flight route and selections. */
+export interface ActivityProposalEstimate {
+  proposal_id: string
+  version: number
+  currency: 'SAR'
+  flights: EstimateComponent
+  accommodation: EstimateComponent
+  transport: EstimateComponent
+  activities: EstimateComponent
+  total: EstimateComponent
+}
+
+export interface ActivitySelections {
+  proposal_id: string
+  version: number
+  activity_ids: string[]
+  estimate?: ActivityProposalEstimate
+}
+
+/** A stay in one city. */
 export interface CityStay {
+  activities?: Activity[]
   /** The position in the route, counting up from 1. Example: `1`. */
   order: number
   /** The city name. Example: `"Cairo"`. */
@@ -222,6 +267,7 @@ export interface FlexibleAdjustment {
 
 /** One complete trip option. */
 export interface Proposal {
+  activity_research_status?: 'not_requested' | 'ready' | 'unavailable'
   /** This proposal's own id, a UUID. */
   id: string
   /** The trip it belongs to, a UUID. */
@@ -286,7 +332,7 @@ export type RoomPlan = 'single' | 'shared'
 export type OwnBudget = 'within' | 'over' | 'unconfirmed' | 'unknown'
 export type CostAssumption =
   | 'rooms_single' | 'rooms_shared' | 'flights_own_city' | 'flights_one_way' | 'flights_missing'
-  | 'meals_allowance' | 'activities_not_included' | 'group_total_all_cities'
+  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'group_total_all_cities'
   | 'group_total_unavailable' | 'prices_may_change'
 
 export interface CostAmount {
@@ -372,3 +418,8 @@ export interface GeneratedProposals extends StoredProposals {
   demo: boolean
 }
 
+
+export interface ProposalSet {
+  /** Options 1, 2 and 3. */
+  proposals: Proposal[]
+}

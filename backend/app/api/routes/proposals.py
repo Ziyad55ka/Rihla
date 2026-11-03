@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from app.core.auth import CurrentIdentity
+from app.schemas.activity_costs import ActivityCostSelections
 from app.schemas.conflicts import GroupConflicts
 from app.schemas.costs import ProposalCosts
 from app.schemas.proposals import AirlineFareNote, Proposal
@@ -236,12 +237,26 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
     )
     proposals = await with_place_images(stored.proposals, settings)
     context: CostContext | None = None
+    activity_choices = {}
     if proposals:
         # Without the group context the page still gets this member's own costs.
         try:
             context = await fetch_cost_context(trip_id, identity.account.id, settings)
         except GenerationInputsError:
             context = None
+        try:
+            activity_data = await trip_rpc(
+                client,
+                identity,
+                "rihla_get_activity_costs",
+                {"p_trip_id": str(trip_id)},
+                ActivityCostSelections,
+            )
+            activity_choices = {a.id: a for a in activity_data.proposals}
+        except HTTPException:
+            # Before the US-12 migration is applied, retain the explicit
+            # "activities not included" state rather than inventing a zero.
+            pass
     return stored.model_copy(
         update={
             "proposals": [
@@ -249,7 +264,17 @@ async def _read(trip_id: UUID, identity, client, settings) -> StoredProposals:
                 for item in proposals
             ],
             "costs": [
-                proposal_costs(item, settings.meals_per_day_sar, context)
+                proposal_costs(
+                    item,
+                    settings.meals_per_day_sar,
+                    context,
+                    activity_choices[item.id].activity_ids
+                    if item.id in activity_choices
+                    else None,
+                    activity_choices[item.id].group_cost
+                    if item.id in activity_choices
+                    else None,
+                )
                 for item in proposals
             ],
             "price_fresh_hours": settings.price_fresh_hours,

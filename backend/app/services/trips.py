@@ -25,6 +25,16 @@ async def trip_rpc[T](
             raise HTTPException(404, "This invitation is invalid, expired or revoked.")
         if response.status_code == 403 or code == "42501":
             raise HTTPException(403, "You do not have permission for this trip action.")
+        if name in {"rihla_get_activity_selection", "rihla_set_activity_selection"}:
+            if code == "P0001":
+                raise HTTPException(
+                    409, "This proposal changed. Reload before saving activities."
+                )
+            if code in {"23514", "22P02"}:
+                raise HTTPException(422, "Select valid activities from this proposal.")
+            raise HTTPException(
+                503, "Activity storage is unavailable. Try again later."
+            )
         preferences = name in {"rihla_get_preferences", "rihla_save_preferences"}
         if code in {"23514", "23502", "22001", "22003", "22007", "22008", "22P02"}:
             if name == "rihla_check_trip_dates":
@@ -37,6 +47,12 @@ async def trip_rpc[T](
                 503,
                 "Preference storage is unavailable. "
                 "Check that the preferences migration is applied.",
+            )
+        if "proposal" in name or name == "rihla_get_group_conflicts":
+            raise HTTPException(
+                503,
+                "Proposals are unavailable. "
+                "Check that the proposals migrations are applied.",
             )
         if name in {"rihla_get_planning_status", "rihla_check_trip_dates"}:
             raise HTTPException(

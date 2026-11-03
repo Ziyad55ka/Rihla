@@ -242,6 +242,43 @@ class PlaceImage(StrictModel):
     license: str = Field(min_length=1, max_length=100)
 
 
+def unavailable_info() -> InfoField:
+    return InfoField(value=None, status="Not available", evidence=[])
+
+
+class ActivityPrice(SarPrice):
+    # Activities may be free. Existing flight/hotel price rules are unchanged.
+    amount_sar: Decimal | None = Field(ge=0, max_digits=12, decimal_places=2)
+
+
+class Activity(StrictModel):
+    id: UUID
+    category: Literal["activity", "attraction", "restaurant"] = "activity"
+    name: InfoField
+    description: InfoField = Field(default_factory=unavailable_info)
+    location: InfoField = Field(default_factory=unavailable_info)
+    duration: InfoField = Field(default_factory=unavailable_info)
+    # Null means the event date is unknown, not that it is available every day.
+    scheduled_date: InfoField = Field(default_factory=unavailable_info)
+    price_per_person: ActivityPrice
+    booking_url: BookingUrl = None
+    image_url: BookingUrl = None
+
+    @field_validator("price_per_person")
+    @classmethod
+    def activity_price_is_not_sourced(cls, price: ActivityPrice) -> ActivityPrice:
+        return _not_sourced(price)
+
+    @field_validator("scheduled_date")
+    @classmethod
+    def calendar_date(cls, field: InfoField) -> InfoField:
+        if field.value is not None:
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", field.value):
+                raise ValueError("Activity date must use YYYY-MM-DD.")
+            date.fromisoformat(field.value)
+        return field
+
+
 # A stay in one city.
 class CityStay(StrictModel):
     # The position in the route, counting up from 1. Example: 1.
@@ -268,6 +305,8 @@ class CityStay(StrictModel):
     hotel_source: str | None = Field(default=None, max_length=50)
     # A photo of this city, or null.
     image: PlaceImage | None = None
+
+    activities: list[Activity] = Field(default_factory=list, max_length=100)
 
     @field_validator("hotel_price_per_night")
     @classmethod
@@ -379,6 +418,9 @@ class Proposal(StrictModel):
     sources: list[ProposalSource]
     # A photo of the destination, or null.
     image: PlaceImage | None = None
+    activity_research_status: Literal["not_requested", "ready", "unavailable"] = (
+        "not_requested"
+    )
     # US-15. Empty on proposals generated before this field existed.
     compatibility: list[CompatibilityCheck] = Field(default_factory=list)
 
@@ -404,6 +446,20 @@ class Proposal(StrictModel):
         legs = [(leg.from_city, leg.to_city) for leg in self.intercity_transport]
         if legs != list(zip(names, names[1:], strict=False)):
             raise ValueError("Transfers must connect the cities in order.")
+        ids = [activity.id for stay in self.cities for activity in stay.activities]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Activity ids must be unique within a proposal.")
+        from datetime import timedelta
+
+        arrival = self.start_date
+        for stay in self.cities:
+            departure = arrival + timedelta(days=stay.nights)
+            for activity in stay.activities:
+                if activity.scheduled_date.value is not None:
+                    scheduled = date.fromisoformat(activity.scheduled_date.value)
+                    if not arrival <= scheduled <= departure:
+                        raise ValueError("Activity date must be within its city stay.")
+            arrival = departure
         return self
 
     @model_validator(mode="after")
@@ -445,6 +501,15 @@ class Proposal(StrictModel):
                 fields += [leg.airline, leg.duration, leg.price]
         for stay in self.cities:
             fields += [stay.hotel_name, stay.hotel_price_per_night]
+            for activity in stay.activities:
+                fields += [
+                    activity.name,
+                    activity.description,
+                    activity.location,
+                    activity.duration,
+                    activity.scheduled_date,
+                    activity.price_per_person,
+                ]
         for leg in self.intercity_transport:
             fields += [leg.mode, leg.duration, leg.price_per_person]
         return fields
