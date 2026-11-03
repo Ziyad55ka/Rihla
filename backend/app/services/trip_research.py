@@ -12,7 +12,7 @@ import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
@@ -254,6 +254,11 @@ class ResearchRequest(BaseModel):
     arrival_airport: str | None = None
     departure_date: date | None = None
     return_date: date | None = None
+    # Fare-first generation: a departure city with an airport must have a live fare
+    # with a booking link. Without one, research stops instead of guessing a price.
+    require_live_fares: bool = False
+    # Nights in each city, in order, so each hotel is priced for its own stay.
+    nights: list[int] = []
 
 
 @dataclass(frozen=True)
@@ -844,6 +849,13 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         {item.strip().casefold(): item.strip() for item in request.origins}.values()
     )
     fares, no_group_fare = await _find_fares(request, origins, settings, cost)
+    if request.require_live_fares:
+        for index, origin in enumerate(origins):
+            airport = airport_for_city(origin)
+            if airport and airport != request.arrival_airport and index not in fares:
+                raise ResearchError(
+                    "no_flights", "No bookable flight was found for this option."
+                )
     # Flight groups come first in the plan, one per origin in this same order.
     groups = [
         group
@@ -863,13 +875,19 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         public_sources.append(source)
         fare_fields += _fare_fields(index, fare, source)
 
-    for group in groups:
+    async def run(group: SearchGroup) -> list[ResearchSource]:
         extra = (
             {"include_domains": search_hosts(settings.booking_domains)}
             if group.booking_only
             else {}
         )
         found, _ = await search_sources(group.query, settings, cost=cost, **extra)
+        return found
+
+    # The searches do not depend on each other, so they run together. Their
+    # results are then read in plan order, which keeps source ids stable.
+    found_by_group = await asyncio.gather(*(run(group) for group in groups))
+    for group, found in zip(groups, found_by_group, strict=True):
         for source in found:
             if group.country and describes_other_country(source, group.country):
                 continue
@@ -929,24 +947,44 @@ async def _find_fares(
     provider = get_flight_provider(settings, cache)
     fares: dict[int, tuple[FlightQuery, FlightFare]] = {}
     no_group: list[int] = []
+    queries: dict[int, FlightQuery] = {}
     for index, origin in enumerate(origins):
         airport = airport_for_city(origin)
         if airport is None or airport == request.arrival_airport:
             continue
-        query = FlightQuery(
+        queries[index] = FlightQuery(
             airport,
             request.arrival_airport,
             request.departure_date,
             request.return_date,
             max(request.travelers.get(origin.casefold(), 1), 1),
         )
-        fare = await provider.find(query)
+    # Every departure city is searched at the same time.
+    found = await asyncio.gather(*(provider.find(query) for query in queries.values()))
+    for (index, query), fare in zip(queries.items(), found, strict=True):
         if fare is not None and _fare_in_sar(fare) is not None:
             fares[index] = (query, fare)
         elif query.adults > 1 and query in getattr(provider, "no_itinerary", ()):
             no_group.append(index)
     cost.ignav_requests += provider.requests_made
     return fares, no_group
+
+
+def city_stays(request: ResearchRequest) -> list[tuple[str, date, date, str | None]]:
+    """Each city with its own check-in and check-out dates."""
+    assert request.departure_date is not None and request.return_date is not None
+    if len(request.nights) != len(request.cities):
+        return [
+            (city, request.departure_date, request.return_date, request.country)
+            for city in request.cities
+        ]
+    stays = []
+    check_in = request.departure_date
+    for city, nights in zip(request.cities, request.nights, strict=True):
+        check_out = check_in + timedelta(days=max(nights, 1))
+        stays.append((city, check_in, check_out, request.country))
+        check_in = check_out
+    return stays
 
 
 async def _apply_hotel_sources(
@@ -962,11 +1000,14 @@ async def _apply_hotel_sources(
     links: dict[int, str] = {}
     names: dict[int, str] = {}
     by_id = {item.field_id: position for position, item in enumerate(fields)}
-    for index, city in enumerate(request.cities):
-        offer = await find_hotel(
-            providers,
-            HotelQuery(city, request.departure_date, request.return_date),
+    stays = city_stays(request)
+    offers = await asyncio.gather(
+        *(
+            find_hotel(providers, HotelQuery(city, check_in, check_out, country))
+            for city, check_in, check_out, country in stays
         )
+    )
+    for index, offer in enumerate(offers):
         if offer is None or not offer.url or offer.price_sar is None:
             continue
         source = ResearchSource(
@@ -991,6 +1032,8 @@ async def _apply_hotel_sources(
                 field_id=price_id,
                 category="hotel_price",
                 value=str(offer.price_sar),
+                # Hotel prices change by the hour, so they stay Estimated even
+                # when a seller showed this exact price (schema rule).
                 status="Estimated",
                 evidence=evidence,
                 source_amount=offer.price_sar,

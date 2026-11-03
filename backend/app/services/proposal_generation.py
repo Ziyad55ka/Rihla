@@ -45,6 +45,7 @@ from app.services.flight_prices import (
     format_duration,
     without_tracking,
 )
+from app.services.generation_progress import ProgressReporter
 from app.services.source_policy import classify_source
 from app.services.trip_research import (
     ResearchCost,
@@ -81,6 +82,7 @@ FailureReason = Literal[
     "invalid_itinerary",
     "research_failed",
     "no_plan",
+    "no_flights",
 ]
 
 PLANNER_PROMPT = """You plan group trip options from the supplied JSON.
@@ -113,7 +115,10 @@ a nearby country, marking that requirement not met with a general explanation.
 If previous_problem is duplicate_route, the last option repeated a route: choose cities
 that appear nowhere in avoid_routes. If it is over_group_budget, the last option cost
 too much: choose cheaper cities, simpler stays or fewer paid transfers, and never
-mention this in the title or explanations.
+mention this in the title or explanations. If it is no_flights, the routes in
+avoid_routes had no bookable flights from Saudi Arabia on those dates: prefer
+destinations with a major international airport and frequent flights from Saudi
+Arabia, such as regional hubs, and set arrival_airport to that main airport.
 Do not state prices, hotels or flights: those come from later research. A hotel and its
 price only ever come from a real source, never from you."""
 
@@ -699,16 +704,12 @@ async def _plan_options(
     return plan.options
 
 
-async def _complete_option(
+def _prevalidate(
     option: PlannedOption,
-    option_number: int,
     generation: GenerationInput,
     requirements: list[Requirement],
-    origins: list[str],
-    version: int,
-    settings: Settings,
-    cost: ResearchCost,
-) -> Proposal:
+) -> list[FlexibleAdjustment]:
+    """Checks that need no outside request. Raises OptionRejected."""
     if not (
         generation.shared_start
         <= option.start_date
@@ -733,7 +734,21 @@ async def _complete_option(
         reasons.append("private_detail_in_text")
     if reasons:
         raise OptionRejected(*dict.fromkeys(reasons))
+    return adjustments
 
+
+async def _research_option(
+    option: PlannedOption,
+    option_number: int,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    adjustments: list[FlexibleAdjustment],
+    origins: list[str],
+    version: int,
+    settings: Settings,
+    cost: ResearchCost,
+    require_live_fares: bool = False,
+) -> Proposal:
     result = await trip_research.research(
         ResearchRequest(
             destination=option.destination,
@@ -748,6 +763,8 @@ async def _complete_option(
                 member.departure_city.strip().casefold()
                 for member in generation.members
             ),
+            nights=[city.nights for city in option.cities],
+            require_live_fares=require_live_fares,
         ),
         settings,
     )
@@ -765,6 +782,30 @@ async def _complete_option(
         )
     except ValidationError as error:
         raise OptionRejected("invalid_itinerary") from error
+
+
+async def _complete_option(
+    option: PlannedOption,
+    option_number: int,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    origins: list[str],
+    version: int,
+    settings: Settings,
+    cost: ResearchCost,
+) -> Proposal:
+    adjustments = _prevalidate(option, generation, requirements)
+    return await _research_option(
+        option,
+        option_number,
+        generation,
+        requirements,
+        adjustments,
+        origins,
+        version,
+        settings,
+        cost,
+    )
 
 
 def load_demo_proposals(
@@ -799,11 +840,20 @@ def load_demo_proposals(
 
 
 async def generate_proposals(
-    generation: GenerationInput, settings: Settings, version: int = 1
+    generation: GenerationInput,
+    settings: Settings,
+    version: int = 1,
+    progress: "ProgressReporter | None" = None,
 ) -> GenerationResult:
     """Return up to three proposals; raise only when none could be produced."""
     if settings.proposals_demo_mode:
         return load_demo_proposals(generation, settings, version)
+    from app.services import fare_first
+
+    if fare_first.live_fares_on(settings):
+        return await fare_first.generate(
+            generation, settings, version, progress=progress
+        )
     cost = ResearchCost()
     requirements = collect_requirements(generation)
     origins = list(

@@ -233,3 +233,44 @@ def test_non_member_cannot_read_proposals(api) -> None:
         api(rihla_get_proposals=denied).get(f"/api/trips/{TRIP}/proposals").status_code
         == 403
     )
+
+
+def test_no_flights_returns_the_reason_and_suggested_changes(
+    api, pipeline, monkeypatch, rpc_log
+) -> None:
+    from app.services.generation_errors import no_flights_error
+
+    async def fail(*args, **kwargs):
+        raise no_flights_error(INPUT, ["Doha"], INPUT.shared_start, 3, 4)
+
+    monkeypatch.setattr(routes, "generate_checked", fail)
+
+    response = post(api())
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "no_flights" and "Doha" in detail["message"]
+    assert {item["action"] for item in detail["suggestions"]} >= {
+        "edit_dates",
+        "edit_preferences",
+        "retry",
+    }
+    assert "4000" not in response.text and "Riyadh" not in response.text
+    assert rpc_log[-1] == "rihla_end_proposal_generation"
+
+
+def test_progress_is_for_members_and_shows_the_last_step(api, pipeline) -> None:
+    client = api()
+    assert client.get(f"/api/trips/{TRIP}/proposals/progress").json() is None
+
+    assert post(client).status_code == 200
+    state = client.get(f"/api/trips/{TRIP}/proposals/progress").json()
+    assert state["stage"] == "done"
+
+    denied = httpx.Response(403, json={"code": "42501"})
+    outsider = api(rihla_get_group_conflicts=denied)
+    assert outsider.get(f"/api/trips/{TRIP}/proposals/progress").status_code == 403
+
+
+def test_progress_requires_authentication(client) -> None:
+    assert client.get(f"/api/trips/{TRIP}/proposals/progress").status_code == 401

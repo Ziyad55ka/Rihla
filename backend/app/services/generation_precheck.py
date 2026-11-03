@@ -20,6 +20,7 @@ from app.core.config import Settings
 from app.schemas.conflicts import ConflictCategory
 from app.schemas.generation import GenerationInput
 from app.schemas.planning import PlanningStatus
+from app.services.generation_progress import ProgressReporter
 from app.services.proposal_generation import (
     GenerationBlocked,
     GenerationResult,
@@ -230,6 +231,7 @@ async def generate_checked(
     planning: PlanningStatus | None = None,
     version: int = 1,
     regenerate: bool = False,
+    progress: ProgressReporter | None = None,
 ) -> GenerationResult:
     """The entry point for generation. Raises GenerationBlocked when a check fails.
 
@@ -254,7 +256,9 @@ async def generate_checked(
     if saved is not None:
         return saved.model_copy(update={"reused": True, "cost": ResearchCost()})
 
-    result = await generate_proposals(generation, settings, version)
+    # Passed only when tracked, so the call stays the same for other callers.
+    extra = {"progress": progress} if progress is not None else {}
+    result = await generate_proposals(generation, settings, version, **extra)
     # Counts only, never values or queries.
     logger.info(
         "generation_cost gemini=%s tokens=%s tavily_credits=%s ignav=%s cached=%s",

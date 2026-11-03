@@ -66,9 +66,22 @@ class ProposalSettings(BaseSettings):
     ignav_price_scope: Literal["per_person", "total"] = "total"
     # Sources in the order they are preferred. Only sources switched on are asked.
     flight_providers: list[str] = Field(default_factory=lambda: ["tripcom", "ignav"])
-    hotel_providers: list[str] = Field(default_factory=lambda: ["tripcom"])
+    hotel_providers: list[str] = Field(default_factory=lambda: ["serpapi", "tripcom"])
     # Academic use only. Read docs/ai-proposals.md before switching this on.
     tripcom_enabled: bool = False
+    # Google Hotels through SerpApi: a real price per night in SAR. Off without a key.
+    serpapi_api_key: str | None = None
+    # One more request per city opens the hotel's page to find a Booking.com link.
+    serpapi_hotel_details: bool = True
+
+    # Fare-first generation, used whenever live fares are switched on (Ignav key).
+    # A trip never starts sooner than this, so seats can still be booked.
+    min_departure_lead_days: int = Field(default=3, ge=0, le=60)
+    # Destinations Gemini suggests in its first request. Code keeps the first 3
+    # that have bookable flights from every departure city.
+    planner_option_count: int = Field(default=5, ge=3, le=8)
+    # Departure days tried, around the planned one, when it has no flights.
+    flight_date_shifts: list[int] = Field(default_factory=lambda: [1, -1, 2, -2])
 
     # A split trip must save this much, and may take only this much longer.
     split_min_saving_percent: Decimal = Field(default=Decimal(15), ge=0, lt=100)

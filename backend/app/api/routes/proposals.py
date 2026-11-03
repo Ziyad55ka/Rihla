@@ -19,6 +19,7 @@ from app.services.flight_refresh import (
     book_flight,
     refresh_flights,
 )
+from app.services.generation_errors import GenerationNeedsChanges, no_proposals_error
 from app.services.generation_inputs import (
     FlightContext,
     GenerationInputsError,
@@ -28,6 +29,11 @@ from app.services.generation_inputs import (
     save_flight_refresh,
 )
 from app.services.generation_precheck import generate_checked
+from app.services.generation_progress import (
+    GenerationProgress,
+    ProgressReporter,
+    read_progress,
+)
 from app.services.place_images import with_place_images
 from app.services.proposal_costs import CostContext, proposal_costs
 from app.services.proposal_generation import GenerationBlocked
@@ -297,6 +303,24 @@ async def read_conflicts(
     )
 
 
+@router.get("/{trip_id}/proposals/progress", response_model=GenerationProgress | None)
+async def read_generation_progress(
+    trip_id: UUID, identity: CurrentIdentity, client: SupabaseHTTP
+):
+    """What a running generation is doing, for any member of the trip.
+
+    Holds no private data. Membership is checked with the same RPC as conflicts.
+    """
+    await trip_rpc(
+        client,
+        identity,
+        "rihla_get_group_conflicts",
+        {"p_trip_id": str(trip_id)},
+        GroupConflicts,
+    )
+    return read_progress(str(trip_id))
+
+
 @router.get("/{trip_id}/proposals", response_model=StoredProposals)
 async def read_proposals(
     trip_id: UUID, request: Request, identity: CurrentIdentity, client: SupabaseHTTP
@@ -397,6 +421,7 @@ async def generate_trip_proposals(
     )
     if not begun.started:
         raise HTTPException(409, "Proposals are already being generated for this trip.")
+    progress = ProgressReporter(str(trip_id))
     try:
         conflicts = await trip_rpc(
             client, identity, "rihla_get_group_conflicts", args, GroupConflicts
@@ -413,22 +438,44 @@ async def generate_trip_proposals(
             store=SupabaseProposalStore(client, identity, settings, begun.version),
             version=begun.version,
             regenerate=body.regenerate if body else False,
+            progress=progress,
         )
+        progress.stage("done")
+    except GenerationNeedsChanges as needs:
+        progress.stage("failed")
+        raise HTTPException(409, needs.detail()) from needs
     except GenerationBlocked as blocked:
+        progress.stage("failed")
         raise HTTPException(
             409,
             {"message": " ".join(blocked.messages), "categories": blocked.categories},
         ) from blocked
     except GenerationInputsError as error:
+        progress.stage("failed")
         status, message = INPUT_FAILURES.get(
             error.code, (503, "Proposal generation is temporarily unavailable.")
         )
         raise HTTPException(status, message) from error
     except ResearchError as error:
+        progress.stage("failed")
+        if error.code == "model_invalid_output":
+            raise HTTPException(409, no_proposals_error().detail()) from error
         status, message = RESEARCH_FAILURES.get(
             error.code, (503, "Proposal generation is temporarily unavailable.")
         )
-        raise HTTPException(status, message) from error
+        raise HTTPException(
+            status,
+            {
+                "code": error.code,
+                "message": message,
+                "suggestions": [
+                    {
+                        "action": "retry",
+                        "text": "Wait a few minutes, then generate again.",
+                    }
+                ],
+            },
+        ) from error
     finally:
         await trip_rpc(client, identity, "rihla_end_proposal_generation", args, dict)
 

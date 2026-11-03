@@ -433,8 +433,10 @@ def test_all_options_over_budget_gives_a_clear_message_without_the_figure(
 
     monkeypatch.setattr(proposal_generation, "call_gemini", plan)
     monkeypatch.setattr(proposal_generation, "_complete_option", rejected)
+    # The web-search flow (no live fares). Fare-first has its own test.
+    web_only = settings.model_copy(update={"ignav_api_key": None})
 
-    blocked = blocked_by(group(), settings)
+    blocked = blocked_by(group(), web_only)
 
     assert blocked.categories == ["budget"]
     assert "4000" not in str(blocked)

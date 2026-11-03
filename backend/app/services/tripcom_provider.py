@@ -26,6 +26,8 @@ class HotelQuery:
     city: str
     check_in: date
     check_out: date
+    # Named in searches so that Alexandria, Egypt is not Alexandria, Virginia.
+    country: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ class HotelOffer:
     # Shown to the user next to the price and link.
     source: str
     address: str | None = None
+    # True when the price is what the seller showed for these exact dates.
+    exact_price: bool = False
 
 
 async def _post(
