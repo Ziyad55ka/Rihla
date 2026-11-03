@@ -52,6 +52,10 @@ class ProposalSettings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)
+    # How much Gemini "thinks" before answering. Reading search results is simple,
+    # so it uses low thinking, which is much faster. Empty uses the model default.
+    gemini_extract_thinking: Literal["minimal", "low", "medium", "high"] | None = "low"
+    gemini_planner_thinking: Literal["minimal", "low", "medium", "high"] | None = None
     # Tavily searches the web. Results are cached to save the free credits.
     tavily_api_key: str | None = None
     tavily_search_depth: Literal["basic", "advanced"] = "basic"

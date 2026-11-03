@@ -35,7 +35,7 @@ from app.services.flight_prices import (
 )
 from app.services.source_policy import on_domain, search_hosts
 from app.services.travel_providers import find_hotel, live_hotel_providers
-from app.services.tripcom_provider import HotelQuery
+from app.services.tripcom_provider import HotelOffer, HotelQuery
 
 logger = logging.getLogger(__name__)
 
@@ -754,6 +754,7 @@ async def call_gemini[SchemaT: BaseModel](
     schema: type[SchemaT],
     settings: Settings,
     cost: ResearchCost,
+    thinking: str | None = None,
 ) -> SchemaT:
     """Ask for JSON. Wait and retry once on a quota limit or an outage."""
     if not settings.gemini_api_key:
@@ -778,6 +779,11 @@ async def call_gemini[SchemaT: BaseModel](
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
                     response_schema=schema,
+                    thinking_config=(
+                        types.ThinkingConfig(thinking_level=thinking.upper())
+                        if thinking
+                        else None
+                    ),
                 ),
             )
         except genai_errors.APIError as error:
@@ -835,7 +841,16 @@ async def extract_facts(
         },
         ensure_ascii=False,
     )
-    draft = await call_gemini(payload, SYSTEM_PROMPT, ExtractionDraft, settings, cost)
+    # Passed only when set, so the call stays the same for older callers and fakes.
+    level = settings.gemini_extract_thinking
+    draft = await call_gemini(
+        payload,
+        SYSTEM_PROMPT,
+        ExtractionDraft,
+        settings,
+        cost,
+        **({"thinking": level} if level else {}),
+    )
     return draft.facts
 
 
@@ -848,7 +863,11 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
     origins = list(
         {item.strip().casefold(): item.strip() for item in request.origins}.values()
     )
-    fares, no_group_fare = await _find_fares(request, origins, settings, cost)
+    # Live hotel prices and live fares are asked together, before any web search.
+    (fares, no_group_fare), offers = await asyncio.gather(
+        _find_fares(request, origins, settings, cost),
+        _find_hotel_offers(request, settings),
+    )
     if request.require_live_fares:
         for index, origin in enumerate(origins):
             airport = airport_for_city(origin)
@@ -861,6 +880,13 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         group
         for index, group in enumerate(groups)
         if not (index < len(origins) and index in fares)
+    ]
+    # A city with a live hotel needs no web search for its hotel.
+    found_hotels = {f"cities.{index}.hotel_name" for index in offers}
+    groups = [
+        group
+        for group in groups
+        if not (group.fields and group.fields[0].id in found_hotels)
     ]
     fare_fields: list[VerifiedField] = []
     for index, (query, fare) in fares.items():
@@ -914,9 +940,8 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         for group in groups
         for spec in group.fields
     ]
-    hotel_links, hotel_sources = await _apply_hotel_sources(
-        request, settings, fields, public_sources
-    )
+    fields += _hotel_placeholders(request, offers, fields)
+    hotel_links, hotel_sources = _apply_hotel_sources(offers, fields, public_sources)
     return ResearchResult(
         hotel_links=hotel_links,
         hotel_sources=hotel_sources,
@@ -987,29 +1012,62 @@ def city_stays(request: ResearchRequest) -> list[tuple[str, date, date, str | No
     return stays
 
 
-async def _apply_hotel_sources(
-    request: ResearchRequest,
-    settings: Settings,
-    fields: list[VerifiedField],
-    sources: list[ResearchSource],
-) -> tuple[dict[int, str], dict[int, str]]:
-    """A live source's hotel replaces the web search's. None switched on, no change."""
+async def _find_hotel_offers(
+    request: ResearchRequest, settings: Settings
+) -> dict[int, HotelOffer]:
+    """Each city's live hotel, by city position. None switched on, nothing found."""
     providers = live_hotel_providers(settings)
     if not providers or request.departure_date is None or request.return_date is None:
-        return {}, {}
-    links: dict[int, str] = {}
-    names: dict[int, str] = {}
-    by_id = {item.field_id: position for position, item in enumerate(fields)}
+        return {}
     stays = city_stays(request)
-    offers = await asyncio.gather(
+    found = await asyncio.gather(
         *(
             find_hotel(providers, HotelQuery(city, check_in, check_out, country))
             for city, check_in, check_out, country in stays
         )
     )
-    for index, offer in enumerate(offers):
-        if offer is None or not offer.url or offer.price_sar is None:
-            continue
+    return {
+        index: offer
+        for index, offer in enumerate(found)
+        if offer is not None and offer.url and offer.price_sar is not None
+    }
+
+
+def _hotel_placeholders(
+    request: ResearchRequest, offers: dict[int, HotelOffer], fields: list[VerifiedField]
+) -> list[VerifiedField]:
+    """Fields for hotels whose web search was skipped, filled in just after."""
+    known = {item.field_id for item in fields}
+    extra: list[VerifiedField] = []
+    for index in offers:
+        for field_id, category in (
+            (f"cities.{index}.hotel_name", "hotel_name"),
+            (f"cities.{index}.hotel_price_per_night", "hotel_price"),
+        ):
+            if field_id not in known:
+                extra.append(
+                    VerifiedField(
+                        field_id=field_id,
+                        category=category,
+                        value=None,
+                        status="Not available",
+                        evidence=[],
+                    )
+                )
+    return extra
+
+
+def _apply_hotel_sources(
+    offers: dict[int, HotelOffer],
+    fields: list[VerifiedField],
+    sources: list[ResearchSource],
+) -> tuple[dict[int, str], dict[int, str]]:
+    """A live source's hotel replaces the web search's."""
+    links: dict[int, str] = {}
+    names: dict[int, str] = {}
+    by_id = {item.field_id: position for position, item in enumerate(fields)}
+    for index, offer in sorted(offers.items()):
+        assert offer.url is not None and offer.price_sar is not None
         source = ResearchSource(
             id=max((item.id for item in sources), default=0) + 1,
             title=f"{offer.source}: {offer.name}"[:300],

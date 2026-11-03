@@ -693,7 +693,15 @@ async def _plan_options(
         },
         ensure_ascii=False,
     )
-    plan = await call_gemini(payload, PLANNER_PROMPT, TripPlan, settings, cost)
+    level = settings.gemini_planner_thinking
+    plan = await call_gemini(
+        payload,
+        PLANNER_PROMPT,
+        TripPlan,
+        settings,
+        cost,
+        **({"thinking": level} if level else {}),
+    )
     if not plan.feasible:
         # Stage 2 happens in the first request. Gemini's own words are never shown.
         if first:
