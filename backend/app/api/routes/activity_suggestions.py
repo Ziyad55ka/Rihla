@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field
 
+from app.api.routes.proposals import RESEARCH_FAILURES
 from app.core.auth import CurrentIdentity
 from app.schemas.proposals import Proposal, StrictModel
 from app.services.activity_research import find_activities
@@ -64,9 +65,11 @@ async def suggestions(
     except ResearchError as error:
         # Codes only: the message and sources may describe the trip.
         logger.info("activity_search_failed stage=research code=%s", error.code)
-        raise HTTPException(
-            503, "Activity search is unavailable. Try again later."
-        ) from error
+        # Same wording as proposal generation, so a spent allowance is named as such.
+        status, message = RESEARCH_FAILURES.get(
+            error.code, (503, "Activity search is unavailable. Try again later.")
+        )
+        raise HTTPException(status, message) from error
     except GenerationInputsError as error:
         logger.info("activity_search_failed stage=database code=%s", error.code)
         code = (

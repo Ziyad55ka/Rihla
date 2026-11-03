@@ -246,3 +246,41 @@ def test_stale_version_or_foreign_activity_is_rejected_before_save(activity_api)
     response = client.put(URL, json={"version": 1, "activity_ids": [TRIP]})
     assert response.status_code == 422
     assert not any(path.endswith("/rihla_set_activity_selection") for path, _ in calls)
+
+
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        ("model_quota", "Today's AI allowance has run out. Try again later."),
+        ("search_quota", "Today's search allowance has run out. Try again later."),
+        ("model_unavailable", "Activity search is unavailable. Try again later."),
+    ],
+)
+def test_suggestion_failures_name_a_spent_allowance(
+    activity_api, monkeypatch, code, message
+):
+    from activity_fixture import mock_data
+
+    from app.api.routes import activity_suggestions as routes
+    from app.services.trip_research import ResearchError
+
+    client, _, _ = activity_api
+    client.app.state.settings.gemini_api_key = "test"
+    client.app.state.settings.tavily_api_key = "test"
+    proposal = mock_data()["proposals"][0]
+
+    async def rpc(name, args, settings, transport):
+        return httpx.Response(
+            200, json={"ready": False, "started": True, "proposal": proposal}
+        )
+
+    async def fail(p, settings):
+        raise ResearchError(code, "provider detail that is never shown")
+
+    monkeypatch.setattr(routes, "_secret_rpc", rpc)
+    monkeypatch.setattr(routes, "find_activities", fail)
+    response = client.post(
+        URL.replace("/selection", "/suggestions"), json={"version": 1}
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == message
