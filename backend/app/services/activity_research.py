@@ -6,7 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from uuid import uuid5
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.core.config import Settings
 from app.schemas.proposals import (
@@ -47,7 +47,13 @@ class Suggestion(BaseModel):
 
 
 class Suggestions(BaseModel):
-    suggestions: list[Suggestion] = Field(max_length=36)
+    # No max_length: newer Gemini models reject large maxItems on nested arrays.
+    # The caps are applied in code after parsing instead.
+    suggestions: list[Suggestion]
+
+
+MAX_SUGGESTIONS = 36
+MAX_PER_CITY = 12
 
 
 PROMPT = """Extract real activities, attractions, restaurants and dated events for
@@ -62,7 +68,8 @@ Give the original stated amount and ISO currency, never convert or invent prices
 For clearly stated free entry use amount 0 and currency SAR.
 For fixed events set is_event true and scheduled_date to the exact ISO date shown
 in the source. Omit events whose date cannot be verified. Never infer a date from
-the search query. Do not invent URLs, photos, opening times or availability."""
+the search query. Do not invent URLs, photos, opening times or availability.
+Return at most 12 suggestions per city."""
 
 
 def _quote(draft, sources):
@@ -169,12 +176,14 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
     draft = await research.call_gemini(
         json.dumps(groups, ensure_ascii=False), PROMPT, Suggestions, settings, cost
     )
-    stays, seen = [], set()
+    stays, seen, total = [], set(), 0
     arrival = proposal.start_date
     for stay in proposal.cities:
         departure = arrival + timedelta(days=stay.nights)
         activities = []
         for item in draft.suggestions:
+            if total >= MAX_SUGGESTIONS or len(activities) >= MAX_PER_CITY:
+                break
             if item.city_order != stay.order or item.category not in {
                 "activity",
                 "attraction",
@@ -202,6 +211,7 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
                 except ValueError:
                     continue
             seen.add(key)
+            total += 1
             activities.append(
                 Activity(
                     id=uuid5(proposal.id, key),

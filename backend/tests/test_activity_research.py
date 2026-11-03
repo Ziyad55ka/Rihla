@@ -1,4 +1,5 @@
 import asyncio
+import json
 from copy import deepcopy
 from decimal import Decimal
 
@@ -186,3 +187,44 @@ def test_group_activities_use_actual_members_choices_not_my_choices_times_member
             after.per_person_total.amount_sar - before.per_person_total.amount_sar
             == Decimal("85.50")
         )
+
+
+def test_gemini_schema_has_no_max_items():
+    assert "maxItems" not in json.dumps(ar.Suggestions.model_json_schema())
+
+
+def test_results_are_capped_per_city_and_in_total(monkeypatch):
+    p = proposal()
+    content = " ".join(f"Place {n:02d}." for n in range(60))
+    source_id = max(s.id for s in p.sources) + 1
+
+    async def search(query, settings, **kwargs):
+        return [
+            ResearchSource(
+                id=1, title="Places", url="https://p.example/", content=content
+            )
+        ], False
+
+    async def extract(contents, prompt, schema, settings, cost):
+        items = []
+        for stay in p.cities:
+            for n in range(40):
+                name = f"Place {n:02d}"
+                items.append(
+                    draft(
+                        city_order=stay.order,
+                        name=text(name, f"{name}.", source_id),
+                    )
+                )
+        return ar.Suggestions(suggestions=items)
+
+    monkeypatch.setattr(ar.research, "search_sources", search)
+    monkeypatch.setattr(ar.research, "call_gemini", extract)
+    settings = Settings(_env_file=None, tavily_api_key="fake", gemini_api_key="fake")
+    result = asyncio.run(ar.find_activities(p, settings))
+    assert len(result.cities[0].activities) == ar.MAX_PER_CITY == 12
+    # The total cap also holds when the per-city cap would allow more.
+    monkeypatch.setattr(ar, "MAX_PER_CITY", 100)
+    monkeypatch.setattr(ar, "MAX_SUGGESTIONS", 15)
+    result = asyncio.run(ar.find_activities(p, settings))
+    assert len(result.cities[0].activities) == 15
