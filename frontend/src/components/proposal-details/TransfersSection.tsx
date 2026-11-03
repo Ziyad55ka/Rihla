@@ -2,8 +2,8 @@ import { type ComponentType, useState } from 'react'
 import { useLanguage } from '../../lib/language'
 import { calendarDate } from '../../lib/planning'
 import { placeName, stationName } from '../../lib/places'
-import { durationLabel, modeKind, type ModeKind, stayDates, transferSearchUrl } from '../../lib/proposals'
-import type { IntercityTransfer, Proposal } from '../../types/proposal'
+import { durationLabel, modeKind, type ModeKind, stayDates, transferLink } from '../../lib/proposals'
+import type { IntercityTransfer, Proposal, ProposalSource } from '../../types/proposal'
 import { BusIcon, CarIcon, ExternalIcon, FerryIcon, PlaneIcon, RouteIcon, RouteTitleIcon, TrainIcon } from './icons'
 import { nightsLabel } from './nights'
 import { SectionTitle } from './SectionTitle'
@@ -12,18 +12,19 @@ import { PriceValue } from './values'
 const modeIcons: Record<ModeKind, ComponentType> = { train: TrainIcon, bus: BusIcon, flight: PlaneIcon, car: CarIcon, ferry: FerryIcon, other: RouteIcon }
 const modeLabels: Record<Exclude<ModeKind, 'other'>, string> = { train: 'Train', bus: 'Bus', flight: 'Flight', car: 'Car', ferry: 'Ferry' }
 
-function Link({ transfer, from, to }: { transfer: IntercityTransfer; from: string; to: string }) {
+function Link({ transfer, sources, from, to }: { transfer: IntercityTransfer; sources: ProposalSource[]; from: string; to: string }) {
   const { t, language, locale } = useLanguage()
   const kind = modeKind(transfer.mode.value)
   const Icon = modeIcons[kind]
   const mode = kind === 'other' ? transfer.mode.value : t(modeLabels[kind])
   const duration = durationLabel(transfer.duration.value, language, locale)
+  const link = transferLink(transfer, sources)
   return <li className="details-metro-link">
     <span className="details-metro-icon"><Icon /></span>
     <div className="details-metro-facts">
       <strong>{mode && <bdi>{mode}</bdi>}{mode && duration && ' · '}{duration && <bdi>{duration}</bdi>}</strong>
       <PriceValue price={transfer.price_per_person} unit="per person" />
-      <a className="details-text-link" href={transferSearchUrl(transfer.mode.value, transfer.from_city, transfer.to_city)} target="_blank" rel="noopener noreferrer" aria-label={t('Search for this trip: {from} to {to}', { from, to })}>{t('Search')} <ExternalIcon /></a>
+      <a className="details-text-link" href={link.url} target="_blank" rel="noopener noreferrer" aria-label={t(link.kind === 'source' ? 'Source for this trip: {from} to {to}' : 'Routes and operators: {from} to {to}', { from, to })}>{t(link.kind === 'source' ? 'View source' : 'Compare routes')} <ExternalIcon /></a>
     </div>
   </li>
 }
@@ -54,7 +55,7 @@ export function TransfersSection({ proposal }: { proposal: Proposal }) {
           </div>}
         </li>
         const transfer = proposal.intercity_transport[index]
-        return transfer ? [stop, <Link key={`link-${stay.order}`} transfer={transfer} from={name(index)} to={name(index + 1)} />] : [stop]
+        return transfer ? [stop, <Link key={`link-${stay.order}`} transfer={transfer} sources={proposal.sources} from={name(index)} to={name(index + 1)} />] : [stop]
       })}
     </ol>
   </section>

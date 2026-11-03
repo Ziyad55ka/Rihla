@@ -1,7 +1,7 @@
 import { authenticatedRequest } from './http'
 import { longRequest } from './proposalsHttp'
 import type { Language } from './language'
-import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GenerationIssue, GenerationProgress, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
+import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GenerationIssue, GenerationProgress, GroupConflicts, ConflictCategory, InfoStatus, IntercityTransfer, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -195,9 +195,14 @@ export function modeKind(mode: string | null): ModeKind {
   return 'other'
 }
 
-/** A plain web search for this trip. It does not check a price or a seat. */
-export function transferSearchUrl(mode: string | null, from: string, to: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(`${mode ?? ''} ${from} to ${to}`.trim())}`
+/** Where a transfer's link goes: the page its price, mode or duration was read from,
+ * otherwise Rome2rio's page for the route, which lists operators. Never a web search. */
+export function transferLink(transfer: IntercityTransfer, sources: ProposalSource[]): { url: string; kind: 'source' | 'planner' } {
+  const cited = [transfer.price_per_person, transfer.mode, transfer.duration].flatMap((field) => field.evidence.map((item) => item.source_id))
+  const page = cited.map((id) => sources.find((source) => source.id === id)).find((source) => source?.url.startsWith('https://'))
+  if (page) return { url: page.url, kind: 'source' }
+  const place = (name: string) => encodeURIComponent(name.trim().replace(/\s+/g, '-'))
+  return { url: `https://www.rome2rio.com/map/${place(transfer.from_city)}/${place(transfer.to_city)}`, kind: 'planner' }
 }
 
 /** Reloads the page's proposals after a check saved something, so it shows the new price. */

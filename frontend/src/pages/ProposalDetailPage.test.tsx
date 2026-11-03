@@ -7,7 +7,7 @@ import { BookResultView, BookSteps, RefreshView, SplitBooking, TimerRing } from 
 import { PlacePhoto } from '../components/proposal-details/PlacePhoto'
 import { airlineName } from '../lib/airlines'
 import { ActivitiesSection } from '../components/proposal-details/ActivitiesSection'
-import { bookingLink, checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, transferSearchUrl } from '../lib/proposals'
+import { bookingLink, checkAndReload, durationLabel, type FlightCheckResult, linkFractionLeft, linkMinutesLeft, modeKind, priceChange, transferLink } from '../lib/proposals'
 import { AiStatus } from '../components/AiStatus'
 import { checkMessages, generateMessages, nextStatusIndex } from '../lib/aiStatus'
 import { countUpValue } from '../lib/motion'
@@ -424,7 +424,12 @@ describe('ProposalDetailView', () => {
     expect(modeKind('باص')).toBe('bus')
     expect(modeKind('Flight')).toBe('flight')
     expect(modeKind(null)).toBe('other')
-    expect(transferSearchUrl('Train', 'Paris', 'Strasbourg')).toContain('Train%20Paris%20to%20Strasbourg')
+    const train = { from_city: 'Paris', to_city: 'Strasbourg', mode: info('Train'), duration: info('2h'), price_per_person: { amount_sar: null, status: 'Not available' as const, evidence: [{ source_id: 7, quote: 'from 30 EUR' }] } }
+    // The cited page first; without one, a route planner. Never a web search.
+    expect(transferLink(train, [{ id: 7, title: 'Trainline', url: 'https://www.thetrainline.com/x' }])).toEqual({ url: 'https://www.thetrainline.com/x', kind: 'source' })
+    const planner = transferLink({ ...train, price_per_person: { ...train.price_per_person, evidence: [] } }, [])
+    expect(planner).toEqual({ url: 'https://www.rome2rio.com/map/Paris/Strasbourg', kind: 'planner' })
+    expect(planner.url).not.toContain('google')
   })
   it('shows a whole Arabic page with no English beyond flight numbers and unknown names', () => {
     localStorage.setItem('rihla-language', 'ar')
