@@ -62,6 +62,20 @@ class FlightQuery:
     return_date: date
     # Everyone flying from this city, so results have seats for all of them.
     adults: int = 1
+    # Open-jaw: the return flight leaves from here instead of the destination,
+    # for a trip that ends in another city (Paris, then Barcelona home).
+    return_from_airport: str | None = None
+
+    @property
+    def open_jaw(self) -> bool:
+        return bool(
+            self.return_from_airport
+            and self.return_from_airport != self.destination_airport
+        )
+
+    @property
+    def return_origin(self) -> str:
+        return self.return_from_airport if self.open_jaw else self.destination_airport  # type: ignore[return-value]
 
 
 @dataclass(frozen=True)
@@ -212,6 +226,28 @@ class IgnavProvider:
 
     async def search(self, query: FlightQuery) -> dict:
         """One search request. Prices come back in SAR through the SA market."""
+        if query.open_jaw:
+            # Flexible search with two legs; read back in the round-trip shape.
+            body = await self._post(
+                "/fares/search",
+                {
+                    "legs": [
+                        {
+                            "origin": query.origin_airport,
+                            "destination": query.destination_airport,
+                            "departure_date": query.departure_date.isoformat(),
+                        },
+                        {
+                            "origin": query.return_origin,
+                            "destination": query.origin_airport,
+                            "departure_date": query.return_date.isoformat(),
+                        },
+                    ],
+                    "adults": query.adults,
+                    "market": "SA",
+                },
+            )
+            return as_round_trip(body)
         return await self._post(
             "/fares/round-trip",
             {
@@ -225,7 +261,9 @@ class IgnavProvider:
         )
 
     async def booking_links(self, ignav_id: str) -> dict:
-        return await self._post("/fares/booking-links", {"ignav_id": ignav_id})
+        return named_legs(
+            await self._post("/fares/booking-links", {"ignav_id": ignav_id})
+        )
 
     async def _fare(self, choice: dict, query: FlightQuery) -> FlightFare | None:
         links = await self.booking_links(str(choice["ignav_id"]))
@@ -331,6 +369,25 @@ class IgnavProvider:
         if self.cache:
             self.cache.put(key, [{**asdict(fare), "cached_at": time.time()}])
         return fare
+
+
+def as_round_trip(body: dict) -> dict:
+    """A flexible search's two legs, named outbound and inbound like a round trip."""
+    for item in body.get("itineraries") or []:
+        legs = item.get("legs")
+        if isinstance(legs, list) and len(legs) == 2 and "outbound" not in item:
+            item["outbound"], item["inbound"] = legs[0], legs[1]
+    return body
+
+
+def named_legs(links: dict) -> dict:
+    """Booking options from a flexible search use leg_indexes; name them."""
+    names = {0: "outbound", 1: "inbound"}
+    for option in links.get("booking_options") or []:
+        indexes = option.get("leg_indexes")
+        if "legs" not in option and isinstance(indexes, list):
+            option["legs"] = [names[i] for i in indexes if i in names]
+    return links
 
 
 def _amount(itinerary: dict) -> Decimal:
@@ -492,7 +549,7 @@ def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
         return False
     origin, destination = query.origin_airport, query.destination_airport
     if directions == {"inbound"}:
-        origin, destination = destination, origin
+        origin, destination = query.return_origin, query.origin_airport
     for pattern, expected in (
         (r"[?&#:,](?:origin|org)[=:]([A-Z]{3})\b", origin),
         (r"[?&#:,](?:destination|dst)[=:]([A-Z]{3})\b", destination),
@@ -816,8 +873,9 @@ def fare_quote(fare: FlightFare, query: FlightQuery) -> str:
     }[fare.trip_type]
     return (
         f"{fare.airline}: {fare.amount} {fare.currency} {kind}, "
-        f"{query.origin_airport}-{query.destination_airport}, "
-        f"{query.departure_date} to {query.return_date}, via Ignav."
+        f"{query.origin_airport}-{query.destination_airport}"
+        + (f", home from {query.return_origin}" if query.open_jaw else "")
+        + f", {query.departure_date} to {query.return_date}, via Ignav."
     )
 
 

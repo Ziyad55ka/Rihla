@@ -316,3 +316,10 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
   .details-match-legend, .details-status-legend { grid-template-columns:1fr; gap:2px; }
   .details-match-legend dd, .details-status-legend dd { margin-block-end:8px; }
 }
+
+/* US-15-AC03: the fit score and its criteria. */
+.details-fit { margin-top:16px; }
+.details-fit-scores { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin:8px 0; }
+.details-fit-scores div { padding:12px 14px; background:#f7f8f1; border:1px solid #dfe3d6; border-radius:12px; }
+.details-fit-scores dt { color:var(--rihla-muted); font-size:13px; }
+.details-fit-scores dd { margin:4px 0 0; font-size:24px; font-weight:600; color:var(--rihla-ink); font-variant-numeric:tabular-nums; }

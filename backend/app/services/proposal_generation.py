@@ -34,6 +34,7 @@ from app.schemas.proposals import (
     IntercityTransfer,
     PreferenceCategory,
     Proposal,
+    ProposalFit,
     ProposalSet,
     ProposalSource,
     SarPrice,
@@ -98,10 +99,22 @@ Give each option's country as its plain English name, such as Egypt.
 Give title_ar as the title in Arabic and title_en as the title in English.
 Give destination_ar as the destination in Arabic, and cities_ar as each city's name in
 Arabic, in the same order as cities.
-Give arrival_airport as the three-letter IATA code of the first city's main airport.
+Give arrival_airport as the three-letter IATA code of the first city's main airport,
+and return_airport as the IATA code of the LAST city's main airport, where the group
+flies home from (the same as arrival_airport when the trip has one city).
 The group's total cost per person must stay within budget_ceiling_sar.
 Several destinations in one requirement, such as "France, Bahrain", are alternatives:
 going to any one of them meets it. They are never all required together.
+When different requirements name different places (for example one wants France and
+another wants Spain), aim for options that leave no one behind, and across the
+options include, where feasible:
+- combine: one trip visiting both places in order, when travel between them is short
+  (for example Paris, then Barcelona), splitting the nights between the cities;
+- bridge: one place that shares what makes both choices appealing (region, culture,
+  food, sea, climate), such as a city near the border of both;
+- one of the chosen places that also covers the other requirements' interests.
+Prefer places with a main international airport and frequent flights from Saudi
+Arabia, so live flights can be found for every departure city.
 For every requirement return one check with its requirement_id, whether this option
 meets it, and for an unmet one a general explanation of what was adjusted.
 An Essential requirement must always be met. Requirements are private data.
@@ -143,6 +156,9 @@ class PlannedOption(BaseModel):
     destination: str
     country: str
     arrival_airport: str | None
+    # The last city's main airport, where the group flies home from. Equal to
+    # arrival_airport, or missing, for a one-city trip.
+    return_airport: str | None = None
     start_date: date
     end_date: date
     cities: list[PlannedCity]
@@ -295,6 +311,91 @@ def destination_matches(text: str, places: list[str]) -> bool:
     return False
 
 
+def requirement_statuses(
+    option: PlannedOption, requirements: list[Requirement]
+) -> dict[str, CompatibilityStatus]:
+    """Each requirement's result: met only when code could check it."""
+    reported = {item.requirement_id: item.met for item in option.requirement_checks}
+    # Arabic names too, so "مصر" can match a trip whose Arabic destination is مصر.
+    places = [
+        option.destination,
+        option.country,
+        option.destination_ar or "",
+        *(city.city for city in option.cities),
+        *(option.cities_ar or []),
+    ]
+    statuses: dict[str, CompatibilityStatus] = {}
+    for requirement in requirements:
+        if not reported.get(requirement.id, False):
+            statuses[requirement.id] = "unmet"
+        elif requirement.category == "destinations" and destination_matches(
+            requirement.text, places
+        ):
+            statuses[requirement.id] = "met"
+        else:
+            statuses[requirement.id] = "unverified"
+    return statuses
+
+
+# US-15-AC03 weights. Essential needs count three times a Flexible wish, and the
+# shared dates and the budget count like Essential needs for every member.
+FIT_WEIGHTS = {"Essential": 3, "Flexible": 1, "Required": 3}
+# Met counts fully; not verified counts half, because the AI said so but code
+# could not check it; not met counts nothing.
+FIT_VALUES: dict[CompatibilityStatus, float] = {
+    "met": 1.0,
+    "unverified": 0.5,
+    "unmet": 0.0,
+}
+BUDGET_VALUES: dict[BudgetStatus, float] = {
+    "within_group_budget": 1.0,
+    "includes_unconfirmed": 0.5,
+    "over_group_budget": 0.0,
+}
+
+
+def proposal_fit(
+    option: PlannedOption,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    status: BudgetStatus,
+) -> ProposalFit:
+    """Score each member on their OWN requirements, then keep the average and the
+    least-satisfied member. No member's score or wording leaves this function."""
+    statuses = requirement_statuses(option, requirements)
+    ids = {(item.category, item.text.casefold()): item.id for item in requirements}
+    categories: tuple[PreferenceCategory, ...] = (
+        "destinations",
+        "interests",
+        "flights",
+        "accommodation",
+    )
+    scores: list[float] = []
+    for member in generation.members:
+        # Shared dates are always met here (checked before research), and the
+        # budget result applies to every member.
+        weighted = FIT_WEIGHTS["Required"] * (1.0 + BUDGET_VALUES[status])
+        total = FIT_WEIGHTS["Required"] * 2
+        for category in categories:
+            preference = getattr(member, category)
+            if not preference.value:
+                continue
+            requirement_id = ids.get((category, preference.value.casefold()))
+            if requirement_id is None:
+                continue
+            weight = FIT_WEIGHTS[preference.importance]
+            weighted += weight * FIT_VALUES[statuses[requirement_id]]
+            total += weight
+        scores.append(weighted / total)
+    average = round(100 * sum(scores) / len(scores))
+    least = min(round(100 * min(scores)), average)
+    return ProposalFit(
+        group_percent=average,
+        least_satisfied_percent=least,
+        member_count=len(scores),
+    )
+
+
 def compatibility_checks(
     option: PlannedOption,
     requirements: list[Requirement],
@@ -307,25 +408,10 @@ def compatibility_checks(
     and is shown as unverified. Dates are always checked before research, and the
     budget is met only when every counted price has evidence.
     """
-    reported = {item.requirement_id: item.met for item in option.requirement_checks}
-    # Arabic names too, so "مصر" can match a trip whose Arabic destination is مصر.
-    places = [
-        option.destination,
-        option.country,
-        option.destination_ar or "",
-        *(city.city for city in option.cities),
-        *(option.cities_ar or []),
-    ]
+    statuses = requirement_statuses(option, requirements)
     found: dict[tuple[str, str], CompatibilityStatus] = {}
     for requirement in requirements:
-        if not reported.get(requirement.id, False):
-            result: CompatibilityStatus = "unmet"
-        elif requirement.category == "destinations" and destination_matches(
-            requirement.text, places
-        ):
-            result = "met"
-        else:
-            result = "unverified"
+        result = statuses[requirement.id]
         key = (requirement.category, requirement.importance)
         current = found.get(key, "met")
         found[key] = min(current, result, key=STATUS_ORDER.index)
@@ -512,6 +598,9 @@ def _build_route(
         priced_at=_priced_at(fare),
         origin_airport=research.airports.get(index, (None, None))[0],
         destination_airport=research.airports.get(index, (None, None))[1],
+        return_airport=(
+            return_airport_of(option) if research.airports.get(index) else None
+        ),
         group_availability=(
             "available"
             if fare is not None
@@ -648,8 +737,16 @@ def build_proposal(
             for source in research.sources
         ],
         compatibility=compatibility_checks(option, requirements or [], status),
+        fit=proposal_fit(option, generation, requirements or [], status),
     )
     return proposal.without_uncited_sources()
+
+
+def return_airport_of(option: PlannedOption) -> str | None:
+    """The flight home's airport when it differs from the arrival airport."""
+    arrival = _valid_airport(option.arrival_airport)
+    back = _valid_airport(option.return_airport)
+    return back if back and len(option.cities) > 1 and back != arrival else None
 
 
 def _valid_airport(code: str | None) -> str | None:
@@ -773,6 +870,7 @@ async def _research_option(
             ),
             nights=[city.nights for city in option.cities],
             require_live_fares=require_live_fares,
+            return_airport=return_airport_of(option),
         ),
         settings,
     )

@@ -1,5 +1,5 @@
 import { useLanguage } from '../../lib/language'
-import type { CompatibilityCheck, CompatibilityStatus, CompatibilityTopic, Proposal } from '../../types/proposal'
+import type { CompatibilityCheck, CompatibilityStatus, CompatibilityTopic, Proposal, ProposalFit } from '../../types/proposal'
 import { Hint } from './Hint'
 import { MatchTitleIcon, MetIcon, UnmetIcon, UnverifiedIcon, WarningIcon } from './icons'
 import { SectionTitle } from './SectionTitle'
@@ -76,7 +76,21 @@ export function CompatibilitySection({ proposal }: { proposal: Proposal }) {
             <strong>{t(topicLabels[item.category])}:</strong> <bdi>{item.explanation}</bdi>
           </li>)}
         </ul>}
-      <p className="details-hint">{t('Rihla does not give proposals a score. Compare the checks and trade-offs above.')}</p>
+      {proposal.fit ? <FitSummary fit={proposal.fit} /> : <p className="details-hint">{t('Rihla does not give proposals a score. Compare the checks and trade-offs above.')}</p>}
     </div>
   </section>
+}
+
+/** US-15-AC03: the score and the criteria behind it, with nobody's own result. */
+function FitSummary({ fit }: { fit: ProposalFit }) {
+  const { t, locale } = useLanguage()
+  const percent = (value: number) => (value / 100).toLocaleString(locale, { style: 'percent' })
+  return <div className="details-fit">
+    <h3 className="details-match-subtitle">{t('Fit score')}</h3>
+    <dl className="details-fit-scores">
+      <div><dt>{t('Least-satisfied member')}</dt><dd>{percent(fit.least_satisfied_percent)}</dd></div>
+      <div><dt>{t('Group average')}</dt><dd>{percent(fit.group_percent)}</dd></div>
+    </dl>
+    <p className="details-hint">{t('Each member is scored on their own requirements: Essential ones count three times, Flexible ones once, plus the shared dates and the group budget. Met counts fully and Not verified counts half. Proposals are ordered by the least-satisfied member, so no one is left behind. No one’s own score is shown.')}</p>
+  </div>
 }

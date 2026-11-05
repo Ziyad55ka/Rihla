@@ -31,6 +31,9 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
   const typeLabel = tripTypeLabels[route.trip_type]
   const home = placeName(route.origin, language)
   const away = placeName(proposal.cities[0].city, language, proposal.cities[0].city_ar)
+  // A multi-city trip can fly home from its last city instead of the first.
+  const last = proposal.cities[proposal.cities.length - 1]
+  const back = route.return_airport ? placeName(last.city, language, last.city_ar) : away
   const partsShown = route.legs.length === 2 && route.legs.every((leg) => leg.price.amount_sar)
   return <div className="details-card details-card--featured">
     <div className="details-route-top">
@@ -41,7 +44,7 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
     {route.group_availability === 'not_found' && <p className="details-note" role="status">{t('We could not find one flight with room for all travellers from your city. You may need different flights.')}</p>}
     {route.legs.map((leg) => {
       const out = leg.direction === 'outbound'
-      return <FlightLine key={leg.direction} leg={leg} from={out ? home : away} to={out ? away : home} fromCode={out ? route.origin_airport : route.destination_airport} toCode={out ? route.destination_airport : route.origin_airport} />
+      return <FlightLine key={leg.direction} leg={leg} from={out ? home : back} to={out ? away : home} fromCode={out ? route.origin_airport : (route.return_airport ?? route.destination_airport)} toCode={out ? route.destination_airport : route.origin_airport} />
     })}
     <div className="details-price-block">
       <div className="details-price-main" key={route.price_per_person.amount_sar ?? 'none'}>

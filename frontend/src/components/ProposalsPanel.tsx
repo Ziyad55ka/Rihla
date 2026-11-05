@@ -70,6 +70,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
         <p className="proposals-destination"><bdi>{placeName(proposal.destination, language, proposal.destination_ar)}</bdi></p>
         <p className="proposals-dates">{calendarDate(proposal.start_date, locale)} {t('to')} {calendarDate(proposal.end_date, locale)}</p>
         <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ''}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
+        {proposal.fit && <p className="proposals-fit">{t('Fits everyone: at least {percent}', { percent: (proposal.fit.least_satisfied_percent / 100).toLocaleString(locale, { style: 'percent' }) })}</p>}
         <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
       </li>)}
     </ol> : !generating && !issue && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}

@@ -307,6 +307,14 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('Nonstop')
     expect(count(html, 'details-line-stop')).toBe(1)
   })
+  it('flies home from the last city when the trip ends somewhere else', () => {
+    const base = proposal()
+    const twoCities = proposal({ cities: [base.cities[0], { ...base.cities[0], city: 'Barcelona', city_ar: 'برشلونة' }], flights: [{ ...lined(), return_airport: 'BCN' }] })
+    const html = page(twoCities)
+    expect(html).toContain('BCN')
+    expect(html).toContain('Barcelona')
+    expect(page(proposal({ flights: [lined()] }))).not.toContain('BCN')
+  })
   it('shows one price and one Book button, with each message only once', () => {
     const html = page(proposal({ flights: [lined()] }))
     expect(count(html, '>Book<')).toBe(1)

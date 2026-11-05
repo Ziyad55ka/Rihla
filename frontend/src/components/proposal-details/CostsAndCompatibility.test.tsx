@@ -116,6 +116,17 @@ describe('US-15 match and trade-offs', () => {
   it('explains older proposals without match details', () => {
     expect(page(proposal({ compatibility: undefined }))).toContain('generated before match details were added')
   })
+
+  it('shows the fit score with its criteria: least-satisfied member and group average (US-15-AC03)', () => {
+    const html = page(proposal({ fit: { group_percent: 88, least_satisfied_percent: 71, member_count: 4 } }))
+    expect(html).toContain('Fit score')
+    expect(html).toContain('Least-satisfied member')
+    expect(html).toContain('71%')
+    expect(html).toContain('Group average')
+    expect(html).toContain('88%')
+    expect(html).toContain('Essential ones count three times')
+    expect(html).not.toContain('does not give proposals a score')
+  })
 })
 
 describe('US-14 sources and reliability', () => {

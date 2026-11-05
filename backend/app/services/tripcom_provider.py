@@ -110,6 +110,9 @@ class TripComFlights:
         self.requests_made = 0
 
     async def search(self, query: FlightQuery) -> dict:
+        if query.open_jaw:
+            # This source only books round trips; the next source is asked.
+            raise IgnavError("unsupported_open_jaw")
         self.requests_made += 1
         text = (
             f"Round trip flights from {query.origin_airport} to "

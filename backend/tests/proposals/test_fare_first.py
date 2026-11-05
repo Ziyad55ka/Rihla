@@ -320,3 +320,80 @@ def test_hotel_price_reaches_progress_without_private_data(
     assert state.options[0].hotel_price_per_night_sar == Decimal("420.00")
     dumped = state.model_dump_json()
     assert "9000" not in dumped and "Riyadh" not in dumped and "Jeddah" not in dumped
+
+
+def test_proposals_are_ranked_by_the_least_satisfied_member(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.schemas.proposals import ProposalFit
+
+    call, _ = planner(
+        [option("Doha", "DOH"), option("Paris", "CDG"), option("Rome", "FCO")]
+    )
+    find, _ = flights({"DOH": None, "CDG": None, "FCO": None})
+    fits = {"Doha": (60, 90), "Paris": (80, 85), "Rome": (80, 88)}
+
+    def fake_fit(option, generation, requirements, status):
+        least, average = fits[option.destination]
+        return ProposalFit(
+            group_percent=average, least_satisfied_percent=least, member_count=3
+        )
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    monkeypatch.setattr(proposal_generation, "proposal_fit", fake_fit)
+
+    result = run(group(), settings(tmp_path))
+
+    assert [p.destination for p in result.proposals] == ["Rome", "Paris", "Doha"]
+    assert [p.option_number for p in result.proposals] == [1, 2, 3]
+
+
+def test_two_city_trip_flies_home_from_the_last_city(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trip = option("France and Spain", "CDG", nights=6).model_copy(
+        update={
+            "cities": [
+                PlannedCity(city="Paris", nights=3),
+                PlannedCity(city="Barcelona", nights=3),
+            ],
+            "return_airport": "BCN",
+        }
+    )
+    call, _ = planner([trip])
+    find, calls = flights({"CDG": None})
+    seen: list[str | None] = []
+
+    async def research(request, config):
+        # Only what research is asked matters here, not building the proposal.
+        seen.append(request.return_airport)
+        raise ResearchError("stop here")
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", research)
+
+    with pytest.raises((GenerationNeedsChanges, ResearchError)):
+        run(group(), settings(tmp_path, max_gemini_calls_per_generation=1))
+
+    assert {q.return_from_airport for q in calls} == {"BCN"}
+    assert seen == ["BCN"]
+
+
+def test_one_city_or_same_airport_needs_no_separate_return() -> None:
+    from app.services.proposal_generation import return_airport_of
+
+    single = option("Paris", "CDG").model_copy(update={"return_airport": "ORY"})
+    assert return_airport_of(single) is None
+    same = option("Paris", "CDG").model_copy(
+        update={
+            "cities": [
+                PlannedCity(city="Paris", nights=2),
+                PlannedCity(city="Lyon", nights=2),
+            ],
+            "return_airport": "CDG",
+        }
+    )
+    assert return_airport_of(same) is None

@@ -259,6 +259,8 @@ class ResearchRequest(BaseModel):
     require_live_fares: bool = False
     # Nights in each city, in order, so each hotel is priced for its own stay.
     nights: list[int] = []
+    # The last city's airport, when the flight home leaves from there.
+    return_airport: str | None = None
 
 
 @dataclass(frozen=True)
@@ -997,6 +999,7 @@ async def _find_fares(
             request.departure_date,
             request.return_date,
             max(request.travelers.get(origin.casefold(), 1), 1),
+            request.return_airport,
         )
     # Every departure city is searched at the same time.
     found = await asyncio.gather(*(provider.find(query) for query in queries.values()))

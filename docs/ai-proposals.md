@@ -380,3 +380,19 @@ cd frontend; npm test; npm run lint
 - **Risk accepted:** The secret key bypasses Row Level Security, so it must never reach a browser, a log or Git. Automated tests check that only one module uses it and that the browser role cannot call the function.
 - This update authorizes no remote migration, deployment or push.
 - **Condition for the upcoming endpoint:** Before generating or regenerating, it must verify the signed-in account through Supabase Auth and confirm that account is the trip administrator. It must pass only that verified id to the functions in `generation_inputs.py`, never an id from the request.
+
+### Fit score and multi-city flights (5 November 2026)
+
+- **Fit score (US-15-AC03).** Each proposal now has `fit`: the group average and
+  the percent for the least-satisfied member, with no names. Dates and budget count
+  3 for every member; each member's own preferences count 3 when Essential and 1
+  when Flexible. Met counts fully, unverified counts half, unmet counts zero.
+  Proposals are ordered by the least-satisfied member first, then by the average.
+- **Combining preferences.** The planner is told to combine two wishes in one trip
+  when they fit (two cities next to each other), to find one place that bridges
+  them, or to pick one and say who gives way.
+- **Flights home from the last city.** A trip such as Paris then Barcelona flies
+  out to `CDG` and back from `BCN`. The planner gives `return_airport`; Ignav is
+  asked with its two-leg search, and `Flights.return_airport` stores it so a price
+  refresh asks for the same flights. Trip.com is skipped for these trips because it
+  only books round trips. One-city trips are unchanged.

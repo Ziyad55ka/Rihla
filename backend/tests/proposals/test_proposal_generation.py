@@ -904,3 +904,66 @@ def test_new_links_have_no_tracking_ids(
 
     assert "gclid" not in body and "gclsrc" not in body
     assert "keep=2" in body
+
+
+def _fit_input(*members):
+    base = {"departure_city": "Riyadh", "max_budget_sar": "5000"}
+    return GenerationInput(
+        trip_id=UUID("00000000-0000-4000-8000-0000000000aa"),
+        shared_start=date(2026, 11, 20),
+        shared_end=date(2026, 11, 24),
+        members=[
+            {"label": f"Member {n}", **base, **m} for n, m in enumerate(members, 1)
+        ],
+    )
+
+
+def test_fit_scores_each_member_and_keeps_only_the_average_and_the_least() -> None:
+    from app.services.proposal_generation import proposal_fit
+
+    generation = _fit_input(
+        {"destinations": {"value": "Paris", "importance": "Essential"}},
+        {"interests": {"value": "museums", "importance": "Flexible"}},
+        {},
+    )
+    requirements = collect_requirements(generation)
+    paris = option("Paris")
+    ids = {item.text: item.id for item in requirements}
+    checks = [
+        RequirementCheck(requirement_id=ids["Paris"], met=True, explanation=None),
+        RequirementCheck(requirement_id=ids["museums"], met=False, explanation="x"),
+    ]
+    planned = paris.model_copy(update={"requirement_checks": checks})
+
+    fit = proposal_fit(planned, generation, requirements, "within_group_budget")
+
+    # Member 1: Paris met (3) + dates/budget (6) = 9/9 = 100.
+    # Member 2: museums not met (0 of 1) + 6 = 6/7 = 86. Member 3: 6/6 = 100.
+    assert fit.least_satisfied_percent == 86
+    assert fit.group_percent == 95
+    assert fit.member_count == 3
+    dumped = fit.model_dump_json()
+    assert "Paris" not in dumped and "museums" not in dumped and "Member" not in dumped
+
+
+def test_fit_counts_unverified_as_half_and_unconfirmed_budget_as_half() -> None:
+    from app.services.proposal_generation import proposal_fit
+
+    generation = _fit_input(
+        {"interests": {"value": "beaches", "importance": "Essential"}}
+    )
+    requirements = collect_requirements(generation)
+    planned = option("Doha").model_copy(
+        update={
+            "requirement_checks": [
+                RequirementCheck(
+                    requirement_id=requirements[0].id, met=True, explanation=None
+                )
+            ]
+        }
+    )
+
+    fit = proposal_fit(planned, generation, requirements, "includes_unconfirmed")
+
+    # beaches: AI says met but code cannot check -> 0.5 * 3; dates 3; budget 0.5 * 3.
+    assert fit.least_satisfied_percent == fit.group_percent == 67

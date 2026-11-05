@@ -575,6 +575,7 @@ async def check_flight(
         # A one_way route still searches the trip's real return day.
         route.legs[-1].date if len(route.legs) > 1 else proposal.end_date,
         party,
+        route.return_airport,
     )
     asked_list, limited, failed = await checker.ask_all(query, trip)
     if not asked_list:

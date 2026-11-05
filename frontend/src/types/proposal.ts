@@ -124,6 +124,8 @@ export interface Flights {
   origin_airport?: string | null
   /** Three-letter code, or null on older proposals. */
   destination_airport?: string | null
+  // Set when the flight home leaves from the last city's airport.
+  return_airport?: string | null
   /** Whether the search for everyone from this city found the flight. Never a count. */
   group_availability?: 'available' | 'not_found' | 'unknown'
   /** solo: each person booking alone was cheaper, and the price shown is that one. */
@@ -306,6 +308,8 @@ export interface Proposal {
   image?: PlaceImage | null
   /** US-15: how this proposal matches the group's requirements. Empty on older proposals. */
   compatibility?: CompatibilityCheck[]
+  /** US-15-AC03: the group's average fit and the least-satisfied member's fit. Null on older proposals. */
+  fit?: ProposalFit | null
 }
 
 /**
@@ -472,4 +476,13 @@ export interface GenerationIssue {
   message: string
   places: string[]
   suggestions: GenerationSuggestion[]
+}
+
+/** How well a proposal fits the group. Anonymous: nobody's own score is stored. */
+export interface ProposalFit {
+  /** The average member's fit, 0-100. */
+  group_percent: number
+  /** The least-satisfied member's fit, 0-100. Proposals are ranked by this first. */
+  least_satisfied_percent: number
+  member_count: number
 }

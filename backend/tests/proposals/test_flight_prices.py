@@ -406,3 +406,51 @@ def test_new_fares_have_clean_booking_links() -> None:
 
     assert found.legs[0].booking_url == "https://air.example/#/book?flightMode=round"
     assert found.source_url == "https://air.example/#/book?flightMode=round"
+
+
+OPEN_JAW = FlightQuery("RUH", "CDG", date(2026, 12, 13), date(2026, 12, 20), 1, "BCN")
+
+
+def test_open_jaw_searches_two_legs_and_reads_them_as_round_trip() -> None:
+    leg_body = itinerary(2900)
+    leg_body["legs"] = [leg_body.pop("outbound"), leg_body.pop("inbound")]
+    provider, requests = provider_with(
+        httpx.Response(200, json={"itineraries": [leg_body]}),
+        httpx.Response(
+            200,
+            json={
+                "booking_options": [
+                    {
+                        "leg_indexes": [0, 1],
+                        "links": [
+                            {"provider_name": "Saudia", "url": "https://air.example/b"}
+                        ],
+                    }
+                ]
+            },
+        ),
+    )
+
+    fare = asyncio.run(provider.find(OPEN_JAW))
+
+    assert requests[0].url.path == "/api/fares/search"
+    legs = json.loads(requests[0].content)["legs"]
+    assert [(leg["origin"], leg["destination"]) for leg in legs] == [
+        ("RUH", "CDG"),
+        ("BCN", "RUH"),
+    ]
+    assert legs[1]["departure_date"] == "2026-12-20"
+    assert fare.amount == "2900"
+    assert fare.source_url == "https://air.example/b"
+
+
+def test_same_airport_back_is_a_plain_round_trip() -> None:
+    query = FlightQuery("RUH", "CAI", date(2026, 12, 13), date(2026, 12, 17), 1, "CAI")
+    assert not query.open_jaw
+    assert query.return_origin == "CAI"
+
+
+def test_open_jaw_inbound_link_leaves_from_the_last_city() -> None:
+    back = "https://a.example/?origin={}&departureDate=2026-12-20"
+    assert link_matches(back.format("BCN"), {"inbound"}, OPEN_JAW)
+    assert not link_matches(back.format("CDG"), {"inbound"}, OPEN_JAW)

@@ -190,6 +190,9 @@ class Flights(StrictModel):
     # Three-letter codes, or null on older proposals. Example: "RUH".
     origin_airport: str | None = None
     destination_airport: str | None = None
+    # Where the flight home leaves when the trip ends in another city, or null
+    # when it leaves from destination_airport. Example: "BCN".
+    return_airport: str | None = None
     # available: the search for everyone from this city found this flight.
     # not_found: it found none, so they may need different flights.
     # unknown: not checked. Never holds a seat count or a traveller count.
@@ -364,6 +367,23 @@ CompatibilityTopic = Literal[
 ]
 
 
+# US-15-AC03: how well a proposal fits the group, from each member's own
+# requirements. Only two anonymous figures are kept: nobody's own score or wording.
+class ProposalFit(StrictModel):
+    # The average member's fit, 0-100. Example: 84.
+    group_percent: int = Field(ge=0, le=100)
+    # The least-satisfied member's fit, 0-100. Proposals are ranked by this first.
+    least_satisfied_percent: int = Field(ge=0, le=100)
+    # How many members were scored. Example: 4.
+    member_count: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def least_is_not_above_average(self):
+        if self.least_satisfied_percent > self.group_percent:
+            raise ValueError("The least-satisfied fit cannot exceed the average.")
+        return self
+
+
 class CompatibilityCheck(StrictModel):
     # See CompatibilityTopic. Example: "accommodation".
     topic: CompatibilityTopic
@@ -423,6 +443,8 @@ class Proposal(StrictModel):
     )
     # US-15. Empty on proposals generated before this field existed.
     compatibility: list[CompatibilityCheck] = Field(default_factory=list)
+    # US-15-AC03. Null on proposals generated before this field existed.
+    fit: ProposalFit | None = None
 
     @model_validator(mode="after")
     def one_check_per_requirement_kind(self):

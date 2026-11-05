@@ -47,6 +47,7 @@ from app.services.proposal_generation import (
     _research_option,
     _valid_airport,
     collect_requirements,
+    return_airport_of,
     route_key,
 )
 from app.services.trip_research import (
@@ -123,7 +124,14 @@ async def probe_option(
         fares = await asyncio.gather(
             *(
                 provider.find(
-                    FlightQuery(origin, arrival, start, start + length, adults)
+                    FlightQuery(
+                        origin,
+                        arrival,
+                        start,
+                        start + length,
+                        adults,
+                        return_airport_of(option),
+                    )
                 )
                 for origin, adults in airports.items()
             )
@@ -340,7 +348,14 @@ async def generate(
         )
         option_failures.append(OptionFailure(option_number=number, reasons=reasons))
 
-    # Numbers follow the order shown, with no gaps.
+    # Best for the least-satisfied member first, then the group average
+    # (US-15-AC03); numbers then follow that order, with no gaps.
+    proposals.sort(
+        key=lambda item: (
+            -(item.fit.least_satisfied_percent if item.fit else 0),
+            -(item.fit.group_percent if item.fit else 0),
+        )
+    )
     proposals = [
         proposal.model_copy(update={"option_number": index})
         for index, proposal in enumerate(proposals, start=1)
