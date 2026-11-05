@@ -5,7 +5,7 @@ import type { Flights, Proposal, TripType } from '../../types/proposal'
 import { BookFlight, FareLine, RefreshFlights, SplitBooking } from './FlightActions'
 import { FlightLine } from './FlightLine'
 import { Hint } from './Hint'
-import { FlightsTitleIcon, ForwardIcon, UsersIcon } from './icons'
+import { CheckIcon, FlightsTitleIcon, ForwardIcon, UsersIcon } from './icons'
 import { SectionTitle } from './SectionTitle'
 import { useSar } from './useSar'
 import { PriceAgeBadge, PriceNotice, PriceValue } from './values'
@@ -40,6 +40,7 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
       <h3><bdi>{home}</bdi> <ForwardIcon rtl={language === 'ar'} /> <bdi>{away}</bdi></h3>
       {typeLabel && <span className="planning-badge details-badge--neutral">{t(typeLabel)}</span>}
       {route.group_availability === 'available' && <span className="details-chip"><UsersIcon /> {t('Available for all travellers from your city')}</span>}
+      {route.schedule_confirmed && <span className="details-chip details-chip--confirmed"><CheckIcon /> {t('Also on sale on Google Flights')}<Hint text={t('A second source shows the same flight numbers on these dates, both ways, so the airline still sells them.')} /></span>}
     </div>
     {route.group_availability === 'not_found' && <p className="details-note" role="status">{t('We could not find one flight with room for all travellers from your city. You may need different flights.')}</p>}
     {route.legs.map((leg) => {

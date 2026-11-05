@@ -1,9 +1,7 @@
 import { useLanguage } from '../../lib/language'
 import { safeLink } from '../../lib/proposals'
 import type { InfoStatus, Proposal } from '../../types/proposal'
-import { Hint } from './Hint'
 import { ExternalIcon, SourcesTitleIcon } from './icons'
-import { SectionTitle } from './SectionTitle'
 import { StatusBadge } from './values'
 
 const statusMeanings: Record<InfoStatus, string> = {
@@ -29,8 +27,11 @@ export function SourcesSection({ proposal, generatedAt }: { proposal: Proposal; 
     const time = value ?? generatedAt
     return time ? new Date(time).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) : null
   }
-  return <section aria-labelledby="details-sources">
-    <SectionTitle id="details-sources" icon={<SourcesTitleIcon />} title={t('Sources and reliability')} hint={<Hint text={t('Each value above shows its label. Flight and hotel prices also show when they were last checked.')} />} />
+  // Folded at the end of the page: most people never open it, but US-14 needs the
+  // sources, their check times and the label legend to stay one click away.
+  return <section aria-labelledby="details-sources" className="details-sources-footer">
+    <details className="details-sources-fold">
+      <summary id="details-sources"><SourcesTitleIcon /> {t('Where this information comes from ({count} sources)', { count: sources.length.toLocaleString(locale) })}</summary>
     <div className="details-card details-sources">
       <dl className="details-status-legend">
         {(Object.keys(statusMeanings) as InfoStatus[]).map((status) => <div key={status}>
@@ -56,5 +57,6 @@ export function SourcesSection({ proposal, generatedAt }: { proposal: Proposal; 
         </ul>}
       <p className="details-hint">{t('A source shows what was found at that time. It does not confirm availability.')}</p>
     </div>
+    </details>
   </section>
 }

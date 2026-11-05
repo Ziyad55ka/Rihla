@@ -74,6 +74,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
         <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
       </li>)}
     </ol> : !generating && !issue && <p className="proposals-note">{t(isAdmin ? 'No proposals yet. Generate them when the group is ready.' : 'No proposals yet. The administrator generates them when the group is ready.')}</p>}
+    {proposals.length > 0 && <p className="proposals-note proposals-ai-note">{t('AI can make mistakes. Check the details before you book.')}</p>}
   </section>
 }
 

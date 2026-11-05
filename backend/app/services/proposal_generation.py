@@ -630,6 +630,7 @@ def _build_route(
         return_airport=(
             return_airport_of(option) if research.airports.get(index) else None
         ),
+        schedule_confirmed=bool(fare and fare.schedule_confirmed),
         group_availability=(
             "available"
             if fare is not None

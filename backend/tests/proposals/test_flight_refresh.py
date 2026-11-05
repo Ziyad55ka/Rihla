@@ -935,3 +935,36 @@ def test_flight_the_seller_did_not_offer_is_replaced_by_another_airline(
     assert result.alternative.reason == "gone"
     assert result.flights.airline.value == "Saudia"
     assert result.updated
+
+
+class GoogleSays:
+    def __init__(self, confirmed, listed) -> None:
+        self.confirmed = confirmed
+        self.listed = listed
+
+    async def confirm(self, query, outbound, inbound):
+        return self.confirmed
+
+    async def listed_outbound(self, query):
+        return self.listed
+
+
+def test_book_never_opens_a_flight_google_flights_does_not_sell(tmp_path) -> None:
+    fake = FakeIgnav(
+        {"itineraries": [itinerary(), itinerary("Saudia", amount=1000)]},
+        links("https://www.saudia.com/book?x=1"),
+    )
+    check = checker(tmp_path, fake)
+    check.verifier = GoogleSays(confirmed=False, listed=set())
+
+    result = book(check)
+
+    assert result.flights.group_availability == "not_found"
+    assert result.fallback == "not_available"
+
+
+def test_book_marks_a_flight_google_flights_also_sells(tmp_path) -> None:
+    check = checker(tmp_path, FakeIgnav())
+    check.verifier = GoogleSays(confirmed=True, listed=None)
+
+    assert book(check).flights.schedule_confirmed is True

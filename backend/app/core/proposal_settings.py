@@ -77,6 +77,9 @@ class ProposalSettings(BaseSettings):
     serpapi_api_key: str | None = None
     # One more request per city opens the hotel's page to find a Booking.com link.
     serpapi_hotel_details: bool = True
+    # Keep a flight only when Google Flights (same SerpApi key) also sells the same
+    # flight numbers that day, both ways. Two requests per departure city.
+    verify_flights_on_google: bool = True
 
     # Fare-first generation, used whenever live fares are switched on (Ignav key).
     # A trip never starts sooner than this, so seats can still be booked.

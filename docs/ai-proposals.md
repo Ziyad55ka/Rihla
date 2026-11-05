@@ -430,3 +430,16 @@ Changes after the first live test, each tied to a Nielsen heuristic or a user st
 - **How it matches the group.** The fit score, trade-offs and "AI can make mistakes"
   lead. The per-topic checks (US-15-AC01/AC02) stay one click away under "See each
   check".
+- **Every flight checked on a second source.** Ignav's data can lag behind the
+  airline, so a kept flight must also be sold on Google Flights (through the SerpApi
+  key) with the same flight numbers, both ways, on the same dates
+  (`google_flights_check.py`, `verify_flights_on_google`). At generation, cheaper
+  itineraries Google does not list are skipped for one it does; with none, the
+  option has no flights and the next place is tried. Book checks again before it
+  opens a link, and replaces a flight Google no longer lists. A check that fails
+  (no key, outage) never removes a flight, but the page then makes no claim: the
+  "Also on sale on Google Flights" chip shows only when both sources agree. Cost:
+  about two SerpApi requests per departure city and proposal.
+- **Sources folded.** The sources list moves to a folded "Where this information
+  comes from" line at the end of the page. US-14-AC01 still needs it reachable.
+- "AI can make mistakes" also shows under the proposal list.

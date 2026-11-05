@@ -328,3 +328,8 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
 .details-match-more > summary { cursor:pointer; font-size:14px; color:var(--rihla-green); }
 .details-match-more[open] > summary { margin-bottom:10px; }
 .details-ai-note { font-style:italic; }
+
+.details-sources-footer { margin-top:8px; }
+.details-sources-fold > summary { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--rihla-muted, #5f6b62); padding:10px 0; }
+.details-sources-fold > summary svg { width:18px; height:18px; }
+.details-sources-fold[open] > summary { color:var(--rihla-ink); }

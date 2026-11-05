@@ -193,6 +193,8 @@ class Flights(StrictModel):
     # Where the flight home leaves when the trip ends in another city, or null
     # when it leaves from destination_airport. Example: "BCN".
     return_airport: str | None = None
+    # Google Flights also listed these exact flights, both ways, for these dates.
+    schedule_confirmed: bool = False
     # available: the search for everyone from this city found this flight.
     # not_found: it found none, so they may need different flights.
     # unknown: not checked. Never holds a seat count or a traveller count.

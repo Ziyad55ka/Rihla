@@ -184,7 +184,9 @@ def run_research(
     monkeypatch.setattr(trip_research, "search_sources", search)
     monkeypatch.setattr(trip_research, "extract_facts", extract)
     monkeypatch.setattr(
-        trip_research, "get_flight_provider", lambda *args: FakeProvider(found)
+        trip_research,
+        "get_flight_provider",
+        lambda *args, **kwargs: FakeProvider(found),
     )
     request = ResearchRequest(
         destination="Egypt",

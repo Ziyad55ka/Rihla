@@ -37,6 +37,7 @@ from app.services.flight_prices import (
     usable_itineraries,
 )
 from app.services.flight_usage import FlightUsage
+from app.services.google_flights_check import flight_key, google_flights_check
 from app.services.price_accuracy import PriceAccuracy
 from app.services.proposal_generation import OptionRejected, _fare_leg, budget_status
 from app.services.travel_providers import FlightProvider, live_flight_providers
@@ -183,6 +184,8 @@ class FlightChecker:
         self.accuracy = PriceAccuracy(
             settings.price_accuracy_db, settings.price_gap_log_percent
         )
+        # Google Flights must also sell a flight before Book opens it.
+        self.verifier = google_flights_check(settings) if providers is None else None
 
     def can_spend(self, provider: FlightProvider, trip: str) -> bool:
         name = _name(provider)
@@ -309,6 +312,8 @@ def route_from_fare(
         priced_at=at,
         origin_airport=query.origin_airport,
         destination_airport=query.destination_airport,
+        return_airport=route.return_airport,
+        schedule_confirmed=fare.schedule_confirmed,
         group_availability="available",
         fare_basis=route.fare_basis if route.fare_basis == "solo" else "group",
         solo_saving_sar=route.solo_saving_sar if route.fare_basis == "solo" else None,
@@ -603,6 +608,33 @@ async def check_flight(
     # The member opened the seller and the flight was not offered: search data can
     # lag behind the airline, so trust the member and look for another flight.
     avoid_reported: frozenset[str] = frozenset()
+    confirmed = False
+    if checker.verifier is not None and matches and not reported_missing:
+        numbers = {
+            item.direction: flight_key(item.flight_number) for item in route.legs
+        }
+        verdict = await checker.verifier.confirm(
+            query, numbers.get("outbound", ()), numbers.get("return", ())
+        )
+        if verdict is False:
+            # The search still lists it but the airline no longer sells it.
+            logger.info("flight_not_listed source=google_flights at=book")
+            reported_missing = True
+        confirmed = verdict is True
+    if reported_missing and checker.verifier is not None:
+        # A replacement must be one Google Flights sells too.
+        listed = await checker.verifier.listed_outbound(query)
+        if listed is not None:
+            for asked in asked_list:
+                asked.body = {
+                    **asked.body,
+                    "itineraries": [
+                        item
+                        for item in asked.body.get("itineraries") or []
+                        if flight_key(flight_numbers(item.get("outbound") or {}))
+                        in listed
+                    ],
+                }
     if reported_missing:
         matches = []
         if route.airline.value:
@@ -686,6 +718,8 @@ async def check_flight(
             checked_at=now,
         )
     fresh = route_from_fare(route, fare, query, best.asked.at)
+    if confirmed:
+        fresh = fresh.model_copy(update={"schedule_confirmed": True})
     if refreshing:
         fresh = await _with_alone_saving(checker, best, route, query, trip, fresh)
     if leg == "round_trip":

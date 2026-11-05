@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { LanguageProvider } from '../lib/language'
 import { ProposalsView } from './ProposalsPanel'
-import type { GroupConflicts, StoredProposals } from '../types/proposal'
+import type { GroupConflicts, ProposalSet, StoredProposals } from '../types/proposal'
+import data from '../test-fixtures/activities.json'
 
 vi.mock('../lib/supabase', () => ({ supabase: null, supabaseConfiguration: { state: 'not-configured', message: '' } }))
 
@@ -18,6 +19,12 @@ function view(props: Partial<Parameters<typeof ProposalsView>[0]> = {}) {
 const button = (html: string) => /<button[^>]*>/.exec(html)?.[0] ?? ''
 
 describe('ProposalsView', () => {
+  it('reminds that AI can make mistakes under the proposals only', () => {
+    const proposals = (data as ProposalSet).proposals
+    const shown: StoredProposals = { ...empty, version: 1, complete: true, proposals }
+    expect(view({ stored: shown })).toContain('AI can make mistakes')
+    expect(view()).not.toContain('AI can make mistakes')
+  })
   it('enables the button for an administrator with no conflicts', () => {
     expect(button(view())).not.toContain('disabled')
   })

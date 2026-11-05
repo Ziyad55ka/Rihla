@@ -985,7 +985,8 @@ async def _find_fares(
     cache = SearchCache(
         settings.search_cache_db, settings.search_cache_ttl_hours * 3600
     )
-    provider = get_flight_provider(settings, cache)
+    # Kept fares must also be on Google Flights when proposals need live fares.
+    provider = get_flight_provider(settings, cache, verify=request.require_live_fares)
     fares: dict[int, tuple[FlightQuery, FlightFare]] = {}
     no_group: list[int] = []
     queries: dict[int, FlightQuery] = {}

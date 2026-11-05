@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from urllib.parse import unquote, urlsplit
 
 import httpx2 as httpx
@@ -127,6 +127,8 @@ class FlightFare:
     agent_name: str | None = None
     agent_url: str | None = None
     agent_amount: str | None = None
+    # Google Flights also lists these exact flights, both ways, on these dates.
+    schedule_confirmed: bool = False
 
     def accuracy_gap(self) -> Decimal | None:
         """The gap to record: None when no seller stated a price to compare."""
@@ -188,7 +190,10 @@ class IgnavProvider:
         on_fare: Callable[[FlightFare, FlightQuery], None] | None = None,
         price_conflict_percent: Decimal = Decimal(10),
         cache_seconds: float = 900,
+        verifier: Any = None,
     ) -> None:
+        # A second source (GoogleFlightsCheck) every kept flight must also be on.
+        self.verifier = verifier
         self.price_conflict_percent = price_conflict_percent
         self.on_fare = on_fare
         self.cache_seconds = cache_seconds
@@ -336,8 +341,61 @@ class IgnavProvider:
             solo_saving=str(saving),
         )
 
+    async def _keep_listed(self, body: dict, query: FlightQuery) -> dict | None:
+        """Only trips whose outbound Google Flights also sells; None if none is."""
+        listed = await self.verifier.listed_outbound(query)
+        if listed is None:
+            return body
+        from app.services.google_flights_check import flight_key
+
+        kept = [
+            item
+            for item in body.get("itineraries") or []
+            if flight_key(flight_numbers(item.get("outbound") or {})) in listed
+        ]
+        if not usable_itineraries({"itineraries": kept}):
+            logger.info("flight_not_listed source=google_flights direction=outbound")
+            return None
+        return {**body, "itineraries": kept}
+
+    async def _confirmed(
+        self, body: dict, query: FlightQuery
+    ) -> tuple[FlightFare | None, bool]:
+        """The best fare whose return Google Flights also sells. Up to three tries."""
+        from app.services.google_flights_check import flight_key
+
+        for _ in range(3):
+            fare = await self._best_fare(body, query)
+            if fare is None:
+                return None, False
+            numbers = {
+                leg.direction: flight_key(leg.flight_number) for leg in fare.legs
+            }
+            verdict = await self.verifier.confirm(
+                query, numbers.get("outbound", ()), numbers.get("return", ())
+            )
+            if verdict is not False:
+                return fare, verdict is True
+            logger.info("flight_not_listed source=google_flights direction=return")
+            body = {
+                **body,
+                "itineraries": [
+                    item
+                    for item in body.get("itineraries") or []
+                    if (
+                        flight_key(flight_numbers(item.get("outbound") or {})),
+                        flight_key(flight_numbers(item.get("inbound") or {})),
+                    )
+                    != (numbers.get("outbound", ()), numbers.get("return", ()))
+                ],
+            }
+            if cheapest_itinerary(body) is None:
+                return None, False
+        return None, False
+
     async def find(self, query: FlightQuery) -> FlightFare | None:
-        key = hashlib.sha256(f"ignav-legs|{query}".encode()).hexdigest()
+        checked = "checked|" if self.verifier else ""
+        key = hashlib.sha256(f"ignav-legs|{checked}{query}".encode()).hexdigest()
         cached = self.cache.get(key) if self.cache else None
         if cached and time.time() - cached[0].get("cached_at", 0) < self.cache_seconds:
             saved = dict(cached[0])
@@ -354,12 +412,23 @@ class IgnavProvider:
                 logger.info("flight_provider_fallback reason=no_itinerary")
                 self.no_itinerary.add(query)
                 return None
-            fare = await self._best_fare(body, query)
+            confirmed = False
+            if self.verifier is not None:
+                listed = await self._keep_listed(body, query)
+                if listed is None:
+                    return None
+                fare, confirmed = await self._confirmed(listed, query)
+            else:
+                fare = await self._best_fare(body, query)
             if fare is None:
                 logger.info("flight_provider_fallback reason=no_booking_link")
                 return None
             fare = await self._cheaper_alone(fare, query)
-            fare = replace(fare, observed_at=str(observed) if observed else None)
+            fare = replace(
+                fare,
+                observed_at=str(observed) if observed else None,
+                schedule_confirmed=confirmed,
+            )
         except IgnavError as error:
             logger.info("flight_provider_fallback reason=%s", error)
             return None
@@ -839,8 +908,10 @@ def fare_from_itinerary(
 
 
 def get_flight_provider(
-    settings: Settings, cache: FareCache | None = None
+    settings: Settings, cache: FareCache | None = None, verify: bool = False
 ) -> FlightPriceProvider:
+    """verify: also require Google Flights to list each kept flight (research only,
+    not the quick availability probes, to save requests)."""
     if settings.flight_price_provider == "ignav" and settings.ignav_api_key:
         usage = FlightUsage(settings.flight_usage_db)
         accuracy = PriceAccuracy(
@@ -860,8 +931,15 @@ def get_flight_provider(
             ),
             price_conflict_percent=settings.price_conflict_percent,
             cache_seconds=settings.flight_cache_minutes * 60,
+            verifier=_verifier(settings) if verify else None,
         )
     return WebSearchOnly()
+
+
+def _verifier(settings: Settings):
+    from app.services.google_flights_check import google_flights_check
+
+    return google_flights_check(settings)
 
 
 def fare_quote(fare: FlightFare, query: FlightQuery) -> str:

@@ -309,6 +309,10 @@ describe('ProposalDetailView', () => {
     expect(html).toContain('Nonstop')
     expect(count(html, 'details-line-stop')).toBe(1)
   })
+  it('says when Google Flights also sells the same flights', () => {
+    expect(page(proposal({ flights: [{ ...lined(), schedule_confirmed: true }] }))).toContain('Also on sale on Google Flights')
+    expect(page(proposal({ flights: [lined()] }))).not.toContain('Also on sale on Google Flights')
+  })
   it('flies home from the last city when the trip ends somewhere else', () => {
     const base = proposal()
     const twoCities = proposal({ cities: [base.cities[0], { ...base.cities[0], city: 'Barcelona', city_ar: 'برشلونة' }], flights: [{ ...lined(), return_airport: 'BCN' }] })

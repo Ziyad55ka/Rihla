@@ -126,6 +126,8 @@ export interface Flights {
   destination_airport?: string | null
   // Set when the flight home leaves from the last city's airport.
   return_airport?: string | null
+  /** Google Flights also listed these exact flights, both ways, on these dates. */
+  schedule_confirmed?: boolean
   /** Whether the search for everyone from this city found the flight. Never a count. */
   group_availability?: 'available' | 'not_found' | 'unknown'
   /** solo: each person booking alone was cheaper, and the price shown is that one. */
