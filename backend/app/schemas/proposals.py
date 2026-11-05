@@ -254,6 +254,24 @@ class ActivityPrice(SarPrice):
     amount_sar: Decimal | None = Field(ge=0, max_digits=12, decimal_places=2)
 
 
+# What a group likes to do on a trip, in general words only. Gemini maps the group's
+# interests to these tags when it plans; members' own wording is never stored.
+ActivityFocus = Literal[
+    "landmarks",
+    "museums_history",
+    "culture_arts",
+    "food",
+    "nature_outdoors",
+    "beaches_water",
+    "shopping",
+    "family_fun",
+    "adventure_sports",
+    "wellness_spa",
+    "events_festivals",
+]
+ACTIVITY_FOCUS_TAGS: tuple[str, ...] = ActivityFocus.__args__  # type: ignore[attr-defined]
+
+
 class Activity(StrictModel):
     id: UUID
     category: Literal["activity", "attraction", "restaurant"] = "activity"
@@ -266,6 +284,8 @@ class Activity(StrictModel):
     price_per_person: ActivityPrice
     booking_url: BookingUrl = None
     image_url: BookingUrl = None
+    # Which of the group's interests this suggestion matches. Empty on older ones.
+    fits: list[ActivityFocus] = Field(default_factory=list, max_length=4)
 
     @field_validator("price_per_person")
     @classmethod
@@ -441,6 +461,9 @@ class Proposal(StrictModel):
     activity_research_status: Literal["not_requested", "ready", "unavailable"] = (
         "not_requested"
     )
+    # The group's interests as general tags, so activity search can match them
+    # without reading any member's private preferences. Empty on older proposals.
+    activity_focus: list[ActivityFocus] = Field(default_factory=list, max_length=5)
     # US-15. Empty on proposals generated before this field existed.
     compatibility: list[CompatibilityCheck] = Field(default_factory=list)
     # US-15-AC03. Null on proposals generated before this field existed.

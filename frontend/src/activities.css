@@ -89,3 +89,7 @@ html[dir='rtl'] .activities-intro h1 { letter-spacing:normal; }
  .activities-summary { padding:22px; gap:15px; }
  .activities-summary button { margin-inline-start:0; width:100%; justify-content:center; }
 }
+
+/* Why a suggestion was picked: the group interests it matches. */
+.activity-fits { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-4px 0 10px; color:var(--rihla-muted); font-size:12px; }
+.activity-fit { padding:2px 8px; color:var(--rihla-green); background:#eef1e7; border:1px solid #d9dfcf; border-radius:999px; font-weight:600; }

@@ -185,7 +185,12 @@ export interface Activity {
   price_per_person: SarPrice
   booking_url: string | null
   image_url: string | null
+  /** Which of the group's interests this suggestion matches. Missing on older ones. */
+  fits?: ActivityFocus[]
 }
+
+/** The group's interests as general tags; never a member's own words. */
+export type ActivityFocus = 'landmarks' | 'museums_history' | 'culture_arts' | 'food' | 'nature_outdoors' | 'beaches_water' | 'shopping' | 'family_fun' | 'adventure_sports' | 'wellness_spa' | 'events_festivals'
 
 export interface EstimateComponent {
   known_amount_sar: string

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../lib/language'
-import { activityApi, activityProposalEstimate, isActivitySuitable, selectedActivityCost, type SelectionStore } from '../lib/activities'
+import { activityApi, activityProposalEstimate, focusLabels, isActivitySuitable, selectedActivityCost, type SelectionStore } from '../lib/activities'
 import type { ActivityCategory, ActivityProposalEstimate, InfoField, Proposal } from '../types/proposal'
 import { ActivityEstimate } from './ActivityEstimate'
 import '../activities.css'
@@ -88,6 +88,7 @@ export function ActivitiesPanel({ proposal, store = activityApi, onSaved, showEs
           </div>}
           <p className="activity-category-label">{t(categoryLabels[activity.category ?? 'activity'])}</p>
           <h6>{activity.name.value ?? t('Not available')} <small>{t(activity.name.status)}</small></h6>
+          {activity.fits && activity.fits.length > 0 && <p className="activity-fits">{t('Matches the group’s interests:')} {activity.fits.map((tag) => <span key={tag} className="activity-fit">{t(focusLabels[tag])}</span>)}</p>}
           <dl>
             <ActivityInfo label="Description" field={activity.description} proposal={proposal} />
             <ActivityInfo label="Location" field={activity.location} proposal={proposal} />

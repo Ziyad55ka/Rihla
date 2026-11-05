@@ -139,7 +139,9 @@ def test_real_search_uses_public_cities_only_and_discards_invalid_events(monkeyp
     assert len(result.cities[0].activities) == 1
     assert result.cities[0].activities[0].price_per_person.amount_sar == 75
     assert result.activity_research_status == "ready"
-    assert len(calls) == len(p.cities)
+    # Two searches per city: things to do, then restaurants (redesign, 3 Nov 2026).
+    assert len(calls) == 2 * len(p.cities)
+    assert all("tourists" in q or "visitors" in q for q in calls)
     assert result.flights == p.flights
     assert Proposal.model_validate(result.model_dump()) == result
 
@@ -189,6 +191,129 @@ def test_group_activities_use_actual_members_choices_not_my_choices_times_member
         )
 
 
+# --- Redesign, 3 Nov 2026: tourist-only, matched to the group's interests ---
+
+MIXED = (
+    "City Museum. Historic exhibits. Old Market. Spice stalls. "
+    "Cardiology Congress 2026. Annual medical meeting. Harbour Cruise. "
+    "Sunset boat trip. Fish House. Grilled seafood. Fashion Mall. Big shops."
+)
+
+
+def _run(monkeypatch, items, focus=None):
+    p = proposal()
+    if focus is not None:
+        p = p.model_copy(update={"activity_focus": focus})
+    seen: dict = {}
+
+    async def search(query, settings, **kwargs):
+        seen.setdefault("queries", []).append((query, kwargs.get("include_domains")))
+        return [
+            ResearchSource(
+                id=1, title="Guide", url="https://guide.example/", content=MIXED
+            )
+        ], False
+
+    async def extract(contents, prompt, schema, settings, cost):
+        seen["payload"] = contents
+        sid = max(s.id for s in p.sources) + 1
+        built = []
+        for category, name, desc, extra in items:
+            built.append(
+                draft(
+                    category=category,
+                    name=text(name, MIXED, sid),
+                    description=text(desc, MIXED, sid),
+                    location=text(None, None, None),
+                    duration=text(None, None, None),
+                    price={
+                        "amount": None,
+                        "currency": None,
+                        "source_id": None,
+                        "quote": None,
+                    },
+                    **extra,
+                ).model_dump()
+            )
+        return ar.Suggestions(suggestions=built)
+
+    monkeypatch.setattr(ar.research, "search_sources", search)
+    monkeypatch.setattr(ar.research, "call_gemini", extract)
+    settings = Settings(_env_file=None, tavily_api_key="fake", gemini_api_key="fake")
+    return asyncio.run(ar.find_activities(p, settings)), seen
+
+
+def test_professional_and_medical_events_are_never_suggested(monkeypatch):
+    result, _ = _run(
+        monkeypatch,
+        [
+            ("activity", "Cardiology Congress 2026", "Annual medical meeting", {}),
+            ("attraction", "City Museum", "Historic exhibits", {}),
+            ("activity", "Harbour Cruise", "Sunset boat trip", {"tourist": False}),
+        ],
+    )
+    names = [a.name.value for a in result.cities[0].activities]
+    assert names == ["City Museum"]
+
+
+def test_group_interests_rank_first_and_are_shown(monkeypatch):
+    result, seen = _run(
+        monkeypatch,
+        [
+            ("attraction", "City Museum", "Historic exhibits", {"fits": []}),
+            (
+                "activity",
+                "Harbour Cruise",
+                "Sunset boat trip",
+                {"fits": ["beaches_water", "not_a_tag"]},
+            ),
+        ],
+        focus=["beaches_water", "food"],
+    )
+    first = result.cities[0].activities[0]
+    assert first.name.value == "Harbour Cruise" and first.fits == ["beaches_water"]
+    assert '"group_focus": ["beaches_water", "food"]' in seen["payload"]
+    things_to_do, food = seen["queries"][0], seen["queries"][1]
+    assert "boat trips" in things_to_do[0] and "tripadvisor.com" in things_to_do[1]
+    assert "restaurants" in food[0]
+
+
+def test_each_city_keeps_a_fair_mix_of_categories(monkeypatch):
+    many = [("restaurant", "Fish House", "Grilled seafood", {})] * 1
+    attractions = [
+        ("attraction", name, desc, {})
+        for name, desc in [
+            ("City Museum", "Historic exhibits"),
+            ("Old Market", "Spice stalls"),
+            ("Fashion Mall", "Big shops"),
+        ]
+    ]
+    result, _ = _run(monkeypatch, attractions + many)
+    categories = [a.category for a in result.cities[0].activities]
+    assert categories.count("attraction") == 3 and categories.count("restaurant") == 1
+    assert len(categories) <= ar.PER_CITY
+
+
+def test_older_proposals_without_focus_use_general_sightseeing(monkeypatch):
+    _, seen = _run(
+        monkeypatch, [("attraction", "City Museum", "Historic exhibits", {})]
+    )
+    assert '"group_focus": ["landmarks", "food"]' in seen["payload"]
+
+
+def test_off_topic_words_in_english_and_arabic():
+    assert ar.off_topic("International Dental Summit")
+    assert ar.off_topic("مؤتمر الأطباء")
+    assert not ar.off_topic("Museum of Islamic Art")
+    assert not ar.off_topic("Art exhibition at the National Gallery")
+
+
+def test_gemini_schema_has_no_list_limit():
+    import json as _json
+
+    assert "maxItems" not in _json.dumps(ar.Suggestions.model_json_schema())
+
+
 def test_gemini_schema_has_no_max_items():
     assert "maxItems" not in json.dumps(ar.Suggestions.model_json_schema())
 
@@ -213,6 +338,7 @@ def test_results_are_capped_per_city_and_in_total(monkeypatch):
                 items.append(
                     draft(
                         city_order=stay.order,
+                        category=("attraction", "activity", "restaurant")[n % 3],
                         name=text(name, f"{name}.", source_id),
                     )
                 )
@@ -222,10 +348,14 @@ def test_results_are_capped_per_city_and_in_total(monkeypatch):
     monkeypatch.setattr(ar.research, "call_gemini", extract)
     settings = Settings(_env_file=None, tavily_api_key="fake", gemini_api_key="fake")
     result = asyncio.run(ar.find_activities(p, settings))
-    assert len(result.cities[0].activities) == ar.MAX_PER_CITY == 12
-    # The total cap also holds when the per-city cap would allow more.
-    monkeypatch.setattr(ar, "MAX_PER_CITY", 100)
-    monkeypatch.setattr(ar, "MAX_SUGGESTIONS", 15)
+    # 6 attractions + 4 activities + 4 restaurants would be 14; the city cap is 12.
+    assert len(result.cities[0].activities) == ar.PER_CITY == 12
+    # The total cap also holds when the per-city caps would allow more.
+    monkeypatch.setattr(ar, "PER_CITY", 100)
+    monkeypatch.setattr(
+        ar, "PER_CITY_LIMITS", {"attraction": 100, "activity": 100, "restaurant": 100}
+    )
+    monkeypatch.setattr(ar, "TOTAL", 15)
     result = asyncio.run(ar.find_activities(p, settings))
     assert len(result.cities[0].activities) == 15
 
@@ -275,19 +405,26 @@ def test_counts_log_holds_only_integers_and_model(monkeypatch, caplog):
         "raw",
         "kept",
         "dropped_category",
+        "dropped_offtopic",
         "dropped_quote",
         "dropped_source",
+        "dropped_date",
         "dropped_price",
+        "focus",
         "model",
     ]
     assert fields.pop("model") == settings.gemini_model
+    # Focus holds only fixed tag names, never the members' own words.
+    assert fields.pop("focus") == "landmarks,food"
     assert all(v.isdigit() for v in fields.values())
     assert fields == {
         "raw": "4",
         "kept": "1",
         "dropped_category": "1",
+        "dropped_offtopic": "0",
         "dropped_quote": "1",
         "dropped_source": "1",
+        "dropped_date": "0",
         "dropped_price": "0",
     }
     assert "Museum" not in line and CONTENT[:20] not in line

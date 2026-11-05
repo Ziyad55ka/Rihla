@@ -33,4 +33,13 @@ describe('activity cards', () => {
     expect(html).toContain('src="https://example.test/museum.jpg"')
     expect(html).toContain('Outside this city stay')
   })
+  it('shows which group interests a suggestion matches, and nothing on older ones', () => {
+    const fixture = structuredClone(proposal)
+    fixture.cities[0].activities![0].fits = ['museums_history', 'culture_arts']
+    const html = render(fixture)
+    expect(html).toContain('Matches the group’s interests:')
+    expect(html).toContain('Museums and history')
+    expect(html.match(/class="activity-fit"/g)).toHaveLength(2)
+    expect(render(proposal)).not.toContain('Matches the group’s interests:')
+  })
 })

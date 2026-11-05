@@ -1,4 +1,4 @@
-import type { Activity, ActivityProposalEstimate, ActivitySelections, CityStay, EstimateComponent, Proposal, SarPrice } from '../types/proposal'
+import type { Activity, ActivityFocus, ActivityProposalEstimate, ActivitySelections, CityStay, EstimateComponent, Proposal, SarPrice } from '../types/proposal'
 import { authenticatedRequest } from './http'
 
 const path = (proposal: Proposal) => `/api/trips/${encodeURIComponent(proposal.trip_id)}/proposals/${encodeURIComponent(proposal.id)}/activities/selection` as const
@@ -83,4 +83,19 @@ export function activityProposalEstimate(proposal: Proposal, ids: string[]): Act
   const parts = [flights, accommodation, transport, activities]
   const total = combineEstimateComponents(parts)
   return { proposal_id: proposal.id, version: proposal.version, currency: 'SAR', flights, accommodation, transport, activities, total }
+}
+
+/** Short labels for the group-interest tags shown on activity cards. */
+export const focusLabels: Record<ActivityFocus, string> = {
+  landmarks: 'Landmarks',
+  museums_history: 'Museums and history',
+  culture_arts: 'Culture and arts',
+  food: 'Food',
+  nature_outdoors: 'Nature',
+  beaches_water: 'Beaches and the sea',
+  shopping: 'Shopping',
+  family_fun: 'Family fun',
+  adventure_sports: 'Adventure',
+  wellness_spa: 'Wellness',
+  events_festivals: 'Festivals and events',
 }

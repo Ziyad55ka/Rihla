@@ -967,3 +967,25 @@ def test_fit_counts_unverified_as_half_and_unconfirmed_budget_as_half() -> None:
 
     # beaches: AI says met but code cannot check -> 0.5 * 3; dates 3; budget 0.5 * 3.
     assert fit.least_satisfied_percent == fit.group_percent == 67
+
+
+def test_focus_tags_keep_known_tags_only_with_a_default() -> None:
+    from app.services.proposal_generation import focus_tags
+
+    assert focus_tags(["Food", "beaches_water", "food", "medical"]) == [
+        "food",
+        "beaches_water",
+    ]
+    assert focus_tags([]) == ["landmarks", "food"]
+    assert (
+        len(
+            focus_tags(
+                list(
+                    __import__(
+                        "app.schemas.proposals", fromlist=["x"]
+                    ).ACTIVITY_FOCUS_TAGS
+                )
+            )
+        )
+        == 4
+    )

@@ -22,6 +22,7 @@ from app.core.proposal_settings import DEFAULT_BOOKING_DOMAINS
 from app.schemas.conflicts import ConflictCategory
 from app.schemas.generation import GenerationInput
 from app.schemas.proposals import (
+    ACTIVITY_FOCUS_TAGS,
     BudgetStatus,
     CityStay,
     CompatibilityCheck,
@@ -132,6 +133,11 @@ mention this in the title or explanations. If it is no_flights, the routes in
 avoid_routes had no bookable flights from Saudi Arabia on those dates: prefer
 destinations with a major international airport and frequent flights from Saudi
 Arabia, such as regional hubs, and set arrival_airport to that main airport.
+Give activity_focus: up to 4 tags, chosen ONLY from this list, that best match what the
+group wants to do on this trip, based on the Interests requirements (use landmarks and
+food when there are none): landmarks, museums_history, culture_arts, food,
+nature_outdoors, beaches_water, shopping, family_fun, adventure_sports, wellness_spa,
+events_festivals. Tags only, never a member's own words.
 Do not state prices, hotels or flights: those come from later research. A hotel and its
 price only ever come from a real source, never from you."""
 
@@ -163,6 +169,9 @@ class PlannedOption(BaseModel):
     end_date: date
     cities: list[PlannedCity]
     requirement_checks: list[RequirementCheck]
+    # Up to 4 tags from ACTIVITY_FOCUS_TAGS. Free text so the schema stays simple;
+    # unknown tags are dropped in code.
+    activity_focus: list[str] = []
 
 
 class TripPlan(BaseModel):
@@ -738,6 +747,7 @@ def build_proposal(
         ],
         compatibility=compatibility_checks(option, requirements or [], status),
         fit=proposal_fit(option, generation, requirements or [], status),
+        activity_focus=focus_tags(option.activity_focus),
     )
     return proposal.without_uncited_sources()
 
@@ -747,6 +757,16 @@ def return_airport_of(option: PlannedOption) -> str | None:
     arrival = _valid_airport(option.arrival_airport)
     back = _valid_airport(option.return_airport)
     return back if back and len(option.cities) > 1 and back != arrival else None
+
+
+def focus_tags(raw: list[str]) -> list[str]:
+    """Known tags only, in order, without repeats; landmarks and food by default."""
+    found = [
+        tag
+        for tag in dict.fromkeys(item.strip().casefold() for item in raw)
+        if tag in ACTIVITY_FOCUS_TAGS
+    ]
+    return found[:4] or ["landmarks", "food"]
 
 
 def _valid_airport(code: str | None) -> str | None:
