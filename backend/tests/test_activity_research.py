@@ -139,9 +139,9 @@ def test_real_search_uses_public_cities_only_and_discards_invalid_events(monkeyp
     assert len(result.cities[0].activities) == 1
     assert result.cities[0].activities[0].price_per_person.amount_sar == 75
     assert result.activity_research_status == "ready"
-    # Two searches per city: things to do, then restaurants (redesign, 3 Nov 2026).
-    assert len(calls) == 2 * len(p.cities)
-    assert all("tourists" in q or "visitors" in q for q in calls)
+    # Three searches per city: things to do, fun experiences, then restaurants.
+    assert len(calls) == 3 * len(p.cities)
+    assert all("tourists" in q or "visitors" in q or "experiences" in q for q in calls)
     assert result.flights == p.flights
     assert Proposal.model_validate(result.model_dump()) == result
 
@@ -273,8 +273,9 @@ def test_group_interests_rank_first_and_are_shown(monkeypatch):
     first = result.cities[0].activities[0]
     assert first.name.value == "Harbour Cruise" and first.fits == ["beaches_water"]
     assert '"group_focus": ["beaches_water", "food"]' in seen["payload"]
-    things_to_do, food = seen["queries"][0], seen["queries"][1]
+    things_to_do, fun, food = seen["queries"][:3]
     assert "boat trips" in things_to_do[0] and "tripadvisor.com" in things_to_do[1]
+    assert "water parks" in fun[0] and "escape rooms" in fun[0]
     assert "restaurants" in food[0]
 
 
@@ -428,3 +429,16 @@ def test_counts_log_holds_only_integers_and_model(monkeypatch, caplog):
         "dropped_price": "0",
     }
     assert "Museum" not in line and CONTENT[:20] not in line
+
+
+def test_no_stated_price_falls_back_to_a_rough_typical_one():
+    from decimal import Decimal
+
+    from app.services.activity_research import typical_price
+
+    assert (typical_price(120).amount_sar, typical_price(120).status) == (
+        Decimal(120),
+        "Unconfirmed",
+    )
+    assert typical_price(0).amount_sar == 0
+    assert typical_price(None).status == "Not available"

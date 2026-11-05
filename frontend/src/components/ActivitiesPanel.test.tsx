@@ -11,11 +11,23 @@ const render = (p: Proposal) => renderToStaticMarkup(<LanguageProvider><Activiti
 describe('activity cards', () => {
   it('shows details, missing information, zero prices and trust labels', () => {
     const html = render(proposal)
-    for (const text of ['Museum visit', 'City walk', 'Description', 'Location', 'Duration', 'Event date', 'Not available', 'Unconfirmed', '85.50', '0.00']) expect(html).toContain(text)
+    for (const text of ['Museum visit', 'City walk', 'Description', 'Location', 'Duration', 'Event date', 'Not available', 'Unconfirmed', 'Rough estimate · may change with the season', '0.00']) expect(html).toContain(text)
+    // A price with no source reads as a rough guide, rounded.
+    expect(html).toMatch(/About (SAR|ر\.س\.)\s?86/)
     expect(html.match(/type="checkbox"/g)).toHaveLength(4)
     expect(html).toContain('Restaurants')
     expect(html).toContain('Attractions')
+    // Grouped the way a visitor scans: sights, things to do, then where to eat.
+    expect(html.indexOf('Top sights')).toBeLessThan(html.indexOf('Where to eat'))
+    expect(html).toContain('Picked for your group')
     expect(html).toContain('Image not available')
+  })
+  it('shows a free photo with its credit when one was found', () => {
+    const fixture = structuredClone(proposal)
+    fixture.cities[0].activities![0].image = { url: 'https://upload.wikimedia.org/a.jpg', source_url: 'https://commons.wikimedia.org/wiki/File:A.jpg', artist: 'A. Photographer', license: 'CC BY-SA 4.0' }
+    const html = render(fixture)
+    expect(html).toContain('https://upload.wikimedia.org/a.jpg')
+    expect(html).toContain('CC BY-SA 4.0')
   })
   it('shows a clear empty state for old proposals', () => {
     expect(render({ ...proposal, cities: proposal.cities.map(city => ({ ...city, activities: undefined })) })).toContain('No activities available for this city.')

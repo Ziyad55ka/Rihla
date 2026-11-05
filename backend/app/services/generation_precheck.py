@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import json
 import logging
-import re
 import secrets
 import sqlite3
 import time
@@ -188,29 +187,12 @@ def check_planning(planning: PlanningStatus) -> None:
         raise GenerationBlocked(*conflicts)
 
 
-def _known_countries(text: str) -> set[str] | None:
-    """The countries named, or None if any word is not a known country."""
-    words = set(re.findall(r"\w+", text.casefold())) - STOP_WORDS
-    if not words or not words <= COUNTRY_WORDS.keys():
-        return None
-    return {COUNTRY_WORDS[word] for word in words}
-
-
 def find_input_conflicts(
     generation: GenerationInput, settings: Settings
 ) -> list[ConflictCategory]:
     """Stage 1 checks on the group's data. Makes no outside request."""
     conflicts: list[ConflictCategory] = []
-    wanted = [
-        _known_countries(member.destinations.value)
-        for member in generation.members
-        if member.destinations.importance == "Essential" and member.destinations.value
-    ]
-    # A clear conflict only: any doubtful value goes to stage 2 instead.
-    known = [item for item in wanted if item is not None]
-    if len(known) == len(wanted) > 1 and not set.intersection(*known):
-        conflicts.append("destinations")
-
+    # Different places are never a conflict: the planner combines them.
     days = (generation.shared_end - generation.shared_start).days + 1
     lowest = min(member.max_budget_sar for member in generation.members)
     if lowest < settings.min_budget_sar_per_day * days:

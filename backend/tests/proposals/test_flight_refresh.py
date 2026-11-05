@@ -912,3 +912,26 @@ def test_empty_search_for_a_group_is_remembered(tmp_path) -> None:
 
     assert asyncio.run(ignav.find(QUERY)) is None
     assert QUERY in ignav.no_itinerary
+
+
+def test_flight_the_seller_did_not_offer_is_replaced_by_another_airline(
+    tmp_path,
+) -> None:
+    from app.services.flight_refresh import report_missing_flight
+
+    # The search still lists the same Gulf Air flight, as Ignav did for Riyadh Air.
+    same = itinerary("Gulf Air", amount=950)
+    other = itinerary("Saudia", amount=1100)
+    fake = FakeIgnav(
+        {"itineraries": [same, other]}, links("https://www.saudia.com/book?x=1")
+    )
+
+    result = asyncio.run(
+        report_missing_flight(
+            checker(tmp_path, fake), proposal(), "الرياض", 1, Decimal(9000), TRIP, "m"
+        )
+    )
+
+    assert result.alternative.reason == "gone"
+    assert result.flights.airline.value == "Saudia"
+    assert result.updated

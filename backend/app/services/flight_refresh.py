@@ -335,16 +335,25 @@ class Alternative:
 
 
 def _status(
-    proposal: Proposal, route: Flights, fresh: Flights, ceiling: Decimal | None
+    proposal: Proposal,
+    route: Flights,
+    fresh: Flights,
+    ceiling: Decimal | None,
+    meals_per_day: Decimal = Decimal(0),
 ) -> str | None:
     if ceiling is None:
         return None
     flights = [
         fresh if item.origin == route.origin else item for item in proposal.flights
     ]
+    days = (proposal.end_date - proposal.start_date).days + 1
     try:
         return budget_status(
-            proposal.cities, flights, proposal.intercity_transport, ceiling
+            proposal.cities,
+            flights,
+            proposal.intercity_transport,
+            ceiling,
+            meals=meals_per_day * days,
         )
     except OptionRejected:
         return "over_group_budget"
@@ -423,7 +432,9 @@ async def find_alternative(
             fresh = route_from_fare(route, fare, query, asked.at).model_copy(
                 update={"fare_basis": "group", "solo_saving_sar": None}
             )
-            status = _status(proposal, route, fresh, ceiling)
+            status = _status(
+                proposal, route, fresh, ceiling, settings.meals_per_day_sar
+            )
             return Alternative(
                 reason,
                 fresh,
@@ -479,7 +490,7 @@ def _agent_option(
             "seller_type": "third_party",
         }
     )
-    status = _status(proposal, route, option, ceiling)
+    status = _status(proposal, route, option, ceiling, settings.meals_per_day_sar)
     return Alternative(
         "agent",
         option,
@@ -553,6 +564,7 @@ async def check_flight(
     member: str,
     ceiling: Decimal | None = None,
     refreshing: bool = False,
+    reported_missing: bool = False,
 ) -> CheckResult:
     route = find_route(proposal, city)
     # A price for one person booking alone is checked as that same booking.
@@ -588,6 +600,13 @@ async def check_flight(
         for asked in asked_list
         if (match := matching_itinerary(asked.body, route))
     ]
+    # The member opened the seller and the flight was not offered: search data can
+    # lag behind the airline, so trust the member and look for another flight.
+    avoid_reported: frozenset[str] = frozenset()
+    if reported_missing:
+        matches = []
+        if route.airline.value:
+            avoid_reported = frozenset({route.airline.value})
 
     async def alternative_for(
         reason: AlternativeReason, avoid: frozenset[str] = frozenset()
@@ -597,7 +616,12 @@ async def check_flight(
         )
 
     if not matches:
-        found = await alternative_for("gone")
+        found = await alternative_for("gone", avoid_reported)
+        if found is None and avoid_reported:
+            # No other airline: any other flight is still better than this one.
+            found = await alternative_for("gone")
+            if found is not None and _same_route_flights(found.flights, route):
+                found = None
         if found is None:
             gone = route.model_copy(update={"group_availability": "not_found"})
             return CheckResult(
@@ -614,7 +638,13 @@ async def check_flight(
                 found.price_sar, route.price_per_person.amount_sar
             ),
             flights=found.flights,
-            budget_status=_status(proposal, route, found.flights, ceiling),
+            budget_status=_status(
+                proposal,
+                route,
+                found.flights,
+                ceiling,
+                checker.settings.meals_per_day_sar,
+            ),
             updated=True,
             alternative=found,
             checked_at=now,
@@ -648,7 +678,9 @@ async def check_flight(
             price_sar=amount,
             previous_price_sar=_changed(amount, route.price_per_person.amount_sar),
             flights=fresh,
-            budget_status=_status(proposal, route, fresh, ceiling),
+            budget_status=_status(
+                proposal, route, fresh, ceiling, settings.meals_per_day_sar
+            ),
             updated=True,
             alternative=await alternative_for("no_link", _carriers(best.itinerary)),
             checked_at=now,
@@ -691,7 +723,9 @@ async def check_flight(
         price_sar=price_now,
         previous_price_sar=_changed(price_now, previous),
         flights=fresh,
-        budget_status=_status(proposal, route, fresh, ceiling),
+        budget_status=_status(
+            proposal, route, fresh, ceiling, settings.meals_per_day_sar
+        ),
         updated=True,
         alternative=alternative,
         checked_at=now,
@@ -710,6 +744,37 @@ async def book_flight(
 ) -> CheckResult:
     return await check_flight(
         checker, proposal, city, leg, adults, trip, member, ceiling
+    )
+
+
+def _same_route_flights(fresh: Flights, route: Flights) -> bool:
+    numbers = [leg.flight_number for leg in route.legs if leg.flight_number]
+    return bool(numbers) and numbers == [
+        leg.flight_number for leg in fresh.legs if leg.flight_number
+    ]
+
+
+async def report_missing_flight(
+    checker: FlightChecker,
+    proposal: Proposal,
+    city: str,
+    adults: int,
+    ceiling: Decimal,
+    trip: str,
+    member: str,
+) -> CheckResult:
+    """The seller did not offer this flight: find another bookable one."""
+    return await check_flight(
+        checker,
+        proposal,
+        city,
+        "round_trip",
+        adults,
+        trip,
+        member,
+        ceiling,
+        refreshing=True,
+        reported_missing=True,
     )
 
 
@@ -736,6 +801,7 @@ async def refresh_flights(
 
 
 __all__ = [
+    "report_missing_flight",
     "CheckResult",
     "FlightChecker",
     "NoRoute",

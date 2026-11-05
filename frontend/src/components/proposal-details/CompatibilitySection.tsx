@@ -41,16 +41,27 @@ export function CompatibilitySection({ proposal }: { proposal: Proposal }) {
   const checks = sorted(proposal.compatibility ?? [])
   const essentialProblems = checks.filter((item) => item.importance === 'Essential' && item.status !== 'met')
   const metCount = checks.filter((item) => item.status === 'met').length
+  // The score and trade-offs lead; each check stays one click away (US-15-AC01/02).
   return <section aria-labelledby="details-match">
     <SectionTitle id="details-match" icon={<MatchTitleIcon />} title={t('How it matches the group')} hint={<Hint text={t('Grouped by topic. It never shows anyone’s own preferences or who asked for what.')} />} />
     <div className="details-card details-match">
+      {essentialProblems.length > 0 && <p className="details-budget details-budget--over" role="status">
+        <WarningIcon /> <span>{t('Check these Essential requirements yourself before deciding: {topics}', { topics: essentialProblems.map((item) => `${t(topicLabels[item.topic])} (${t(resultLabels[item.status])})`).join(language === 'ar' ? '، ' : ', ') })}</span>
+      </p>}
+      {proposal.fit && <FitSummary fit={proposal.fit} />}
+      <h3 className="details-match-subtitle">{t('Trade-offs')}</h3>
+      {proposal.flexible_adjustments.length === 0
+        ? <p className="details-hint">{t('No trade-offs: every Flexible preference was met.')}</p>
+        : <ul className="details-tradeoffs">
+          {proposal.flexible_adjustments.map((item, index) => <li key={index}>
+            <strong>{t(topicLabels[item.category])}:</strong> <bdi>{item.explanation}</bdi>
+          </li>)}
+        </ul>}
+      <p className="details-hint details-ai-note">{t('AI can make mistakes. Check the details before you book.')}</p>
       {checks.length === 0
         ? <p className="details-hint">{t('This proposal was generated before match details were added. Generate the proposals again to see them.')}</p>
-        : <>
-          {essentialProblems.length > 0 && <p className="details-budget details-budget--over" role="status">
-            <WarningIcon /> <span>{t('Check these Essential requirements yourself before deciding: {topics}', { topics: essentialProblems.map((item) => `${t(topicLabels[item.topic])} (${t(resultLabels[item.status])})`).join(language === 'ar' ? '، ' : ', ') })}</span>
-          </p>}
-          <p className="details-hint">{t('{met} of {total} checks met', { met: metCount.toLocaleString(locale), total: checks.length.toLocaleString(locale) })}</p>
+        : <details className="details-match-more">
+          <summary>{t('See each check ({met} of {total} met)', { met: metCount.toLocaleString(locale), total: checks.length.toLocaleString(locale) })}</summary>
           <ul className="details-match-list">
             {checks.map((item) => {
               const Icon = resultIcons[item.status]
@@ -65,18 +76,10 @@ export function CompatibilitySection({ proposal }: { proposal: Proposal }) {
           <dl className="details-match-legend">
             <div><dt>{t('Met')}</dt><dd>{t('Rihla checked this against the proposal’s details.')}</dd></div>
             <div><dt>{t('Not verified')}</dt><dd>{t('The AI reported it as met, but Rihla could not check it. Review it yourself.')}</dd></div>
-            <div><dt>{t('Not met')}</dt><dd>{t('The proposal does not meet it. See the trade-offs below.')}</dd></div>
+            <div><dt>{t('Not met')}</dt><dd>{t('The proposal does not meet it. See the trade-offs above.')}</dd></div>
           </dl>
-        </>}
-      <h3 className="details-match-subtitle">{t('Trade-offs')}</h3>
-      {proposal.flexible_adjustments.length === 0
-        ? <p className="details-hint">{t('No trade-offs: every Flexible preference was met.')}</p>
-        : <ul className="details-tradeoffs">
-          {proposal.flexible_adjustments.map((item, index) => <li key={index}>
-            <strong>{t(topicLabels[item.category])}:</strong> <bdi>{item.explanation}</bdi>
-          </li>)}
-        </ul>}
-      {proposal.fit ? <FitSummary fit={proposal.fit} /> : <p className="details-hint">{t('Rihla does not give proposals a score. Compare the checks and trade-offs above.')}</p>}
+        </details>}
+      {!proposal.fit && <p className="details-hint">{t('Rihla does not give proposals a score. Compare the checks and trade-offs above.')}</p>}
     </div>
   </section>
 }
@@ -86,11 +89,10 @@ function FitSummary({ fit }: { fit: ProposalFit }) {
   const { t, locale } = useLanguage()
   const percent = (value: number) => (value / 100).toLocaleString(locale, { style: 'percent' })
   return <div className="details-fit">
-    <h3 className="details-match-subtitle">{t('Fit score')}</h3>
+    <h3 className="details-match-subtitle">{t('Fit score')}<Hint text={t('Each member is scored on their own requirements: Essential ones count three times, Flexible ones once, plus the shared dates and the group budget. Met counts fully and Not verified counts half. Proposals are ordered by the least-satisfied member, so no one is left behind. No one’s own score is shown.')} /></h3>
     <dl className="details-fit-scores">
       <div><dt>{t('Least-satisfied member')}</dt><dd>{percent(fit.least_satisfied_percent)}</dd></div>
       <div><dt>{t('Group average')}</dt><dd>{percent(fit.group_percent)}</dd></div>
     </dl>
-    <p className="details-hint">{t('Each member is scored on their own requirements: Essential ones count three times, Flexible ones once, plus the shared dates and the group budget. Met counts fully and Not verified counts half. Proposals are ordered by the least-satisfied member, so no one is left behind. No one’s own score is shown.')}</p>
   </div>
 }

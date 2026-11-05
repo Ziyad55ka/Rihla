@@ -23,6 +23,10 @@ Kind = Literal[
     "wait_and_retry",
 ]
 
+# Live fares are cached for minutes only, so after this long a new search sees
+# seats the airlines have opened since. Long enough for real changes to appear.
+RETRY_AFTER_HOURS = 2
+
 
 class Suggestion(BaseModel):
     action: Action
@@ -107,8 +111,8 @@ def no_flights_error(
             action="edit_preferences",
             kind="add_destination",
             text=(
-                "Add another destination, or mark the destination Flexible, so Rihla "
-                "can suggest places that have flights from every departure city."
+                "Add more places to your preferences, or leave them empty, so Rihla "
+                "can look at more places with flights from every departure city."
             ),
         )
     )
@@ -116,7 +120,11 @@ def no_flights_error(
         Suggestion(
             action="retry",
             kind="retry_later",
-            text="Try again later: airlines add and release seats during the day.",
+            text=(
+                f"Try again in about {RETRY_AFTER_HOURS} hours: airlines add and "
+                "release seats during the day, and Rihla checks live each time."
+            ),
+            params={"hours": str(RETRY_AFTER_HOURS)},
         )
     )
     return GenerationNeedsChanges(

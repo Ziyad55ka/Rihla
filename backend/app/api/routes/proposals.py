@@ -18,6 +18,7 @@ from app.services.flight_refresh import (
     NoRoute,
     book_flight,
     refresh_flights,
+    report_missing_flight,
 )
 from app.services.generation_errors import GenerationNeedsChanges, no_proposals_error
 from app.services.generation_inputs import (
@@ -389,6 +390,37 @@ async def refresh_proposal_flights(
     context = await _flight_context(trip_id, proposal_id, identity, settings)
     try:
         result = await refresh_flights(
+            FlightChecker(settings),
+            context.proposal,
+            context.city or "",
+            context.adults,
+            context.ceiling,
+            str(trip_id),
+            str(identity.account.id),
+        )
+    except NoRoute as error:
+        raise HTTPException(
+            404, "No flights from your city in this proposal."
+        ) from error
+    await _save_check(result, trip_id, proposal_id, identity, settings, required=True)
+    return _check_response(result, settings)
+
+
+@router.post(
+    "/{trip_id}/proposals/{proposal_id}/flight-not-offered",
+    response_model=FlightCheckResponse,
+)
+async def flight_not_offered(
+    trip_id: UUID,
+    proposal_id: UUID,
+    request: Request,
+    identity: CurrentIdentity,
+):
+    """The member's seller page did not offer this flight. Find another one."""
+    settings = request.app.state.settings
+    context = await _flight_context(trip_id, proposal_id, identity, settings)
+    try:
+        result = await report_missing_flight(
             FlightChecker(settings),
             context.proposal,
             context.city or "",

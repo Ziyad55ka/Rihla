@@ -37,8 +37,13 @@ describe('Arabic and English UI', () => {
     expect(signup).not.toContain('Create my account')
     expect(signup).not.toContain('At least 8 characters')
     const join = render('ar', <JoinTripForm initialInvitation={null} onJoined={() => {}} onBack={() => {}} />)
-    expect(join).toContain('رابط الدعوة أو الرمز')
+    expect(join).toContain('رمز الدعوة')
+    expect(join.match(/trip-code-box/g)).toHaveLength(6)
+    expect(join).toContain('one-time-code')
     expect(join).not.toContain('Invitations are valid')
+    const link = render('en', <JoinTripForm initialInvitation={'https://rihla.example/#invite=' + 'a'.repeat(64)} onJoined={() => {}} onBack={() => {}} />)
+    expect(link).toContain('Invitation link')
+    expect(link).not.toContain('trip-code-box')
   })
   it('translates trip controls without translating user-entered trip/member names', () => {
     const trip = { id: 'demo', title: 'My London trip', description: '', role: 'administrator', member_count: 1,

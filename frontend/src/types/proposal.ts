@@ -185,6 +185,8 @@ export interface Activity {
   price_per_person: SarPrice
   booking_url: string | null
   image_url: string | null
+  /** A free photo with its credit, added when proposals are read. */
+  image?: PlaceImage | null
   /** Which of the group's interests this suggestion matches. Missing on older ones. */
   fits?: ActivityFocus[]
 }

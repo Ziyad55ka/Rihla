@@ -23,6 +23,22 @@ class GenerationMember(BaseModel):
     flights: OptionalPreference = Field(default_factory=OptionalPreference)
     accommodation: OptionalPreference = Field(default_factory=OptionalPreference)
 
+    @model_validator(mode="after")
+    def places_and_flights_are_wishes(self):
+        # Rihla combines everyone's places and flight wishes into one plan, so
+        # they are always Flexible, even if older saves marked them Essential.
+        for key in WISH_CATEGORIES:
+            preference = getattr(self, key)
+            if preference.importance != "Flexible":
+                setattr(
+                    self, key, preference.model_copy(update={"importance": "Flexible"})
+                )
+        return self
+
+
+# Preferences the planner combines instead of enforcing one member's choice.
+WISH_CATEGORIES = ("destinations", "flights")
+
 
 class GenerationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")

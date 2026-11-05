@@ -82,7 +82,7 @@ describe('ProposalDetailView', () => {
   })
   it('shows Unconfirmed with its warning and no About', () => {
     const html = page(proposal({ cities: [{ ...stay, hotel_price_per_night: { amount_sar: '750', status: 'Unconfirmed', evidence: [] } }] }))
-    expect(html).toContain('Unconfirmed · Check before booking')
+    expect(html).toContain('Rough estimate · Check before booking')
     expect(html).toContain('750 SAR')
     expect(html).not.toContain('About 750')
   })
@@ -164,6 +164,8 @@ describe('ProposalDetailView', () => {
   })
   it('says a checked price is the same', () => {
     expect(pure(<BookResultView result={checked()} />)).toContain('Checked just now. The price is the same.')
+    expect(pure(<BookResultView result={checked()} />)).not.toContain('Find another flight')
+    expect(pure(<BookResultView result={checked()} onNotOffered={() => undefined} />)).toContain('Find another flight')
     const down = priceChange('800', '900')
     expect(down?.difference).toBe(-100)
     expect(priceChange('900', '900')).toBeNull()

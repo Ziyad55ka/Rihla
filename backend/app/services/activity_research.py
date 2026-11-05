@@ -5,7 +5,7 @@ general tags saved on the proposal (Proposal.activity_focus), never as any membe
 own words, so no private preference is read here.
 
 Why it is built this way:
-- Two searches per city, on travel and food guides, instead of one broad search that
+- Three searches per city, on travel and food guides, instead of one broad search that
   also returned conferences, trade fairs and medical events.
 - Gemini is told plainly what a tourist suggestion is, what to exclude, and which
   interests to favour; it says which interests each suggestion fits.
@@ -121,6 +121,9 @@ class Suggestion(BaseModel):
     duration: CitedText
     scheduled_date: CitedText
     price: CitedPrice
+    # Usual price per person in SAR when the sources state none (0 if free).
+    # Shown as a rough estimate only, since it is not quoted from a source.
+    typical_price_sar: int | None = None
     is_event: bool
 
 
@@ -138,7 +141,9 @@ INCLUDE only things a typical holiday visitor would choose:
 - attraction: landmarks, museums, galleries, historic and religious sites open to
   visitors, viewpoints, parks, beaches, zoos, aquariums, theme parks, markets.
 - activity: tours, cruises, day trips, cultural shows, outdoor and family activities,
-  and festivals, concerts or exhibitions that are open to the public.
+  water parks, theme parks, haunted houses and escape rooms, beach and sea activities,
+  popular or newly opened experiences, and festivals, concerts or exhibitions that
+  are open to the public.
 - restaurant: restaurants, cafes and food markets recommended for visitors.
 
 NEVER return (set tourist false if unsure): conferences, congresses, summits,
@@ -158,6 +163,9 @@ an exact excerpt of that source. Source ids must belong to that city. Descriptio
 be an exact informative sentence. Unknown fields are null.
 Prices must be admission or meal cost PER PERSON, not hotel, package or group prices.
 Give the original stated amount and ISO currency; never convert or invent prices.
+Always also give typical_price_sar: your realistic estimate of the usual cost per
+person in SAR this season (a ticket, or one meal at a restaurant), 0 when free. It is
+shown only as a rough estimate when no source states a price.
 For clearly stated free entry use amount 0 and currency SAR.
 For dated events set is_event true and scheduled_date to the exact ISO date shown in
 the source, inside the city's start and end dates. Omit events whose date cannot be
@@ -220,6 +228,13 @@ def _price(draft: CitedPrice, sources) -> ActivityPrice:
     return ActivityPrice(amount_sar=converted, status="Estimated", evidence=evidence)
 
 
+def typical_price(amount: int | None) -> ActivityPrice:
+    """Gemini's usual price when no source states one: a rough estimate."""
+    if amount is None or amount < 0 or amount > 100_000:
+        return ActivityPrice(amount_sar=None, status="Not available", evidence=[])
+    return ActivityPrice(amount_sar=Decimal(amount), status="Unconfirmed", evidence=[])
+
+
 def group_focus(proposal: Proposal) -> list[str]:
     return list(proposal.activity_focus) or ["landmarks", "food"]
 
@@ -227,12 +242,19 @@ def group_focus(proposal: Proposal) -> list[str]:
 def search_queries(
     city: str, country: str, focus: list[str]
 ) -> list[tuple[str, list[str]]]:
-    """Two searches per city: things to do (with the group's interests), and food."""
+    """Three searches per city: things to do (with the group's interests), popular
+    experiences such as water parks and escape rooms, and food."""
     interests = ", ".join(FOCUS_WORDS[tag] for tag in focus if tag in FOCUS_WORDS)
     return [
         (
             f"best things to do in {city}, {country} for tourists: top attractions, "
             f"tours and {interests}",
+            TRAVEL_SITES,
+        ),
+        (
+            f"popular fun experiences in {city}, {country} right now: water parks, "
+            "theme parks, haunted houses, escape rooms, beach and boat activities, "
+            "new attractions",
             TRAVEL_SITES,
         ),
         (f"best restaurants in {city}, {country} for visitors, local food", FOOD_SITES),
@@ -360,6 +382,8 @@ async def find_activities(proposal: Proposal, settings: Settings) -> Proposal:
                     counts["date"] += 1
                     continue
             price = _price(item.price, sources)
+            if price.status == "Not available":
+                price = typical_price(item.typical_price_sar)
             if price.amount_sar is None and item.price.amount:
                 counts["price"] += 1
             fits = [tag for tag in dict.fromkeys(item.fits) if tag in focus][:4]

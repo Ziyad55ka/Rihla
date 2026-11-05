@@ -97,3 +97,16 @@ returned conferences and medical events, and nothing used the group's interests.
 
 A proposal whose activities were already found keeps them; regenerate the proposals
 to get the new focus tags and search again.
+
+## Live test feedback (5 November 2026)
+
+- A third search per city finds popular experiences: water parks, theme parks, haunted
+  houses, escape rooms, beach and boat activities, and newly opened places.
+- When no source states a price, Gemini's usual price per person (`typical_price_sar`)
+  is shown as "About X · Rough estimate, may change with the season" (`Unconfirmed`).
+- Cards are grouped as Top sights, Things to do and Where to eat, with the ones that
+  match the group's interests first, plus a "Picked for your group" filter.
+- US-11-AC02 photos: sights and activities get the free Wikipedia photo of the page
+  with that exact name, with its artist and licence (`Activity.image`, added when
+  proposals are read and never saved). Restaurants are not looked up. Lookups run six
+  at a time with a 5-second limit and are cached, so photos fill in on a later read.

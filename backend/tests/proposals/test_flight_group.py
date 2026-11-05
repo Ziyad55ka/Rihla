@@ -48,7 +48,8 @@ def refresh(check, adults: int, ceiling: str = "100000"):
 
 def test_refresh_shows_the_cheaper_alone_price_and_budgets_on_it(tmp_path) -> None:
     fake = ByParty(group=2000, alone=900)
-    check = checker(tmp_path, fake, ignav_price_scope="total")
+    # Meals left out here so the figures below stay about flights and the stay.
+    check = checker(tmp_path, fake, ignav_price_scope="total", meals_per_day_sar=0)
 
     # 1000 for the stay plus 900 fits. The group's 1000 per person would not.
     result = refresh(check, 2, ceiling="1950")

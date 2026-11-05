@@ -13,8 +13,8 @@ const titles: Record<string, string> = {
 const suggestionText: Record<SuggestionKind, string> = {
   dates_too_soon: 'Trips need to start at least {days} days from today so seats can still be booked. Move the group’s dates to {earliest} or later.',
   widen_dates: 'Widen the group’s shared dates by a few days, so other departure days can be checked.',
-  add_destination: 'Add another destination, or mark the destination Flexible, so Rihla can suggest places that have flights from every departure city.',
-  retry_later: 'Try again later: airlines add and release seats during the day.',
+  add_destination: 'Add more places to your preferences, or leave them empty, so Rihla can look at more places with flights from every departure city.',
+  retry_later: 'Try again in about {hours} hours: airlines add and release seats during the day, and Rihla checks live each time.',
   generate_again: 'Generate again: the AI suggests different places each time.',
   review_essentials: 'Review Essential preferences: fewer Essential items give the AI more places to choose from.',
   wait_and_retry: 'Wait a few minutes, then generate again.',
@@ -34,7 +34,8 @@ export function GenerationIssueCard({ issue, isAdmin, onAction }: { issue: Gener
     if (!template) return item.text
     const earliest = item.params.earliest ? calendarDate(item.params.earliest, locale) : ''
     const days = item.params.days ? Number(item.params.days).toLocaleString(locale) : ''
-    return t(template, { earliest, days })
+    const hours = Number(item.params.hours ?? 2).toLocaleString(locale)
+    return t(template, { earliest, days, hours })
   }
   // Only the administrator can generate; every member can change their own inputs.
   const shown = issue.suggestions.filter((item) => isAdmin || item.action !== 'retry')

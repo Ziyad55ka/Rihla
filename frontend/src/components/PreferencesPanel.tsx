@@ -6,11 +6,13 @@ import type { Importance, MemberPreferences, SavedPreferences } from '../types/p
 import { useLanguage } from '../lib/language'
 import '../preferences.css'
 
+// Places and flight wishes have no importance: Rihla combines everyone's into
+// one plan, so they are always saved as Flexible.
 const optionalFields = [
-  { key: 'destinations', label: 'Destinations', placeholder: 'Cities or countries you would like to visit' },
-  { key: 'interests', label: 'Interests', placeholder: 'For example: nature, museums, food or adventure' },
-  { key: 'flights', label: 'Flight preferences', placeholder: 'For example: direct flights or a preferred airline' },
-  { key: 'accommodation', label: 'Accommodation preferences', placeholder: 'For example: a hotel near the city centre' },
+  { key: 'destinations', label: 'Destinations', placeholder: 'Cities or countries you would like to visit', wish: true },
+  { key: 'interests', label: 'Interests', placeholder: 'For example: nature, museums, food or adventure', wish: false },
+  { key: 'flights', label: 'Flight preferences', placeholder: 'For example: direct flights or a preferred airline', wish: true },
+  { key: 'accommodation', label: 'Accommodation preferences', placeholder: 'For example: a hotel near the city centre', wish: false },
 ] as const
 
 function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial: SavedPreferences; onSaved: () => void }) {
@@ -48,7 +50,11 @@ function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial
     setBusy(true); setError(''); setNotice('')
     setCheckAttempt((current) => current + 1)
     try {
-      const result = await savePreferences(tripId, values)
+      const result = await savePreferences(tripId, {
+        ...values,
+        destinations: { ...values.destinations, importance: 'Flexible' },
+        flights: { ...values.flights, importance: 'Flexible' },
+      })
       setValues(editablePreferences(result)); setSavedAt(result.updated_at); setDirty(false)
       setNotice('Your preferences have been saved. You can edit them throughout planning.')
       onSaved()
@@ -76,13 +82,13 @@ function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; initial
     </fieldset>
     <fieldset disabled={busy} className="preferences-fields preferences-optional">
       <legend><span className="preferences-section-number">02</span> {t('The little things that matter')} <span className="preferences-optional-label">{t('Optional')}</span></legend>
-      <p className="trip-field-note">{t("Essential means it must be respected. Flexible means it may be adjusted, with an explanation when proposals are introduced. Leaving these blank will not block readiness.")}</p>
-      {optionalFields.map(({ key, label, placeholder }) => {
+      <p className="trip-field-note">{t("List as many places as you like. Rihla combines everyone’s places into trips that suit the whole group. For interests and accommodation, Essential means it must be respected and Flexible means it may be adjusted, with an explanation. Leaving these blank will not block readiness.")}</p>
+      {optionalFields.map(({ key, label, placeholder, wish }) => {
         const essential = values[key].importance === 'Essential'
         const nextImportance: Importance = essential ? 'Flexible' : 'Essential'
-        return <div className="preference-choice" key={key}>
+        return <div className={`preference-choice${wish ? ' preference-choice--wish' : ''}`} key={key}>
           <div><label htmlFor={`preference-${key}`}>{t(label)}</label><textarea id={`preference-${key}`} maxLength={500} rows={2} value={values[key].value} placeholder={t(placeholder)} onChange={(event) => change(key, { ...values[key], value: event.target.value })} /></div>
-          <div className="importance-control"><label htmlFor={`importance-${key}`}>{t('Importance')}</label><button id={`importance-${key}`} type="button" className={`importance-toggle importance-toggle--${essential ? 'essential' : 'flexible'}`} aria-pressed={essential} onClick={() => change(key, { ...values[key], importance: nextImportance })}>{t(values[key].importance)}</button></div>
+          {!wish && <div className="importance-control"><label htmlFor={`importance-${key}`}>{t('Importance')}</label><button id={`importance-${key}`} type="button" className={`importance-toggle importance-toggle--${essential ? 'essential' : 'flexible'}`} aria-pressed={essential} onClick={() => change(key, { ...values[key], importance: nextImportance })}>{t(values[key].importance)}</button></div>}
         </div>
       })}
     </fieldset>

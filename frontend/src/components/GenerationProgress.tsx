@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { elapsedLabel } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
 import { calendarDate } from '../lib/planning'
@@ -14,6 +15,9 @@ const STEPS: { stage: GenerationStage; label: string }[] = [
   { stage: 'researching', label: 'Finding hotels and trip details' },
   { stage: 'saving', label: 'Saving the proposals' },
 ]
+
+// How long a place without flights stays on screen before it leaves the list.
+export const DROPPED_VISIBLE_MS = 2500
 
 const optionLabels: Record<OptionStage, string> = {
   checking_flights: 'Checking flights…',
@@ -63,6 +67,20 @@ export function GenerationProgressView({ progress, elapsedSeconds }: { progress:
   const current = stepIndex(progress?.stage ?? 'planning')
   const options = progress?.options ?? []
   const ready = progress?.ready ?? 0
+  // A place without bookable flights shows briefly, then leaves, so the list
+  // keeps only places still in play. A count keeps what was checked visible.
+  const [gone, setGone] = useState<ReadonlySet<string>>(() => new Set())
+  const timers = useRef(new Map<string, number>())
+  const dropped = options.filter((option) => option.status === 'no_flights' || option.status === 'failed')
+  useEffect(() => {
+    for (const option of dropped) {
+      if (timers.current.has(option.key)) continue
+      timers.current.set(option.key, window.setTimeout(() => setGone((current) => new Set(current).add(option.key)), DROPPED_VISIBLE_MS))
+    }
+  }, [dropped])
+  useEffect(() => () => { for (const timer of timers.current.values()) window.clearTimeout(timer) }, [])
+  const shown = options.filter((option) => !gone.has(option.key))
+  const skipped = options.length - shown.length
   return <section className="generation-progress" aria-labelledby="generation-progress-title">
     <div className="generation-progress-head">
       <h3 id="generation-progress-title"><span className="ai-status-spark" aria-hidden="true"><SparkleIcon /></span> {t('Building your proposals')}</h3>
@@ -82,7 +100,8 @@ export function GenerationProgressView({ progress, elapsedSeconds }: { progress:
     <p className="generation-summary" role="status" aria-live="polite">
       {t('{ready} of {target} proposals ready', { ready: ready.toLocaleString(locale), target: (progress?.target ?? 3).toLocaleString(locale) })}
     </p>
-    {options.length > 0 && <ul className="generation-options">{options.map((option) => <OptionRow key={option.key} option={option} />)}</ul>}
+    {shown.length > 0 && <ul className="generation-options">{shown.map((option) => <OptionRow key={option.key} option={option} />)}</ul>}
+    {skipped > 0 && <p className="generation-skipped">{t(skipped === 1 ? 'Skipped 1 place with no bookable flights' : 'Skipped {count} places with no bookable flights', { count: skipped.toLocaleString(locale) })}</p>}
     <p className="proposals-note">{t('Only places with bookable flights from every departure city are kept. You can stay on this page.')}</p>
   </section>
 }

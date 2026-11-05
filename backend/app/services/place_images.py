@@ -152,6 +152,64 @@ async def _image_for(place: str, cache: ImageCache) -> PlaceImage | None:
     return image
 
 
+# Polite to Wikimedia: a few lookups at a time. Found photos are cached, so a
+# lookup cut off by the time limit is simply finished on a later read.
+ACTIVITY_LOOKUPS_AT_ONCE = 6
+ACTIVITY_TIMEOUT_SECONDS = 5.0
+
+
+async def _with_activity_images(
+    proposals: list[Proposal], cache: ImageCache
+) -> list[Proposal]:
+    """A photo for each suggested place whose Wikipedia page has a free one."""
+    names = sorted(
+        {
+            activity.name.value
+            for item in proposals
+            for stay in item.cities
+            for activity in stay.activities
+            if activity.name.value and activity.category != "restaurant"
+        }
+    )
+    if not names:
+        return proposals
+    gate = asyncio.Semaphore(ACTIVITY_LOOKUPS_AT_ONCE)
+    found: dict[str, PlaceImage | None] = {}
+
+    async def one(name: str) -> None:
+        async with gate:
+            found[name] = await _image_for(name, cache)
+
+    tasks = [asyncio.ensure_future(one(name)) for name in names]
+    _, pending = await asyncio.wait(tasks, timeout=ACTIVITY_TIMEOUT_SECONDS)
+    for task in pending:
+        task.cancel()
+    if not any(found.values()):
+        return proposals
+    return [
+        item.model_copy(
+            update={
+                "cities": [
+                    stay.model_copy(
+                        update={
+                            "activities": [
+                                activity.model_copy(
+                                    update={
+                                        "image": found.get(activity.name.value or "")
+                                    }
+                                )
+                                for activity in stay.activities
+                            ]
+                        }
+                    )
+                    for stay in item.cities
+                ]
+            }
+        )
+        for item in proposals
+    ]
+
+
 async def with_place_images(
     proposals: list[Proposal], settings: Settings
 ) -> list[Proposal]:
@@ -171,6 +229,7 @@ async def with_place_images(
     except TimeoutError:
         return proposals
     images = dict(zip(places, found, strict=True))
+    proposals = await _with_activity_images(proposals, cache)
     return [
         item.model_copy(
             update={

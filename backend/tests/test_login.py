@@ -223,3 +223,28 @@ def test_invalid_login_input_does_not_reach_supabase(login_client, body):
     )
     assert client.post("/api/auth/login", json=body).status_code == 422
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({"code": 400, "error_code": "invalid_credentials", "msg": "x"}, 401),
+        (
+            {
+                "error": "invalid_grant",
+                "error_description": "Invalid login credentials",
+            },
+            401,
+        ),
+        ({"code": 400, "error_code": "email_not_confirmed", "msg": "x"}, 403),
+        ({"error": "invalid_grant", "error_description": "Email not confirmed"}, 403),
+    ],
+)
+def test_current_and_older_supabase_error_shapes_are_understood(
+    login_client, payload, expected
+):
+    client, _ = login_client(lambda _: httpx.Response(400, json=payload))
+    response = client.post(
+        "/api/auth/login", json={"email": "user@example.test", "password": "wrong"}
+    )
+    assert response.status_code == expected

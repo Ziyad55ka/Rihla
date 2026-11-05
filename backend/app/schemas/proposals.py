@@ -284,6 +284,8 @@ class Activity(StrictModel):
     price_per_person: ActivityPrice
     booking_url: BookingUrl = None
     image_url: BookingUrl = None
+    # A free photo with its credit, added when proposals are read; never saved.
+    image: PlaceImage | None = None
     # Which of the group's interests this suggestion matches. Empty on older ones.
     fits: list[ActivityFocus] = Field(default_factory=list, max_length=4)
 

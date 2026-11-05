@@ -253,3 +253,61 @@ def test_photo_cache_remembers_a_photo_and_an_empty_answer(tmp_path) -> None:
 def test_photos_are_off_when_switched_off() -> None:
     settings = Settings(_env_file=None, place_images_enabled=False)
     assert asyncio.run(with_place_images([], settings)) == []
+
+
+def test_suggested_places_get_a_photo_with_its_credit_but_restaurants_do_not(
+    tmp_path, monkeypatch
+) -> None:
+    from uuid import uuid4
+
+    from activity_fixture import mock_data
+
+    from app.schemas.proposals import (
+        Activity,
+        ActivityPrice,
+        InfoField,
+        PlaceImage,
+        Proposal,
+    )
+    from app.services import place_images
+
+    photo = PlaceImage(
+        url="https://upload.wikimedia.org/p.jpg",
+        source_url="https://commons.wikimedia.org/wiki/File:P.jpg",
+        artist="A. Photographer",
+        license="CC BY-SA 4.0",
+    )
+    asked: list[str] = []
+
+    async def fake(place, cache):
+        asked.append(place)
+        return photo if place == "Prado Museum" else None
+
+    monkeypatch.setattr(place_images, "_image_for", fake)
+
+    def suggestion(name: str, category: str) -> Activity:
+        return Activity(
+            id=uuid4(),
+            category=category,
+            name=InfoField(value=name, status="Unconfirmed", evidence=[]),
+            price_per_person=ActivityPrice(
+                amount_sar=None, status="Not available", evidence=[]
+            ),
+        )
+
+    proposal = Proposal.model_validate(mock_data()["proposals"][0])
+    proposal.cities[0].activities = [
+        suggestion("Prado Museum", "attraction"),
+        suggestion("Casa Lucio", "restaurant"),
+    ]
+    settings = Settings(
+        _env_file=None,
+        place_images_enabled=True,
+        place_images_db=tmp_path / "i.sqlite3",
+    )
+
+    [read] = asyncio.run(with_place_images([proposal], settings))
+
+    museum, restaurant = read.cities[0].activities
+    assert museum.image == photo and restaurant.image is None
+    assert "Casa Lucio" not in asked

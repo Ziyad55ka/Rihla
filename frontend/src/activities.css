@@ -93,3 +93,7 @@ html[dir='rtl'] .activities-intro h1 { letter-spacing:normal; }
 /* Why a suggestion was picked: the group interests it matches. */
 .activity-fits { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-4px 0 10px; color:var(--rihla-muted); font-size:12px; }
 .activity-fit { padding:2px 8px; color:var(--rihla-green); background:#eef1e7; border:1px solid #d9dfcf; border-radius:999px; font-weight:600; }
+
+.activities-group + .activities-group { margin-top:22px; }
+.activities-group-title { margin:14px 0 10px; font-size:15px; font-weight:600; letter-spacing:.01em; }
+.activity-card .details-photo { margin:-1px -1px 12px; aspect-ratio:16/10; overflow:hidden; border-radius:inherit; border-bottom-left-radius:0; border-bottom-right-radius:0; }

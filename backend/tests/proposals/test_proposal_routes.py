@@ -154,7 +154,7 @@ def test_conflicts_stop_generation_with_categories_only(api, pipeline, rpc_log) 
         200,
         json={
             "conflicts": ["destinations", "budget"],
-            "own_review": [],
+            "own_review": ["destinations"],
             "can_generate": False,
         },
     )
@@ -162,7 +162,8 @@ def test_conflicts_stop_generation_with_categories_only(api, pipeline, rpc_log) 
     response = post(api(rihla_get_group_conflicts=conflict))
 
     assert response.status_code == 409
-    assert response.json()["detail"]["categories"] == ["destinations", "budget"]
+    # Places are wishes the planner combines, so only the budget blocks.
+    assert response.json()["detail"]["categories"] == ["budget"]
     assert pipeline == {"fetch": [], "generate": []}
     assert rpc_log[-1] == "rihla_end_proposal_generation"
 
@@ -274,3 +275,17 @@ def test_progress_is_for_members_and_shows_the_last_step(api, pipeline) -> None:
 
 def test_progress_requires_authentication(client) -> None:
     assert client.get(f"/api/trips/{TRIP}/proposals/progress").status_code == 401
+
+
+def test_older_essential_places_alone_no_longer_block() -> None:
+    from app.schemas.conflicts import GroupConflicts
+
+    found = GroupConflicts.model_validate(
+        {
+            "conflicts": ["destinations"],
+            "own_review": ["destinations"],
+            "can_generate": False,
+        }
+    )
+
+    assert (found.conflicts, found.own_review, found.can_generate) == ([], [], True)

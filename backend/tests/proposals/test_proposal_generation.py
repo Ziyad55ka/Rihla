@@ -253,7 +253,7 @@ def test_failed_option_stops_after_two_regenerations_and_returns_the_rest(
 def test_essential_not_met_is_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    essential = {"value": "Direct flights", "importance": "Essential"}
+    essential = {"value": "Pool at the hotel", "importance": "Essential"}
     good = [RequirementCheck(requirement_id="R1", met=True, explanation=None)]
     bad = [RequirementCheck(requirement_id="R1", met=False, explanation="Not found")]
     fake_planner(
@@ -267,14 +267,14 @@ def test_essential_not_met_is_rejected(
     )
     monkeypatch.setattr(trip_research, "research", fake_research())
 
-    result = run(group(flights=essential), tmp_path)
+    result = run(group(accommodation=essential), tmp_path)
 
     assert {p.destination for p in result.proposals} == {"Muscat", "Baku", "Tbilisi"}
 
 
 def test_essential_wins_when_members_share_a_preference() -> None:
-    generation = group(flights={"value": "Direct", "importance": "Essential"})
-    generation.members[1].flights.value = "direct"
+    generation = group(accommodation={"value": "Pool", "importance": "Essential"})
+    generation.members[1].accommodation.value = "pool"
 
     [requirement] = collect_requirements(generation)
 
@@ -989,3 +989,37 @@ def test_focus_tags_keep_known_tags_only_with_a_default() -> None:
         )
         == 4
     )
+
+
+def test_budget_counts_meals_like_the_cost_page() -> None:
+    from decimal import Decimal
+
+    from app.schemas.proposals import SarPrice
+    from app.services.proposal_generation import OptionRejected, budget_status
+
+    flights = []  # no flight: never settled, but still counted against the ceiling
+    hotel = SarPrice(amount_sar=Decimal("1000"), status="Unconfirmed", evidence=[])
+
+    class Stay:
+        hotel_price_per_night = hotel
+        nights = 8
+
+    assert (
+        budget_status([Stay()], flights, [], Decimal("9000")) == "includes_unconfirmed"
+    )
+    with pytest.raises(OptionRejected):
+        budget_status([Stay()], flights, [], Decimal("9000"), meals=Decimal("1350"))
+
+
+def test_a_missing_price_becomes_the_typical_one_marked_unconfirmed() -> None:
+    from decimal import Decimal
+
+    from app.schemas.proposals import SarPrice
+    from app.services.proposal_generation import typical_if_missing
+
+    missing = SarPrice(amount_sar=None, status="Not available", evidence=[])
+    filled = typical_if_missing(missing, 480)
+    assert (filled.amount_sar, filled.status) == (Decimal(480), "Unconfirmed")
+    assert typical_if_missing(missing, None) == missing
+    known = SarPrice(amount_sar=Decimal("300"), status="Unconfirmed", evidence=[])
+    assert typical_if_missing(known, 480) == known

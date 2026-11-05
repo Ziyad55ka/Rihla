@@ -103,7 +103,12 @@ Arabic, in the same order as cities.
 Give arrival_airport as the three-letter IATA code of the first city's main airport,
 and return_airport as the IATA code of the LAST city's main airport, where the group
 flies home from (the same as arrival_airport when the trip has one city).
-The group's total cost per person must stay within budget_ceiling_sar.
+The group's total cost per person must stay within budget_ceiling_sar: flights, one
+hotel room per person, travel between cities, and meals_per_day_sar for every day.
+For each city give typical_hotel_night_sar, the usual price in SAR of one night in a
+central 3-4 star hotel room in that season, and typical_transfer_sar, the usual price in
+SAR per person to travel to the next city (null for the last city). Use realistic
+figures; they are shown only when no live price is found.
 Several destinations in one requirement, such as "France, Bahrain", are alternatives:
 going to any one of them meets it. They are never all required together.
 When different requirements name different places (for example one wants France and
@@ -151,6 +156,11 @@ class RequirementCheck(BaseModel):
 class PlannedCity(BaseModel):
     city: str
     nights: int
+    # The planner's typical price, used only when no live or web price is found,
+    # so the estimate never leaves a cost out. Shown as Unconfirmed.
+    typical_hotel_night_sar: int | None = None
+    # Per person, from this city to the next one; null for the last city.
+    typical_transfer_sar: int | None = None
 
 
 class PlannedOption(BaseModel):
@@ -459,13 +469,16 @@ def budget_status(
     flights: list[Flights],
     transfers: list[IntercityTransfer],
     ceiling: Decimal,
+    meals: Decimal = Decimal(0),
 ) -> BudgetStatus:
     """Full cost per person, using every price, for the costliest departure city.
 
-    Rooms are assumed unshared so the estimate errs high. A price that is Not
-    available cannot be counted, so it reports the same as an Unconfirmed one.
+    It adds the same parts as the cost page (proposal_costs), meals included, so a
+    proposal accepted here never shows a higher total there. Rooms are assumed
+    unshared so the estimate errs high. A price that is Not available cannot be
+    counted, so it reports the same as an Unconfirmed one.
     """
-    shared = Decimal(0)
+    shared = meals
     settled = True
 
     def counted(price: SarPrice, multiplier: int = 1) -> Decimal:
@@ -488,6 +501,13 @@ def budget_status(
     if highest > ceiling:
         raise OptionRejected("over_group_budget")
     return "within_group_budget" if settled else "includes_unconfirmed"
+
+
+def typical_if_missing(price: SarPrice, typical: int | None) -> SarPrice:
+    """A missing price becomes the planner's typical one, marked Unconfirmed."""
+    if price.status != "Not available" or not typical or typical <= 0:
+        return price
+    return SarPrice(amount_sar=Decimal(typical), status="Unconfirmed", evidence=[])
 
 
 def hotel_search_url(
@@ -665,6 +685,7 @@ def build_proposal(
     adjustments: list[FlexibleAdjustment],
     version: int,
     requirements: list[Requirement] | None = None,
+    meals_per_day: Decimal = Decimal(0),
 ) -> Proposal:
     by_id: dict[str, VerifiedField] = {item.field_id: item for item in research.fields}
     flights = [
@@ -682,8 +703,9 @@ def build_proposal(
                 city=city.city,
                 nights=city.nights,
                 hotel_name=hotel,
-                hotel_price_per_night=to_sar_price(
-                    by_id[f"cities.{index}.hotel_price_per_night"]
+                hotel_price_per_night=typical_if_missing(
+                    to_sar_price(by_id[f"cities.{index}.hotel_price_per_night"]),
+                    city.typical_hotel_night_sar,
                 ),
                 booking_url=hotel_search_url(
                     hotel.value,
@@ -707,14 +729,20 @@ def build_proposal(
             to_city=end.city,
             mode=to_info_field(by_id[f"intercity.{index}.mode"]),
             duration=to_info_field(by_id[f"intercity.{index}.duration"]),
-            price_per_person=to_sar_price(by_id[f"intercity.{index}.price_per_person"]),
+            price_per_person=typical_if_missing(
+                to_sar_price(by_id[f"intercity.{index}.price_per_person"]),
+                start.typical_transfer_sar,
+            ),
         )
         for index, (start, end) in enumerate(
             zip(option.cities, option.cities[1:], strict=False)
         )
     ]
     ceiling = min(member.max_budget_sar for member in generation.members)
-    status = budget_status(cities, flights, transfers, ceiling)
+    days = (option.end_date - option.start_date).days + 1
+    status = budget_status(
+        cities, flights, transfers, ceiling, meals=meals_per_day * days
+    )
     retrieved_at = datetime.now(UTC)
     proposal = Proposal(
         id=uuid4(),
@@ -802,6 +830,7 @@ async def _plan_options(
             "budget_ceiling_sar": str(
                 min(member.max_budget_sar for member in generation.members)
             ),
+            "meals_per_day_sar": str(settings.meals_per_day_sar),
             "requirements": [item.model_dump() for item in requirements],
             "avoid_routes": [
                 {"destination": route[0], "cities": list(route[1])} for route in avoid
@@ -905,6 +934,7 @@ async def _research_option(
             adjustments,
             version,
             requirements,
+            meals_per_day=settings.meals_per_day_sar,
         )
     except ValidationError as error:
         raise OptionRejected("invalid_itinerary") from error

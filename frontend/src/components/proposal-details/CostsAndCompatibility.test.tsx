@@ -103,7 +103,7 @@ describe('US-15 match and trade-offs', () => {
     const html = page()
     expect(html).toContain('How it matches the group')
     expect(html).toContain('Check these Essential requirements yourself before deciding: Accommodation (Not verified)')
-    expect(html).toContain('2 of 5 checks met')
+    expect(html).toContain('See each check (2 of 5 met)')
   })
 
   it('describes trade-offs and says no score is used', () => {
@@ -120,6 +120,7 @@ describe('US-15 match and trade-offs', () => {
   it('shows the fit score with its criteria: least-satisfied member and group average (US-15-AC03)', () => {
     const html = page(proposal({ fit: { group_percent: 88, least_satisfied_percent: 71, member_count: 4 } }))
     expect(html).toContain('Fit score')
+    expect(html).toContain('AI can make mistakes')
     expect(html).toContain('Least-satisfied member')
     expect(html).toContain('71%')
     expect(html).toContain('Group average')

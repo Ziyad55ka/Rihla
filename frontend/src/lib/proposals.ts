@@ -60,7 +60,7 @@ export const budgetStatusLabels: Record<BudgetStatus, string> = {
 export const statusLabels: Record<InfoStatus, string> = {
   Sourced: 'Confirmed by the seller',
   Estimated: 'Estimated',
-  Unconfirmed: 'Unconfirmed · Check before booking',
+  Unconfirmed: 'Rough estimate · Check before booking',
   'Not available': 'Not available',
 }
 
@@ -140,6 +140,10 @@ export const bookFlight = (tripId: string, proposalId: string, leg: BookLeg) =>
 
 export const refreshFlights = (tripId: string, proposalId: string) =>
   longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { timeoutMs: 60000 })
+
+/** The member opened the seller and this flight was not offered: find another. */
+export const reportFlightNotOffered = (tripId: string, proposalId: string) =>
+  longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/flight-not-offered`, { timeoutMs: 60000 })
 
 export interface PriceAgeLimits {
   freshHours: number

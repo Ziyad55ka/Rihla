@@ -396,3 +396,37 @@ cd frontend; npm test; npm run lint
   asked with its two-leg search, and `Flights.return_airport` stores it so a price
   refresh asks for the same flights. Trip.com is skipped for these trips because it
   only books round trips. One-city trips are unchanged.
+
+### Live test feedback (5 November 2026)
+
+Changes after the first live test, each tied to a Nielsen heuristic or a user story:
+
+- **Sign-in errors (Nielsen 9).** Supabase now reports the reason in `error_code`
+  (with the HTTP status in `code`), so a wrong password was shown as "check the
+  backend". `auth_error_code` reads both shapes. The page now tells apart a wrong
+  password (with "New to Rihla? Choose Sign up"), an unreachable server, a failing
+  sign-in service and an incomplete email.
+- **Invitation code (Nielsen 4 and 7).** Six digit boxes with `one-time-code`,
+  paste fills every box, and pasting a link switches to the link field.
+- **Places are wishes.** Destinations and flight preferences have no Essential or
+  Flexible choice and are always saved as Flexible, because the planner combines
+  everyone's places. Older Essential places no longer block generation
+  (`GroupConflicts` drops the `destinations` category) and different countries are
+  never a stage-one conflict.
+- **Progress list.** A place with no bookable flights shows for 2.5 seconds, then
+  leaves the list; a line counts the places skipped. One or two proposals are still
+  returned when fewer than three have flights.
+- **Retry advice.** "Try again in about 2 hours" (`RETRY_AFTER_HOURS`), since fares are
+  cached for minutes only.
+- **One cost rule (US-13, US-15).** The budget check now adds the same parts as the
+  cost page, meals allowance included, so a proposal accepted at generation cannot
+  show a higher total on its page. A hotel night or transfer with no live or web price
+  takes the planner's typical price, shown as "Rough estimate · Check before booking"
+  (`Unconfirmed`), so no cost is left out of the total.
+- **Flight not offered by the seller.** Search data can lag behind the airline (Riyadh
+  Air showed no RX 531 on 8 November while the search still listed it). Under the
+  booking button, "Find another flight" calls `POST .../flight-not-offered`, which
+  looks for another airline first, then any other flight.
+- **How it matches the group.** The fit score, trade-offs and "AI can make mistakes"
+  lead. The per-topic checks (US-15-AC01/AC02) stay one click away under "See each
+  check".

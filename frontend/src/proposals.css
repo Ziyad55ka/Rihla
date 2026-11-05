@@ -33,6 +33,11 @@ html[dir='rtl'] .proposals-conflicts { padding:14px 34px 14px 18px; }
 .generation-option--done .generation-option-icon { color:#fff; background:var(--rihla-green); }
 .generation-option--warn { background:#fbf6ea; border-color:#eadfb8; }
 .generation-option--warn .generation-option-icon { color:#7a5a12; background:#f3e8c6; }
+/* Stays readable for 2s, then fades over the last 0.5s before it is removed. */
+.generation-option--warn { animation:generation-leave 2.5s ease-in forwards; }
+@keyframes generation-leave { 0%,80% { opacity:1; } 100% { opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .generation-option--warn { animation:none; } }
+.generation-skipped { margin:10px 0 0; font-size:13px; color:var(--rihla-muted, #5f6b62); }
 .generation-option-body { min-width:0; }
 .generation-option-body p { margin:0; overflow-wrap:anywhere; }
 .generation-option-name { font-weight:600; font-size:14px; }
