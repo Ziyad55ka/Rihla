@@ -29,7 +29,7 @@
 .planning-badge--conflict { background:#f7eadd; color:#91562e; border-color:#e9d3ba; }
 .planning-badge--incomplete { background:#f0eddf; color:#786b42; border-color:#deddd0; }
 .planning-preferences-button { min-width:184px; min-height:56px; padding:14px 21px; border:1px solid var(--rihla-green,#2b7d76); border-radius:999px; background:var(--rihla-green,#2b7d76); color:#fff; display:flex; align-items:center; justify-content:space-between; gap:24px; cursor:pointer; font-size:12px!important; white-space:nowrap; }
-.planning-preferences-button:hover { background:#253740; border-color:#253740; }
+.planning-preferences-button:hover { background:var(--rihla-green-deep); border-color:var(--rihla-green-deep); }
 .planning-refresh { display:flex; align-items:center; justify-content:center; gap:9px; min-height:34px; margin:9px 0 0 auto; background:transparent; border:0; color:#cddfde; padding:5px; cursor:pointer; font-size:10px!important; }
 .planning-refresh > span { font-size:15px; }
 .planning-members { padding:53px 0 0; }
@@ -55,7 +55,7 @@
 .planning-member-readiness > span:first-child { color:var(--rihla-muted,#667372); font-size:11px; }
 .planning-invite-control { min-width:184px; }
 .planning-invite-button { width:100%; min-height:56px; padding:14px 21px; color:var(--rihla-green,#2b7d76); background:transparent; border:1px solid var(--rihla-green,#2b7d76); border-radius:999px; display:flex; align-items:center; justify-content:space-between; gap:24px; cursor:pointer; font-size:12px!important; }
-.planning-invite-button:hover:not(:disabled) { color:#fff; background:#253740; border-color:#253740; }
+.planning-invite-button:hover:not(:disabled) { color:#fff; background:var(--rihla-green); border-color:var(--rihla-green); }
 .planning-invite-backdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:24px; background:#1e34428f; backdrop-filter:blur(4px); }
 .planning-invite-dialog { position:relative; width:min(620px,100%); padding:38px; color:var(--rihla-ink,#1e3442); background:var(--rihla-paper,#f2f8f8); border:1px solid var(--rihla-line,#ccdad9); border-radius:20px; box-shadow:0 28px 80px #0f1b2145; }
 .planning-invite-dialog .trip-eyebrow { margin:0 0 13px; }
