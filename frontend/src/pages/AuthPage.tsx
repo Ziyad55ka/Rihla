@@ -30,7 +30,7 @@ export function AuthPage({ hasPendingInvitation = false, initialMode = 'signin',
         <h1 id="auth-story-title">{t('Life’s better')}<br />{t('when you')}<br /><span>{t('go together.')}</span></h1>
         <p className="auth-story-description">{t('A place for your people, your possibilities,')}<br />{t('and a plan that works for everyone.')}</p>
         <div className="auth-story-route" aria-hidden="true">
-          <svg viewBox="0 0 440 150" fill="none"><path d="M8 100h85c24 0 24-66 48-66h105c24 0 24 66 48 66h136" stroke="currentColor" /><path d="M8 116h92c28 0 28-66 48-66h91c23 0 23 66 55 66h136" stroke="currentColor" opacity=".35" /><circle cx="8" cy="100" r="5" fill="currentColor" /><circle cx="430" cy="100" r="5" fill="currentColor" /><circle cx="197" cy="34" r="14" fill="#e9e9df" stroke="currentColor" /><path d="m191 34 4 4 8-8" stroke="currentColor" strokeWidth="1.5" /></svg>
+          <svg viewBox="0 0 440 150" fill="none"><path d="M8 100h85c24 0 24-66 48-66h105c24 0 24 66 48 66h136" stroke="currentColor" /><path d="M8 116h92c28 0 28-66 48-66h91c23 0 23 66 55 66h136" stroke="currentColor" opacity=".35" /><circle cx="8" cy="100" r="5" fill="currentColor" /><circle cx="430" cy="100" r="5" fill="currentColor" /><circle cx="197" cy="34" r="14" fill="#deeae9" stroke="currentColor" /><path d="m191 34 4 4 8-8" stroke="currentColor" strokeWidth="1.5" /></svg>
           <span>{t('Your people.')}</span><span>{t('Your common ground.')}</span><span>{t('Your next chapter.')}</span>
         </div>
       </section>

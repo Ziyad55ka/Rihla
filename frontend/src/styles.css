@@ -1,11 +1,17 @@
 :root {
-  --rihla-ink:#172b22;
-  --rihla-muted:#687267;
-  --rihla-green:#345441;
-  --rihla-cream:#e9e9df;
-  --rihla-bg:#e9e9df;
-  --rihla-paper:#f8f8f2;
-  --rihla-line:#d4d9cd;
+  --rihla-ink:#1e3442;
+  --rihla-muted:#667372;
+  --rihla-green:#2b7d76;
+  /* Hover for every main button: the same teal, a little deeper. */
+  --rihla-green-deep:#22655f;
+  --rihla-cream:#edf2f1;
+  --rihla-bg:#edf2f1;
+  --rihla-paper:#fafcfb;
+  --rihla-line:#d3dfdd;
+  /* Brand identity: teal to slate gradient, with a sand accent. */
+  --rihla-teal:#2f8f86;
+  --rihla-slate:#2f4a5c;
+  --rihla-sand:#d29a5f;
   font-family:Arial,'Helvetica Neue',system-ui,sans-serif;
   color:var(--rihla-ink);
   background:var(--rihla-cream);
@@ -16,24 +22,24 @@
   font-weight:400;
   line-height:1.5
 }
-.account-section { padding:28px 0 36px; border-top:1px solid #dce4e0 }
-.account-card { background:white; border:1px solid #dfe6e1; border-radius:12px; padding:28px }
+.account-section { padding:28px 0 36px; border-top:1px solid #dce4e4 }
+.account-card { background:white; border:1px solid #dfe6e6; border-radius:12px; padding:28px }
 .account-content { max-width:660px }
 .account-form { display:grid; gap:10px; margin-top:20px }
 .account-form label { font-size:13px; font-weight:650 }
-.account-form input { font:inherit; color:inherit; width:100%; border:1px solid #c4d5cd; background:#fff; border-radius:6px; padding:11px 12px; min-height:44px }
-.account-form input:disabled { background:#f2f5f3 }
+.account-form input { font:inherit; color:inherit; width:100%; border:1px solid #c3d6d5; background:#fff; border-radius:6px; padding:11px 12px; min-height:44px }
+.account-form input:disabled { background:#f2f5f5 }
 .account-actions,.account-checks,.account-heading { display:flex; gap:12px; align-items:center; flex-wrap:wrap }
 .account-heading { justify-content:space-between }
 .account-checks { margin-top:18px }
 .primary-button,.secondary-button { min-height:44px; border-radius:6px; padding:10px 16px; cursor:pointer; font-size:13px; font-weight:650 }
-.primary-button { background:#167568; border:1px solid #167568; color:white }
-.secondary-button { background:#fff; border:1px solid #c4d5cd; color:#167568 }
+.primary-button { background:#2b7d76; border:1px solid #2b7d76; color:white }
+.secondary-button { background:#fff; border:1px solid #c3d6d5; color:#2b7d76 }
 .primary-button:disabled,.secondary-button:disabled { cursor:wait; opacity:.6 }
-.form-hint,.account-email { font-size:13px; color:#62756f; margin:4px 0 8px; overflow-wrap:anywhere }
+.form-hint,.account-email { font-size:13px; color:#617675; margin:4px 0 8px; overflow-wrap:anywhere }
 .form-error,.form-notice { padding:12px; border-radius:6px; font-size:13px; overflow-wrap:anywhere }
 .form-error { background:#fff1ea; color:#8c371d }
-.form-notice { background:#eff8f1; color:#216c4b }
+.form-notice { background:#eff8f8; color:#1d706d }
 @media(max-width:600px) { .account-card { padding:20px } .account-actions { align-items:stretch; flex-direction:column } }
 * {
   box-sizing:border-box
@@ -52,7 +58,7 @@ a {
   color:inherit
 }
 :focus-visible {
-  outline:3px solid #188477;
+  outline:3px solid #2f8f86;
   outline-offset:5px
 }
 .workspace {
@@ -65,7 +71,7 @@ a {
   display:flex;
   align-items:center;
   justify-content:space-between;
-  border-bottom:1px solid #dce4e0
+  border-bottom:1px solid #dce4e4
 }
 .brand {
   display:flex;
@@ -80,7 +86,7 @@ a {
 .brand-mark {
   display:grid;
   place-items:center;
-  background:#167568;
+  background:#2b7d76;
   color:#fff;
   width:37px;
   height:37px;
@@ -92,11 +98,11 @@ a {
   padding-bottom:9px
 }
 .brand-period {
-  color:#198577
+  color:#2f8f86
 }
 .workspace-label {
   font-size:12px;
-  color:#657872;
+  color:#647978;
   font-weight:550;
   letter-spacing:.5px
 }
@@ -113,12 +119,12 @@ a {
   font-weight:700;
   letter-spacing:1.8px;
   text-transform:uppercase;
-  color:#4b766c
+  color:#497877
 }
 .eyebrow>span {
   width:6px;
   height:6px;
-  background:#188477;
+  background:#2f8f86;
   border-radius:50%
 }
 h1 {
@@ -130,7 +136,7 @@ h1 {
   margin:0 0 21px
 }
 .intro-description {
-  color:#62756f;
+  color:#617675;
   font-size:15px;
   line-height:1.8;
   max-width:550px;
@@ -144,20 +150,20 @@ h1 {
   align-items:center;
   gap:9px;
   font-size:12px;
-  color:#5d756b
+  color:#5c7675
 }
 .foundation-label>span {
-  border:1px solid #d5e2dc;
+  border:1px solid #d4e3e2;
   border-radius:50%;
   height:28px;
   width:28px;
   display:grid;
   place-items:center;
-  color:#167568
+  color:#2b7d76
 }
 .services {
   padding:31px 0 0;
-  border-top:1px solid #dce4e0
+  border-top:1px solid #dce4e4
 }
 .section-heading {
   display:flex;
@@ -167,7 +173,7 @@ h1 {
 }
 .section-heading .eyebrow {
   margin-bottom:6px;
-  color:#7c8c85;
+  color:#7b8d8c;
   font-size:10px;
   letter-spacing:1.4px
 }
@@ -180,9 +186,9 @@ h2 {
 }
 .local-label {
   font-size:11px;
-  color:#687f72;
-  background:#edf1ed;
-  border:1px solid #e0e7e0;
+  color:#67807f;
+  background:#edf1f1;
+  border:1px solid #e0e7e7;
   border-radius:5px;
   padding:5px 9px
 }
@@ -197,7 +203,7 @@ h2 {
   padding:26px 28px 0;
   min-width:0;
   background:white;
-  border:1px solid #dfe6e1;
+  border:1px solid #dfe6e6;
   border-radius:12px;
   box-shadow:0 2px 3px #17344103
 }
@@ -212,9 +218,9 @@ h2 {
   width:39px;
   display:grid;
   place-items:center;
-  border:1px solid #dceae4;
-  background:#f0f6f3;
-  color:#167568;
+  border:1px solid #dbebea;
+  background:#f0f6f6;
+  color:#2b7d76;
   border-radius:10px;
   font-size:25px;
   font-weight:500
@@ -222,7 +228,7 @@ h2 {
 .service-number {
   font-size:11px;
   font-family:monospace;
-  color:#97a59e
+  color:#96a6a5
 }
 h3 {
   margin:0 0 8px;
@@ -233,7 +239,7 @@ h3 {
 }
 .service-description {
   margin:0;
-  color:#6b7a74;
+  color:#6a7b7a;
   font-size:13px;
   line-height:1.7;
   max-width:350px
@@ -260,9 +266,9 @@ h3 {
   flex-shrink:0
 }
 .status-badge--success {
-  color:#216c4b;
-  background:#eff8f1;
-  border-color:#d8ecdd
+  color:#1d706d;
+  background:#eff8f8;
+  border-color:#d7edec
 }
 .status-badge--warning {
   color:#8e551b;
@@ -270,12 +276,12 @@ h3 {
   border-color:#f0e3ca
 }
 .status-badge--neutral {
-  color:#5a6a67;
-  background:#f2f5f3;
-  border-color:#e2e8e3
+  color:#596b6a;
+  background:#f2f5f5;
+  border-color:#e2e8e8
 }
 .status-detail {
-  color:#687a72;
+  color:#677b7a;
   font-size:12px;
   line-height:1.75;
   min-height:42px;
@@ -283,7 +289,7 @@ h3 {
   overflow-wrap:anywhere
 }
 .card-footer {
-  border-top:1px solid #edf0ec;
+  border-top:1px solid #ecf0f0;
   min-height:60px;
   display:flex;
   align-items:center;
@@ -292,14 +298,14 @@ h3 {
 }
 .endpoint {
   font-size:10px;
-  color:#73827c;
+  color:#728382;
   overflow-wrap:anywhere;
   min-width:0
 }
 .card-footer button {
   background:none;
   border:0;
-  color:#1c7565;
+  color:#1d7471;
   font-size:11px;
   font-weight:650;
   cursor:pointer;
@@ -310,12 +316,12 @@ h3 {
   gap:8px
 }
 .card-footer button:hover {
-  color:#104d43;
+  color:#13384a;
   text-decoration:underline
 }
 .card-footer button:disabled {
   cursor:wait;
-  color:#869a90;
+  color:#859b9a;
   text-decoration:none
 }
 .card-footer button span {
@@ -323,11 +329,11 @@ h3 {
 }
 .footer-note {
   font-size:10px;
-  color:#73827c
+  color:#728382
 }
 .next-label {
   font-size:11px;
-  color:#7d8e83;
+  color:#7c8f8e;
   white-space:nowrap;
   display:flex;
   align-items:center;
@@ -342,11 +348,11 @@ h3 {
   gap:18px;
   padding:23px 0;
   margin-top:29px;
-  border-top:1px solid #dce4e0;
-  border-bottom:1px solid #dce4e0
+  border-top:1px solid #dce4e4;
+  border-bottom:1px solid #dce4e4
 }
 .next-icon {
-  color:#167568;
+  color:#2b7d76;
   font-size:22px;
   align-self:flex-start;
   margin-top:1px
@@ -358,7 +364,7 @@ h3 {
 }
 .next-section p {
   font-size:12px;
-  color:#6e8076;
+  color:#6d8180;
   margin:5px 0 0;
   max-width:610px;
   line-height:1.7
@@ -367,7 +373,7 @@ h3 {
   margin-left:auto;
   font-size:10px;
   white-space:nowrap;
-  color:#7a8d82
+  color:#798e8d
 }
 .site-footer {
   display:flex;
@@ -375,10 +381,10 @@ h3 {
   gap:20px;
   padding:28px 0 32px;
   font-size:10px;
-  color:#819188
+  color:#809291
 }
 .site-footer span:first-child {
-  color:#5f796c
+  color:#5e7a79
 }
 @media(min-width:1440px) {
   .workspace {

@@ -2,6 +2,7 @@ import { useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEve
 import { createTrip, invitationToken, joinTrip } from '../lib/trips'
 import type { TripDetail } from '../types/trips'
 import { useLanguage } from '../lib/language'
+import { FlyIcon } from './FlightIcons'
 
 export function CreateTripForm({ onCreated, onBack }: { onCreated: (trip: TripDetail) => void; onBack: () => void }) {
   const { t } = useLanguage()
@@ -28,7 +29,7 @@ export function CreateTripForm({ onCreated, onBack }: { onCreated: (trip: TripDe
       <textarea id="trip-description" name="description" maxLength={500} rows={4} placeholder={t("A celebration, a catch-up, or just a change of scenery…")} value={description} disabled={busy} onChange={(event) => setDescription(event.target.value)} />
       <p className="trip-field-note">{t("You’ll be the trip administrator and a participating member.")}</p>
       {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
-      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || title.trim().length < 2}>{t(busy ? 'Creating your trip…' : 'Create trip')} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
+      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || title.trim().length < 2}>{t(busy ? 'Creating your trip…' : 'Create trip')} <span aria-hidden="true"><FlyIcon /></span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
     </form>
   </section>
 }
@@ -114,7 +115,7 @@ export function JoinTripForm({ initialInvitation, onJoined, onBack }: { initialI
       </>}
       <p className="trip-field-note">{t("Invitations are valid for 7 days unless the administrator replaces or revokes them. Already a member? Joining again takes you to the same trip.")}</p>
       {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
-      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || !ready}>{t(busy ? 'Joining your group…' : 'Join trip')} <span aria-hidden="true">↗</span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
+      <div className="trip-form-actions"><button className="trip-primary" disabled={busy || !ready}>{t(busy ? 'Joining your group…' : 'Join trip')} <span aria-hidden="true"><FlyIcon /></span></button><button type="button" className="trip-text-button" onClick={onBack} disabled={busy}>{t('Cancel')}</button></div>
     </form>
   </section>
 }

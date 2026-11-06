@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, SlidersHorizontal } from 'lucide-react'
+import { SlidersHorizontal } from 'lucide-react'
+import { FlyIcon } from './FlightIcons'
 import { calendarDate, getPlanningStatus, missingFieldLabels } from '../lib/planning'
 import { tripStage } from '../lib/trip-stage'
 import type { PlanningStatus } from '../types/planning'
@@ -37,7 +38,7 @@ export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { tr
     <section className="planning-overview" aria-labelledby="trip-overview-title">
       <div className="planning-overview-top">
         <div className="planning-overview-title"><h1 id="trip-overview-title">{trip.title}</h1>{trip.description && <p>{trip.description}</p>}</div>
-        <div className="planning-overview-actions"><span className="trip-role">{t(trip.role === 'administrator' ? 'You’re the administrator' : 'You’re a member')}</span><button className="planning-preferences-button" type="button" onClick={onPreferences}><SlidersHorizontal size={17} aria-hidden="true" />{hasSaved === true ? t('Edit preferences') : hasSaved === false ? t('Enter preferences') : t('Your preferences')}<ArrowUpRight size={17} aria-hidden="true" /></button></div>
+        <div className="planning-overview-actions"><span className="trip-role">{t(trip.role === 'administrator' ? 'You’re the administrator' : 'You’re a member')}</span><button className="planning-preferences-button" type="button" onClick={onPreferences}><SlidersHorizontal size={17} aria-hidden="true" />{hasSaved === true ? t('Edit preferences') : hasSaved === false ? t('Enter preferences') : t('Your preferences')}<FlyIcon /></button></div>
       </div>
       <div className="planning-overview-details">
         <div className="planning-people-summary">

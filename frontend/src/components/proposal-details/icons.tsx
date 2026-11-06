@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, BedDouble, Bus, Car, Check, ChevronDown, CircleAlert, CircleCheck, CircleHelp, CircleX, Clock, ExternalLink, Info, Library, ListChecks, Luggage, Plane, RefreshCw, Route, Ship, Sparkles, TrainFront, Users, Wallet } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BedDouble, Bus, Car, Check, ChevronDown, CircleAlert, CircleCheck, CircleHelp, CircleX, Clock, ExternalLink, Info, Library, ListChecks, Luggage, Plane, RefreshCw, Route, Ship, TrainFront, Users, Wallet } from 'lucide-react'
 
 // One library, one line weight. The words beside each icon carry the meaning.
 const look = { className: 'details-icon', strokeWidth: 1.75, 'aria-hidden': true, focusable: false } as const
@@ -11,7 +11,7 @@ export function UsersIcon() { return <Users {...look} size={16} /> }
 export function RefreshIcon() { return <RefreshCw {...look} size={16} /> }
 export function ExternalIcon() { return <ExternalLink {...look} size={14} /> }
 export function ChevronIcon() { return <ChevronDown {...look} size={16} /> }
-export function SparkleIcon() { return <Sparkles {...look} size={16} /> }
+export { AiPlaneIcon as SparkleIcon } from '../FlightIcons'
 export function FlightsTitleIcon() { return <Plane {...look} size={20} /> }
 export function StaysTitleIcon() { return <BedDouble {...look} size={20} /> }
 export function RouteTitleIcon() { return <Route {...look} size={20} /> }

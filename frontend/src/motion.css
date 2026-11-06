@@ -6,12 +6,12 @@
   }
   :is(.landing-page, .auth-page, .trip-workspace) button:hover:not(:disabled) { transform:translateY(-2px); }
   :is(.landing-page, .auth-page, .trip-workspace) button:active:not(:disabled) { transform:translateY(0) scale(.98); }
-  :is(.landing-action, .trip-primary, .planning-preferences-button, .rihla-navbar-action):hover:not(:disabled) { box-shadow:0 7px 18px #172b2220; }
+  :is(.landing-action, .trip-primary, .planning-preferences-button, .rihla-navbar-action):hover:not(:disabled) { box-shadow:0 7px 18px #1e344220; }
   .landing-main-panel, .auth-page, .trip-workspace { position:relative; isolation:isolate; }
   .landing-main-panel::before, .auth-page::before, .trip-workspace::before {
     content:''; pointer-events:none; position:absolute; z-index:-1;
     inset:0 0 auto; height:850px;
-    background:radial-gradient(ellipse at 18% 30%, #9fb58a28, transparent 55%), radial-gradient(ellipse at 85% 60%, #c8b68a22, transparent 50%);
+    background:radial-gradient(ellipse at 18% 30%, #88b7b628, transparent 55%), radial-gradient(ellipse at 85% 60%, #c8b68a22, transparent 50%);
     animation:rihla-ambient 16s ease-in-out infinite alternate;
   }
   .landing-hero-copy, .auth-story, .trip-dashboard-hero { animation:rihla-arrive 700ms cubic-bezier(.2,.7,.2,1) both; }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="560" viewBox="0 0 560 560" fill="none">
+  <!-- Faint round-trip flight paths, tiled behind the app. Cards cover it. -->
+  <g stroke="#8fa8a6" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="7 11">
+    <path d="M-20 120C90 40 210 60 260 150s150 120 320 40"/>
+    <path d="M40 560c30-120 140-170 250-150s190-60 210-190"/>
+  </g>
+  <g fill="#8fa8a6" fill-opacity=".26">
+    <path transform="translate(262 148) rotate(28) scale(.9)" d="M12 0c1.6 0 2.4 1.2 2.4 2.4v6.4l9.6 6v3.2l-9.6-2.8v6.4l3.2 2.4v2.4l-5.6-1.6-5.6 1.6v-2.4l3.2-2.4v-6.4L0 18v-3.2l9.6-6V2.4C9.6 1.2 10.4 0 12 0Z"/>
+    <path transform="translate(484 236) rotate(-150) scale(.8)" d="M12 0c1.6 0 2.4 1.2 2.4 2.4v6.4l9.6 6v3.2l-9.6-2.8v6.4l3.2 2.4v2.4l-5.6-1.6-5.6 1.6v-2.4l3.2-2.4v-6.4L0 18v-3.2l9.6-6V2.4C9.6 1.2 10.4 0 12 0Z"/>
+  </g>
+</svg>
