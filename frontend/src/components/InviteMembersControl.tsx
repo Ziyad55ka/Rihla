@@ -2,6 +2,7 @@ import { useLanguage } from '../lib/language'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { invitationUrl, issueInvitation } from '../lib/trips'
+import { FlyIcon } from './FlightIcons'
 
 export function InviteMembersControl({ tripId }: { tripId: string }) {
   const { t } = useLanguage()
@@ -51,7 +52,7 @@ export function InviteMembersControl({ tripId }: { tripId: string }) {
   }
 
   return <div className="planning-invite-control">
-    <button className="planning-invite-button" type="button" disabled={busy} onClick={() => void invite()}>{busy ? t("Creating link…") : t("Invite members")} <span aria-hidden="true">↗</span></button>
+    <button className="planning-invite-button" type="button" disabled={busy} onClick={() => void invite()}>{busy ? t("Creating link…") : t("Invite members")} <span aria-hidden="true"><FlyIcon /></span></button>
     {error && !open && <p className="planning-invite-error" role="alert">{t(error)}</p>}
     {open && link && createPortal(<div className="planning-invite-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
       <section className="planning-invite-dialog" role="dialog" aria-modal="true" aria-labelledby="invitation-dialog-title">

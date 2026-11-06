@@ -1,4 +1,5 @@
 import { Brand } from '../components/Brand'
+import { FlyIcon, TakeoffIcon } from '../components/FlightIcons'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useLanguage } from '../lib/language'
 import '../auth.css'
@@ -7,10 +8,6 @@ import '../landing.css'
 interface LandingPageProps {
   onAction: (action: 'create' | 'join') => void
   onLogin: () => void
-}
-
-function Arrow({ diagonal = false }: { diagonal?: boolean }) {
-  return <svg viewBox="0 0 24 24" fill="none" width="17" height="17" aria-hidden="true"><path d={diagonal ? 'M6 18 18 6M6 6h12v12' : 'M4 12h15m-6-6 6 6-6 6'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
 function JourneyArtwork() {
@@ -22,12 +19,12 @@ function JourneyArtwork() {
     </svg>
 
     <div className="landing-ticket-card">
-      <div className="landing-ticket-top"><span className="landing-mini-mark">↗</span><span>{t("THE NEXT CHAPTER")}</span><span>01</span></div>
+      <div className="landing-ticket-top"><span className="landing-mini-mark"><FlyIcon /></span><span>{t("THE NEXT CHAPTER")}</span><span>01</span></div>
       <p>{t("Somewhere")}<br />{t("worth sharing.")}</p>
       <div className="landing-ticket-map">
         <svg viewBox="0 0 270 115" fill="none"><path d="m-15 95 70-52 52 23 60-50 49 44 78-24M-10 109l72-50 48 23 62-49 42 43 83-25" stroke="currentColor" opacity=".22" /><path d="M38 80c38-9 42-32 73-25s44 15 67-13 41-17 59-13" stroke="currentColor" strokeWidth="1.3" strokeDasharray="3 5" /><circle cx="38" cy="80" r="5" stroke="currentColor" /><circle cx="237" cy="29" r="5" fill="currentColor" /><path d="m137 57 13-17 3 13-16 4Z" fill="currentColor" /></svg>
       </div>
-      <div className="landing-ticket-bottom"><span>{t("YOUR PEOPLE. YOUR POSSIBILITIES.")}</span><span>↗</span></div>
+      <div className="landing-ticket-bottom"><span>{t("YOUR PEOPLE. YOUR POSSIBILITIES.")}</span><span><FlyIcon /></span></div>
     </div>
 
     <div className="landing-people-card">
@@ -68,7 +65,7 @@ export function LandingPage({ onAction, onLogin }: LandingPageProps) {
       <header className="landing-header rihla-navbar">
         <Brand />
         <nav className="landing-nav rihla-navbar-links" aria-label={t("Main navigation")}><a href="/" aria-current="page">{t('Home')}</a><a href="#about">{t('About Rihla')}</a></nav>
-        <div className="rihla-navbar-actions"><button className="landing-signup rihla-navbar-action" type="button" onClick={onLogin}>{t('Login / Sign up')} <Arrow diagonal /></button><LanguageSwitcher /></div>
+        <div className="rihla-navbar-actions"><button className="landing-signup rihla-navbar-action" type="button" onClick={onLogin}>{t('Login / Sign up')} <FlyIcon /></button><LanguageSwitcher /></div>
       </header>
 
       <main id="main">
@@ -77,7 +74,7 @@ export function LandingPage({ onAction, onLogin }: LandingPageProps) {
             <p className="landing-eyebrow"><span /> {t('YOUR NEXT JOURNEY STARTS WITH YOUR PEOPLE')}</p>
             <h1 id="landing-title">{t('Good company.')}<br /><span>{t('Great journeys.')}</span></h1>
             <p className="landing-hero-description">{t("Turn “we should go somewhere” into a plan.")}<br className="landing-desktop-break" /> {t("Bring everyone’s dates, budgets, and ideas together.")}<br className="landing-desktop-break" /> {t("Make space for a journey you’ll share.")}</p>
-            <div className="landing-hero-actions"><button className="landing-action landing-action--primary" type="button" onClick={() => onAction('create')}>{t('Create a trip')} <Arrow /></button><button className="landing-action landing-action--secondary" type="button" onClick={() => onAction('join')}>{t('Join a trip')} <Arrow diagonal /></button></div>
+            <div className="landing-hero-actions"><button className="landing-action landing-action--primary" type="button" onClick={() => onAction('create')}>{t('Create a trip')} <TakeoffIcon /></button><button className="landing-action landing-action--secondary" type="button" onClick={() => onAction('join')}>{t('Join a trip')} <FlyIcon /></button></div>
             <p className="landing-hero-note"><span className="landing-note-symbol" aria-hidden="true">✧</span> {t("A little less organizing. A lot more looking forward.")}</p>
           </div>
           <JourneyArtwork />
@@ -88,7 +85,7 @@ export function LandingPage({ onAction, onLogin }: LandingPageProps) {
           <div className="landing-steps">{steps.map((step) => <article className="landing-step" key={step.number}><div className="landing-step-top"><StepIcon icon={step.icon} /><span>{step.number}</span></div><h3>{t(step.title)}</h3><p>{t(step.text)}</p></article>)}</div>
         </section>
 
-        <section className="landing-closing" aria-labelledby="landing-closing-title"><div><p className="landing-eyebrow">{t("START WITH THE PEOPLE. THE REST COMES TOGETHER.")}</p><h2 id="landing-closing-title">{t("Your next chapter")}<br /><span>{t("is a shared one.")}</span></h2></div><button className="landing-action landing-action--primary" type="button" onClick={() => onAction('create')}>{t("Let’s plan a trip")} <Arrow /></button><svg aria-hidden="true" viewBox="0 0 650 230" fill="none"><path d="M0 180h120c35 0 35-100 70-100h150c35 0 35 100 70 100h240M0 197h130c35 0 35-100 70-100h130c35 0 35 100 70 100h250" stroke="currentColor" /><circle cx="507" cy="180" r="5" fill="currentColor" /></svg></section>
+        <section className="landing-closing" aria-labelledby="landing-closing-title"><div><p className="landing-eyebrow">{t("START WITH THE PEOPLE. THE REST COMES TOGETHER.")}</p><h2 id="landing-closing-title">{t("Your next chapter")}<br /><span>{t("is a shared one.")}</span></h2></div><button className="landing-action landing-action--primary" type="button" onClick={() => onAction('create')}>{t("Let’s plan a trip")} <TakeoffIcon /></button><svg aria-hidden="true" viewBox="0 0 650 230" fill="none"><path d="M0 180h120c35 0 35-100 70-100h150c35 0 35 100 70 100h240M0 197h130c35 0 35-100 70-100h130c35 0 35 100 70 100h250" stroke="currentColor" /><circle cx="507" cy="180" r="5" fill="currentColor" /></svg></section>
       </main>
 
       <footer className="landing-footer"><Brand /><span>{t("Good company. Great journeys.")}</span><span>رحلة <span aria-hidden="true">/</span> {t("A journey worth sharing.")}</span></footer>

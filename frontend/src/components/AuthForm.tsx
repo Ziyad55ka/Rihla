@@ -2,10 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { authErrorMessage, submitCredentials } from '../lib/auth'
 import { supabase } from '../lib/supabase'
 import { useLanguage } from '../lib/language'
-
-function Arrow() {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-}
+import { TakeoffIcon, FlyIcon } from './FlightIcons'
 
 function PasswordField({ id, label, value, onChange, newPassword, disabled, t }: {
   id: string; label: string; value: string; onChange: (value: string) => void; newPassword: boolean; disabled: boolean; t: (value: string) => string
@@ -85,13 +82,13 @@ export function AuthForm({ sessionError = '', initialMode = 'signin' }: { sessio
       {notice && <p className="auth-feedback auth-feedback--success" role="status">{t(notice)}</p>}
       <button className="auth-submit" disabled={busy} type="submit">
         <span>{busy ? t(signingUp ? 'Creating your account…' : 'Signing you in…') : signingUp ? t("Create my account") : t("Let’s go")}</span>
-        {busy ? <span className="auth-spinner" aria-hidden="true" /> : <Arrow />}
+        {busy ? <span className="auth-spinner" aria-hidden="true" /> : <TakeoffIcon />}
       </button>
     </form>
 
     <p className="auth-switch-prompt">{signingUp ? t("Already part of the journey?") : t("New adventures start with an account.")}<br />
-      <button type="button" disabled={busy} onClick={() => changeMode(signingUp ? 'signin' : 'signup')}>{signingUp ? t("Sign in instead") : t("Join Rihla")} <span aria-hidden="true">↗</span></button>
+      <button type="button" disabled={busy} onClick={() => changeMode(signingUp ? 'signin' : 'signup')}>{signingUp ? t("Sign in instead") : t("Join Rihla")} <span aria-hidden="true"><FlyIcon /></span></button>
     </p>
-    <div className="auth-form-footer"><span className="auth-tiny-compass" aria-hidden="true">↗</span><span>{t("A little planning. A lot to look forward to.")}</span></div>
+    <div className="auth-form-footer"><span className="auth-tiny-compass" aria-hidden="true"><FlyIcon /></span><span>{t("A little planning. A lot to look forward to.")}</span></div>
   </div>
 }

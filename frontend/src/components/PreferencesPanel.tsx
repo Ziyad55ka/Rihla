@@ -9,6 +9,7 @@ import '../preferences.css'
 import { DestinationDiscovery } from './DestinationDiscovery'
 import { formatAccommodation, parseAccommodation, toggleHotelClass } from '../lib/accommodation'
 import { stepBudget } from '../lib/budget'
+import { FlyIcon } from './FlightIcons'
 
 const interestLabels: Record<InterestFocus, string> = {
   adventure_sports: 'Adventure',
@@ -107,7 +108,7 @@ export function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; 
     <fieldset disabled={busy} tabIndex={-1} className="preferences-fields preferences-destination" id="preferences-destination">
       <legend><span className="preferences-section-number">01</span><span>{t('Where would you like to go?')}</span><span className="preferences-optional-label">{t('Optional')}</span></legend>
       <label htmlFor="preference-destinations">{t('Destinations')}<span aria-hidden="true">{values.destinations.value.length}/500</span></label>
-      <textarea id="preference-destinations" maxLength={500} rows={2} value={values.destinations.value} placeholder={t('For example: Paris, Japan, or a beach destination')} aria-describedby="destinations-help" onChange={event => change('destinations', { ...values.destinations, value: event.target.value })} />
+      <input type="text" id="preference-destinations" maxLength={500} autoComplete="off" value={values.destinations.value} placeholder={t('For example: Paris, Japan, or a beach destination')} aria-describedby="destinations-help" onChange={event => change('destinations', { ...values.destinations, value: event.target.value })} />
       <div className="destination-help-row"><p id="destinations-help">{t('Add cities or countries. We’ll combine the group’s wishes.')}</p><DestinationDiscovery onChoose={applyDiscovery} /></div>
     </fieldset>
     <fieldset disabled={busy} tabIndex={-1} className="preferences-fields" id="preferences-essentials">
@@ -170,7 +171,7 @@ export function PreferencesForm({ tripId, initial, onSaved }: { tripId: string; 
     </fieldset>
     {error && <p ref={feedback} tabIndex={-1} className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
-    <div className={`trip-form-actions preferences-actions${dirty ? ' preferences-actions--dirty' : ''}`}><button type="submit" className="trip-primary" disabled={busy || !dirty}>{busy ? t("Saving…") : t("Save preferences")} <span aria-hidden="true">↗</span></button>
+    <div className={`trip-form-actions preferences-actions${dirty ? ' preferences-actions--dirty' : ''}`}><button type="submit" className="trip-primary" disabled={busy || !dirty}>{busy ? t("Saving…") : t("Save preferences")} <span aria-hidden="true"><FlyIcon /></span></button>
       <span className="preferences-save-status" role="status">{dirty ? t("Unsaved changes") : savedAt ? t('Saved {date}', { date: new Date(savedAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) }) : t("No preferences saved yet")}</span></div>
   </form>
 }

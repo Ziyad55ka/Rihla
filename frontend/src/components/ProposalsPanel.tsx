@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ArrowUpRight, BedDouble, CalendarCheck2, CircleCheck, Coins, MapPinned, Plane, SlidersHorizontal } from 'lucide-react'
+import { BedDouble, CalendarCheck2, CircleCheck, Coins, MapPinned, Plane, SlidersHorizontal } from 'lucide-react'
 import { GENERATE_STEP_MS, generateMessages } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
 import { navigate } from '../lib/navigation'
@@ -9,6 +9,7 @@ import { ApiError } from '../lib/http'
 import { useGenerationRetry } from '../lib/useGenerationRetry'
 import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposals, generationIssue, getConflicts, getGenerationProgress, getProposals, PROGRESS_POLL_MS, proposalTitle, reviewMessages } from '../lib/proposals'
 import type { GenerationIssue, GenerationProgress, GroupConflicts, Proposal, StoredProposals, SuggestionAction } from '../types/proposal'
+import { TakeoffIcon } from './FlightIcons'
 import { AiStatus } from './AiStatus'
 import { GenerationIssueCard } from './GenerationIssueCard'
 import { GenerationProgressView } from './GenerationProgress'
@@ -59,7 +60,7 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
       <div className="proposals-actions">
         {isAdmin && <button type="button" className="trip-primary" disabled={!enabled} aria-describedby={retryPending ? 'generation-issue-title' : undefined} onClick={() => { if (enabled) onGenerate(proposals.length > 0, tripDays || null) }}>
           {generating ? <AiStatus messages={progress ? ['Generating proposals…'] : generateMessages} stepMs={GENERATE_STEP_MS} /> : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
-          {!generating && <ArrowUpRight size={17} aria-hidden="true" />}
+          {!generating && <TakeoffIcon />}
         </button>}
         {preferencesHref && <a className="proposals-preferences" href={preferencesHref} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(preferencesHref) }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Edit preferences')}</a>}
       </div>

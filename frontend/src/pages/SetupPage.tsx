@@ -6,6 +6,7 @@ import { AccountPanel } from '../components/AccountPanel'
 import { API_BASE_URL, getBackendHealth } from '../lib/api'
 import { supabaseConfiguration } from '../lib/supabase'
 import type { BackendStatus } from '../types/api'
+import { FlyIcon } from '../components/FlightIcons'
 
 export function SetupPage() {
   const { t, locale } = useLanguage()
@@ -54,7 +55,7 @@ export function SetupPage() {
           <p className="eyebrow"><span aria-hidden="true" />{t("Sprint 01 / Accounts")}</p>
           <h1 id="page-title">{t("Every journey starts")}<br />{t("with a shared plan.")}</h1>
           <p className="intro-description">{t("A home for your group’s next adventure. Create your account and get ready to plan together.")}</p>
-          <a className="foundation-label" href="#account"><span aria-hidden="true">↗</span> {t("Your account")}</a>
+          <a className="foundation-label" href="#account"><span aria-hidden="true"><FlyIcon /></span> {t("Your account")}</a>
         </section>
 
         <AccountPanel />
@@ -90,7 +91,7 @@ export function SetupPage() {
                 </StatusBadge>
                 <p className="status-detail">{t(supabaseConfiguration.message)}</p>
               </div>
-              <div className="card-footer"><span className="footer-note">{t("Project URL + publishable key")}</span><span className="next-label">{t("Next step")} <span aria-hidden="true">↗</span></span></div>
+              <div className="card-footer"><span className="footer-note">{t("Project URL + publishable key")}</span><span className="next-label">{t("Next step")} <span aria-hidden="true"><FlyIcon /></span></span></div>
             </article>
           </div>
         </section>
