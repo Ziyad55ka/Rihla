@@ -76,6 +76,9 @@
 .trip-form input,.trip-form textarea,.trip-copy-link input { width:100%; min-width:0; border:1px solid #cfd6c8; border-radius:5px; background:#fffefa; padding:13px 14px; font-size:14px; color:var(--rihla-ink); }
 .trip-form input { min-height:51px; }
 .trip-form textarea { resize:vertical; line-height:1.7; }
+.trip-code { display:flex; gap:10px; margin:6px 0 4px; }
+.trip-form .trip-code-box { width:56px; min-width:0; flex:0 0 56px; height:64px; min-height:64px; padding:0; text-align:center; font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; border-radius:8px; }
+.trip-code-switch { justify-self:start; align-self:flex-start; margin-top:4px; font-size:13px; }
 .trip-form label:not(:first-child) { margin-top:14px; }
 .trip-form input:focus,.trip-form textarea:focus { outline:2px solid var(--rihla-green); outline-offset:2px; background:white; }
 .trip-field-note { font-size:11px; line-height:1.8; color:var(--rihla-muted); margin:4px 0 12px; }
@@ -124,6 +127,8 @@
   .trip-card { min-height:310px; padding:24px; }
   .trip-form-page { padding:22px; }
   .trip-form input,.trip-form textarea { font-size:16px; }
+  .trip-code { gap:6px; }
+  .trip-form .trip-code-box { width:auto; flex:1 1 0; height:54px; min-height:54px; font-size:22px; }
   .trip-form-page h1 { font-size:40px; }
   .trip-back { margin-bottom:22px; }
   .trip-form { margin-top:25px; }

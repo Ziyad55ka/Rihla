@@ -8,7 +8,9 @@ export function authErrorMessage(error: unknown): string {
     case 'email_not_confirmed': return 'Confirm your email using the link in your inbox, then sign in.'
     case 'login_locked': return 'Five sign-in attempts failed within 15 minutes. Please wait 15 minutes before trying again.'
     case 'login_in_progress': return 'A sign-in attempt is already in progress. Wait a moment, then try again.'
-    case 'backend_unavailable': return 'Could not complete sign-in. Check that the backend is running and try again.'
+    case 'backend_unavailable': return 'Rihla could not be reached. Check your internet connection, then try again.'
+    case 'service_unavailable': return 'Sign-in is not working right now. This is not about your email or password. Try again in a few minutes.'
+    case 'invalid_email': return 'Enter a full email address, such as name@example.com.'
     case 'over_request_rate_limit':
     case 'over_email_send_rate_limit': return 'Too many attempts. Please wait before trying again.'
     case 'weak_password': return 'Choose a stronger password and try again.'
@@ -28,11 +30,12 @@ async function backendSignIn(client: SupabaseClient, email: string, password: st
   const payload: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const detail = typeof payload === 'object' && payload !== null && 'detail' in payload ? payload.detail : null
-    const code = typeof detail === 'object' && detail !== null && 'code' in detail ? detail.code : 'backend_unavailable'
+    const code = typeof detail === 'object' && detail !== null && 'code' in detail ? detail.code
+      : response.status === 422 ? 'invalid_email' : 'service_unavailable'
     throw { code }
   }
   if (typeof payload !== 'object' || payload === null || !('access_token' in payload) || typeof payload.access_token !== 'string'
-    || !('refresh_token' in payload) || typeof payload.refresh_token !== 'string') throw { code: 'backend_unavailable' }
+    || !('refresh_token' in payload) || typeof payload.refresh_token !== 'string') throw { code: 'service_unavailable' }
   // Supabase still owns persistence, refresh and auth state notifications.
   return client.auth.setSession({ access_token: payload.access_token, refresh_token: payload.refresh_token })
 }

@@ -55,7 +55,7 @@ def provider_with(*responses: httpx.Response) -> tuple[IgnavProvider, list]:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        return remaining.pop(0)
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
 
     return IgnavProvider("secret-key", None, httpx.MockTransport(handler)), requests
 
@@ -164,6 +164,7 @@ def fare(amount="1450", currency="SAR", verified=True) -> FlightFare:
             FareLeg("outbound", "2026-12-13", "Saudia", 200, None, None, url),
             FareLeg("return", "2026-12-17", "Saudia", 210, None, None, url),
         ),
+        price_source="seller",
     )
 
 
@@ -184,7 +185,9 @@ def run_research(
     monkeypatch.setattr(trip_research, "search_sources", search)
     monkeypatch.setattr(trip_research, "extract_facts", extract)
     monkeypatch.setattr(
-        trip_research, "get_flight_provider", lambda *args: FakeProvider(found)
+        trip_research,
+        "get_flight_provider",
+        lambda *args, **kwargs: FakeProvider(found),
     )
     request = ResearchRequest(
         destination="Egypt",
@@ -406,3 +409,99 @@ def test_new_fares_have_clean_booking_links() -> None:
 
     assert found.legs[0].booking_url == "https://air.example/#/book?flightMode=round"
     assert found.source_url == "https://air.example/#/book?flightMode=round"
+
+
+OPEN_JAW = FlightQuery("RUH", "CDG", date(2026, 12, 13), date(2026, 12, 20), 1, "BCN")
+
+
+def test_open_jaw_searches_two_legs_and_reads_them_as_round_trip() -> None:
+    leg_body = itinerary(2900)
+    leg_body["legs"] = [leg_body.pop("outbound"), leg_body.pop("inbound")]
+    provider, requests = provider_with(
+        httpx.Response(200, json={"itineraries": [leg_body]}),
+        httpx.Response(
+            200,
+            json={
+                "booking_options": [
+                    {
+                        "leg_indexes": [0, 1],
+                        "links": [
+                            {"provider_name": "Saudia", "url": "https://air.example/b"}
+                        ],
+                    }
+                ]
+            },
+        ),
+    )
+
+    fare = asyncio.run(provider.find(OPEN_JAW))
+
+    assert requests[0].url.path == "/api/fares/search"
+    legs = json.loads(requests[0].content)["legs"]
+    assert [(leg["origin"], leg["destination"]) for leg in legs] == [
+        ("RUH", "CDG"),
+        ("BCN", "RUH"),
+    ]
+    assert legs[1]["departure_date"] == "2026-12-20"
+    assert fare.amount == "2900"
+    assert fare.source_url == "https://air.example/b"
+
+
+def test_same_airport_back_is_a_plain_round_trip() -> None:
+    query = FlightQuery("RUH", "CAI", date(2026, 12, 13), date(2026, 12, 17), 1, "CAI")
+    assert not query.open_jaw
+    assert query.return_origin == "CAI"
+
+
+def test_open_jaw_inbound_link_leaves_from_the_last_city() -> None:
+    back = "https://a.example/?origin={}&departureDate=2026-12-20"
+    assert link_matches(back.format("BCN"), {"inbound"}, OPEN_JAW)
+    assert not link_matches(back.format("CDG"), {"inbound"}, OPEN_JAW)
+
+
+def test_a_failed_lookup_is_retried_three_times_then_reported_failed():
+    failed = {"error": {"type": "upstream_error", "code": "unable_to_complete_request"}}
+    provider, requests = provider_with(
+        httpx.Response(424, json=failed),
+        httpx.Response(424, json=failed),
+        httpx.Response(424, json=failed),
+    )
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 3
+    # A failed lookup is not "no flights": the group is told to try again.
+    assert QUERY in provider.unavailable_queries
+    assert QUERY not in provider.miss_reasons
+
+
+def test_a_failed_lookup_that_recovers_uses_the_answer():
+    failed = {"error": {"code": "unable_to_complete_request"}}
+    provider, requests = provider_with(
+        httpx.Response(424, json=failed),
+        httpx.Response(200, json={"itineraries": []}),
+    )
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 2
+    assert provider.miss_reasons[QUERY] == "no_seats"
+
+
+def test_flights_that_only_land_after_the_trip_are_named():
+    from app.services.flight_prices import miss_reason
+
+    late = itinerary(900)
+    late["inbound"]["segments"] = [
+        {
+            "departure_time_local": "2026-12-17T23:30:00",
+            "arrival_time_local": "2026-12-18T01:00:00",
+        }
+    ]
+    assert miss_reason({"itineraries": [late]}, QUERY) == "lands_after_trip"
+    assert miss_reason({"itineraries": [itinerary(900)]}, QUERY) == "no_single_booking"
+
+
+def test_unsupported_search_asks_for_other_dates_and_is_not_retried():
+    body = {"error": {"type": "invalid_request", "code": "unsupported_search"}}
+    provider, requests = provider_with(httpx.Response(424, json=body))
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 1
+    assert provider.miss_reasons[QUERY] == "dates_not_searchable"
+    assert QUERY not in provider.unavailable_queries

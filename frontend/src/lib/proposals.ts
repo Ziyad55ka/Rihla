@@ -1,7 +1,7 @@
 import { authenticatedRequest } from './http'
 import { longRequest } from './proposalsHttp'
 import type { Language } from './language'
-import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GroupConflicts, ConflictCategory, InfoStatus, Proposal, StoredProposals } from '../types/proposal'
+import type { AirlineFareNote, BudgetStatus, GeneratedProposals, GenerationIssue, GenerationProgress, GroupConflicts, ConflictCategory, InfoStatus, IntercityTransfer, Proposal, ProposalSource, StoredProposals } from '../types/proposal'
 
 // Generation searches and asks the AI several times, so it can take minutes.
 const GENERATION_TIMEOUT_MS = 10 * 60 * 1000
@@ -14,8 +14,30 @@ export const getConflicts = (tripId: string, signal?: AbortSignal) =>
 export const getProposals = (tripId: string, signal?: AbortSignal) =>
   authenticatedRequest<StoredProposals>(path(tripId, 'proposals'), { signal })
 
-export const generateProposals = (tripId: string, regenerate: boolean) =>
-  longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
+/** `tripDays` is the administrator's chosen length; leave it out to let the AI choose. */
+export const generateProposals = (tripId: string, regenerate: boolean, tripDays?: number | null) =>
+  longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: tripDays ? { regenerate, trip_days: tripDays } : { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
+
+export const getGenerationProgress = (tripId: string, signal?: AbortSignal) =>
+  authenticatedRequest<GenerationProgress | null>(path(tripId, 'proposals/progress'), { signal })
+
+/** How often the page asks for progress while generating. */
+export const PROGRESS_POLL_MS = 2000
+
+/** The structured reason from a failed generation, when the backend sent one. */
+export function generationIssue(detail: unknown): GenerationIssue | null {
+  if (typeof detail !== 'object' || detail === null) return null
+  const value = detail as Partial<GenerationIssue>
+  if (typeof value.code !== 'string' || typeof value.message !== 'string' || !Array.isArray(value.suggestions)) return null
+  return {
+    code: value.code,
+    message: value.message,
+    places: Array.isArray(value.places) ? value.places.filter((item): item is string => typeof item === 'string') : [],
+    causes: Array.isArray(value.causes) ? value.causes.filter((item) => typeof item === 'object' && item !== null && typeof item.kind === 'string' && typeof item.text === 'string') : [],
+    suggestions: value.suggestions.filter((item) => typeof item === 'object' && item !== null && typeof item.action === 'string' && typeof item.kind === 'string')
+      .map((item) => ({ ...item, params: item.params ?? {} })),
+  }
+}
 
 // Category messages only. The API never says which member or value caused a conflict.
 export const conflictMessages: Record<ConflictCategory, string> = {
@@ -33,14 +55,14 @@ export const reviewMessages: Partial<Record<ConflictCategory, string>> = {
 
 export const budgetStatusLabels: Record<BudgetStatus, string> = {
   within_group_budget: 'Within the group budget',
-  includes_unconfirmed: 'Within budget, with unconfirmed prices',
+  includes_unconfirmed: 'Budget not confirmed: some prices are estimates or missing',
   over_group_budget: 'Over the group budget',
 }
 
 export const statusLabels: Record<InfoStatus, string> = {
-  Sourced: 'Confirmed by the seller',
+  Sourced: 'Source-backed',
   Estimated: 'Estimated',
-  Unconfirmed: 'Unconfirmed · Check before booking',
+  Unconfirmed: 'Rough estimate',
   'Not available': 'Not available',
 }
 
@@ -51,6 +73,17 @@ export function proposalTitle(proposal: Proposal, language: Language): string {
 // Saved data comes from outside services, so only web addresses become links.
 export function safeLink(url: string | null): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null
+}
+
+/** Old saved hotel results may contain an ad click instead of a hotel page. */
+export function hotelLink(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const link = new URL(url)
+    if (link.protocol !== 'https:' || link.username || link.password) return null
+    if (['google.com', 'www.google.com'].includes(link.hostname) && ['/aclk', '/url'].includes(link.pathname)) return null
+    return link.toString()
+  } catch { return null }
 }
 
 function addDays(day: string, count: number): string {
@@ -109,6 +142,10 @@ export interface FlightCheckResult extends FlightFacts {
   /** Set means url, if any, is a Google Flights search. */
   fallback: FlightFallback | null
   alternative: FlightAlternative | null
+  /** Google Flights with both chosen flights selected for the group, or null. */
+  itinerary_url?: string | null
+  /** With fallback "limit": when a new check is allowed again (ISO time). */
+  retry_at?: string | null
   now_over_budget: boolean
   checked_at: string | null
   link_valid_minutes: number
@@ -120,6 +157,10 @@ export const bookFlight = (tripId: string, proposalId: string, leg: BookLeg) =>
 
 export const refreshFlights = (tripId: string, proposalId: string) =>
   longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/refresh-flights`, { timeoutMs: 60000 })
+
+/** The member opened the seller and this flight was not offered: find another. */
+export const reportFlightNotOffered = (tripId: string, proposalId: string) =>
+  longRequest<FlightCheckResult>(`/api/trips/${encodeURIComponent(tripId)}/proposals/${encodeURIComponent(proposalId)}/flight-not-offered`, { timeoutMs: 60000 })
 
 export interface PriceAgeLimits {
   freshHours: number
@@ -175,9 +216,14 @@ export function modeKind(mode: string | null): ModeKind {
   return 'other'
 }
 
-/** A plain web search for this trip. It does not check a price or a seat. */
-export function transferSearchUrl(mode: string | null, from: string, to: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(`${mode ?? ''} ${from} to ${to}`.trim())}`
+/** Where a transfer's link goes: the page its price, mode or duration was read from,
+ * otherwise Rome2rio's page for the route, which lists operators. Never a web search. */
+export function transferLink(transfer: IntercityTransfer, sources: ProposalSource[]): { url: string; kind: 'source' | 'planner' } {
+  const cited = [transfer.price_per_person, transfer.mode, transfer.duration].flatMap((field) => field.evidence.map((item) => item.source_id))
+  const page = cited.map((id) => sources.find((source) => source.id === id)).find((source) => source?.url.startsWith('https://'))
+  if (page) return { url: page.url, kind: 'source' }
+  const place = (name: string) => encodeURIComponent(name.trim().replace(/\s+/g, '-'))
+  return { url: `https://www.rome2rio.com/map/${place(transfer.from_city)}/${place(transfer.to_city)}`, kind: 'planner' }
 }
 
 /** Reloads the page's proposals after a check saved something, so it shows the new price. */

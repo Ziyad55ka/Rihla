@@ -36,6 +36,40 @@ Code: `backend/app/services/proposal_generation.py`, `trip_research.py`, `flight
 
 `PROPOSALS_DEMO_MODE=true` serves `backend/app/data/demo_proposals.json` with no external calls, and marks the result as demo.
 
+## Fare-first generation (3 November 2026)
+
+Used whenever `IGNAV_API_KEY` is set. Without it, the web-search flow above is unchanged.
+
+Problems it fixes: generation took 3-5 minutes, some runs ended with no result, and
+some flights showed a web number with no booking link or a Google Flights search.
+
+1. Gemini suggests `PLANNER_OPTION_COUNT` (5) trips in one request.
+2. Code checks dates, requirements and privacy with no outside request.
+3. Ignav checks each trip from every departure airport at the same time, with everyone
+   from that airport in one search. A day with no fares moves by `FLIGHT_DATE_SHIFTS`
+   (+1, -1, +2, -2), only inside the shared dates and never sooner than
+   `MIN_DEPARTURE_LEAD_DAYS` (3) from today.
+4. The first 3 trips with fares are researched at the same time (Tavily searches,
+   departure cities and hotels also run together). Research is told a departure city
+   with an airport must have a live fare, so a price is never shown without a link.
+5. Fewer than 3: Gemini is asked once more, told those routes had no flights.
+   None: `409` with `code`, `places` and `suggestions` (change dates, open preferences,
+   try again). Messages name places only, never members, budgets or cities.
+
+`GET /api/trips/{id}/proposals/progress` (members only) returns the current step and
+each destination's status, moved dates and hotel price per night. It holds no private
+data and lives in memory, so it needs a single backend process.
+
+Hotel prices: with `SERPAPI_API_KEY`, Google Hotels (SerpApi) gives a 3-4 star hotel
+rated 4.0+ for each city's own nights, priced per night in SAR. One more request opens
+the hotel's page to prefer Booking.com's own price and link. Prices stay Estimated
+because they change by the hour. About 2 requests per city per proposal: the free
+plan (250 a month) covers roughly 30-40 generations.
+
+Rihla does not scrape booking sites. Their terms forbid automated access, and avoiding
+blocks would mean hiding that a bot is asking. Licensed APIs (Ignav, SerpApi) are used
+instead.
+
 ## Privacy decisions
 
 - Budgets and preferences stay in the backend. They never appear in a proposal.
@@ -346,3 +380,66 @@ cd frontend; npm test; npm run lint
 - **Risk accepted:** The secret key bypasses Row Level Security, so it must never reach a browser, a log or Git. Automated tests check that only one module uses it and that the browser role cannot call the function.
 - This update authorizes no remote migration, deployment or push.
 - **Condition for the upcoming endpoint:** Before generating or regenerating, it must verify the signed-in account through Supabase Auth and confirm that account is the trip administrator. It must pass only that verified id to the functions in `generation_inputs.py`, never an id from the request.
+
+### Fit score and multi-city flights (5 November 2026)
+
+- **Fit score (US-15-AC03).** Each proposal now has `fit`: the group average and
+  the percent for the least-satisfied member, with no names. Dates and budget count
+  3 for every member; each member's own preferences count 3 when Essential and 1
+  when Flexible. Met counts fully, unverified counts half, unmet counts zero.
+  Proposals are ordered by the least-satisfied member first, then by the average.
+- **Combining preferences.** The planner is told to combine two wishes in one trip
+  when they fit (two cities next to each other), to find one place that bridges
+  them, or to pick one and say who gives way.
+- **Flights home from the last city.** A trip such as Paris then Barcelona flies
+  out to `CDG` and back from `BCN`. The planner gives `return_airport`; Ignav is
+  asked with its two-leg search, and `Flights.return_airport` stores it so a price
+  refresh asks for the same flights. Trip.com is skipped for these trips because it
+  only books round trips. One-city trips are unchanged.
+
+### Live test feedback (5 November 2026)
+
+Changes after the first live test, each tied to a Nielsen heuristic or a user story:
+
+- **Sign-in errors (Nielsen 9).** Supabase now reports the reason in `error_code`
+  (with the HTTP status in `code`), so a wrong password was shown as "check the
+  backend". `auth_error_code` reads both shapes. The page now tells apart a wrong
+  password (with "New to Rihla? Choose Sign up"), an unreachable server, a failing
+  sign-in service and an incomplete email.
+- **Invitation code (Nielsen 4 and 7).** Six digit boxes with `one-time-code`,
+  paste fills every box, and pasting a link switches to the link field.
+- **Places are wishes.** Destinations and flight preferences have no Essential or
+  Flexible choice and are always saved as Flexible, because the planner combines
+  everyone's places. Older Essential places no longer block generation
+  (`GroupConflicts` drops the `destinations` category) and different countries are
+  never a stage-one conflict.
+- **Progress list.** A place with no bookable flights shows for 2.5 seconds, then
+  leaves the list; a line counts the places skipped. One or two proposals are still
+  returned when fewer than three have flights.
+- **Retry advice.** "Try again in about 2 hours" (`RETRY_AFTER_HOURS`), since fares are
+  cached for minutes only.
+- **One cost rule (US-13, US-15).** The budget check now adds the same parts as the
+  cost page, meals allowance included, so a proposal accepted at generation cannot
+  show a higher total on its page. A hotel night or transfer with no live or web price
+  takes the planner's typical price, shown as "Rough estimate · Check before booking"
+  (`Unconfirmed`), so no cost is left out of the total.
+- **Flight not offered by the seller.** Search data can lag behind the airline (Riyadh
+  Air showed no RX 531 on 8 November while the search still listed it). Under the
+  booking button, "Find another flight" calls `POST .../flight-not-offered`, which
+  looks for another airline first, then any other flight.
+- **How it matches the group.** The fit score, trade-offs and "AI can make mistakes"
+  lead. The per-topic checks (US-15-AC01/AC02) stay one click away under "See each
+  check".
+- **Every flight checked on a second source.** Ignav's data can lag behind the
+  airline, so a kept flight must also be sold on Google Flights (through the SerpApi
+  key) with the same flight numbers, both ways, on the same dates
+  (`google_flights_check.py`, `verify_flights_on_google`). At generation, cheaper
+  itineraries Google does not list are skipped for one it does; with none, the
+  option has no flights and the next place is tried. Book checks again before it
+  opens a link, and replaces a flight Google no longer lists. A check that fails
+  (no key, outage) never removes a flight, but the page then makes no claim: the
+  "Also on sale on Google Flights" chip shows only when both sources agree. Cost:
+  about two SerpApi requests per departure city and proposal.
+- **Sources folded.** The sources list moves to a folded "Where this information
+  comes from" line at the end of the page. US-14-AC01 still needs it reachable.
+- "AI can make mistakes" also shows under the proposal list.

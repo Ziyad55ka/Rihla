@@ -11,7 +11,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import httpx2 as httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.core.config import Settings
 from app.schemas.generation import GenerationInput
@@ -71,7 +71,7 @@ class FlightContext(BaseModel):
     # Everyone flying from the caller's departure city.
     adults: int
     # The group's lowest budget.
-    ceiling: Decimal
+    ceiling: Decimal = Field(gt=0, allow_inf_nan=False)
     proposal: Proposal
 
 

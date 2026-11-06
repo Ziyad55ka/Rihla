@@ -45,3 +45,29 @@ Every check is kept in `backend/.local/price-accuracy.sqlite3`: the airline, rou
 ```powershell
 uv run python -m app.services.price_accuracy
 ```
+
+## The live accuracy run
+
+`backend/scripts/live_accuracy.py` searches for real and checks every result
+against independent sources. It spends real requests, so it is not part of pytest.
+Run it from `backend`:
+
+```powershell
+uv run python -m scripts.live_accuracy                 # daily set, about 10 Google Flights requests
+uv run python -m scripts.live_accuracy --set weekly    # 15 routes, about 45 requests
+uv run python -m scripts.live_accuracy --only RUH-JED  # one route
+```
+
+Each route checks: one booking for outbound and return; the airline link's
+airports, dates and passengers; the dates and the time home; the Google Flights
+page with both flights chosen; Rihla's price against the airline's own total on
+Google's booking page (PASS within 2%, FAIL above 5%); and what is known about bags.
+A route expected to find nothing must say why in plain words. The activity check
+confirms every quote is in its source and counts prices that are only estimates.
+
+Routes are in `scripts/live_scenarios.json`, with dates counted from today. The
+report is saved to `backend/.local/accuracy/`, after every route as it goes.
+
+Results on 6 Nov 2026: RUH-JED (flyadeal), DMM-IST (Saudia) and RUH-LHR (Turkish)
+matched the airline's own price exactly (0.0%). No source states the checked bag,
+so every flight now says what may cost extra and to check the airline's site.

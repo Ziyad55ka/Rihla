@@ -1,6 +1,42 @@
 import { authenticatedRequest } from './http'
 import type { MemberPreferences, SavedPreferences } from '../types/preferences'
 
+export const INTEREST_FOCUS = [
+  'adventure_sports',
+  'beaches_water',
+  'landmarks',
+  'museums_history',
+  'events_festivals',
+  'food',
+  'nature_outdoors',
+  'family_fun',
+] as const
+
+export type InterestFocus = typeof INTEREST_FOCUS[number]
+
+const INTEREST_PREFIX = 'focus:'
+const NOTES_SEPARATOR = '; ' + 'notes:'
+
+/** Keep the existing private preference column while giving the backend stable tags. */
+export function parseInterestPreference(value: string): { focus: InterestFocus[]; notes: string } {
+  if (!value.startsWith(INTEREST_PREFIX)) return { focus: [], notes: value }
+  const body = value.slice(INTEREST_PREFIX.length)
+  const separator = body.indexOf(NOTES_SEPARATOR)
+  const encodedFocus = separator < 0 ? body : body.slice(0, separator)
+  const notes = separator < 0 ? '' : body.slice(separator + NOTES_SEPARATOR.length)
+  const allowed = new Set<string>(INTEREST_FOCUS)
+  const focus = encodedFocus.split(',').filter((item): item is InterestFocus => allowed.has(item))
+  return { focus: [...new Set(focus)], notes }
+}
+
+export function formatInterestPreference(focus: InterestFocus[], notes: string): string {
+  const unique = INTEREST_FOCUS.filter((item) => focus.includes(item))
+  // Preserve spaces/newlines during controlled-input editing. Trimming on each
+  // keystroke made it impossible to type a space at the end of a word.
+  if (unique.length === 0) return notes
+  return `${INTEREST_PREFIX}${unique.join(',')}${NOTES_SEPARATOR}${notes}`
+}
+
 export const getPreferences = (tripId: string, signal?: AbortSignal) =>
   authenticatedRequest<SavedPreferences>(`/api/trips/${encodeURIComponent(tripId)}/preferences`, { signal })
 

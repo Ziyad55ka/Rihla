@@ -13,7 +13,7 @@ function citiesLabel(count: number, t: ReturnType<typeof useLanguage>['t'], loca
   return t('{count} cities', { count: count.toLocaleString(locale) })
 }
 
-export function ProposalHeader({ proposal, total }: { proposal: Proposal; total: number }) {
+export function ProposalHeader({ proposal, total, stale = false }: { proposal: Proposal; total: number; stale?: boolean }) {
   const { t, locale, language } = useLanguage()
   const nights = proposal.cities.reduce((sum, stay) => sum + stay.nights, 0)
   const summary = [
@@ -29,6 +29,6 @@ export function ProposalHeader({ proposal, total }: { proposal: Proposal; total:
     <p className="trip-eyebrow">{t('Option {number} of {total}', { number: proposal.option_number.toLocaleString(locale), total: total.toLocaleString(locale) })}</p>
     <h1 aria-label={title}><bdi aria-hidden="true">{title.split(' ').map((word, index) => <span className="details-word" key={index} style={{ animationDelay: `${index * 90 + 150}ms` }}>{word} </span>)}</bdi></h1>
     <p className="details-hero-summary"><bdi>{place}</bdi> · {summary.join(' · ')}</p>
-    <span className={`planning-badge${proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ' planning-badge--conflict'}`}>{t(budgetStatusLabels[proposal.budget_status])}</span>
+    <span className={`planning-badge${!stale && proposal.budget_status === 'within_group_budget' ? ' planning-badge--ready' : ' planning-badge--conflict'}`}>{t(stale ? 'Regenerate to recheck budget and preferences' : budgetStatusLabels[proposal.budget_status])}</span>
   </header>
 }

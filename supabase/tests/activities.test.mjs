@@ -119,6 +119,88 @@ async function tripWithActivities() {
 const getSelection = (p) => rpc('rihla_get_activity_selection', [p.trip, p.proposal])
 const putSelection = (p, ids, version = 1) => rpc('rihla_set_activity_selection', [p.trip, p.proposal, version, ids])
 
+test('direct activity RPC enforces the lowest member budget and costliest route at the cent boundary', async () => {
+  const p = await tripWithActivities()
+  await root()
+  await db.query('update public.member_preferences set max_budget_sar=1175 where trip_id=$1 and user_id=$2', [p.trip, BOB])
+  // This scenario isolates money boundaries using the current input snapshot.
+  await db.query('update public.proposal_generations set input_fingerprint=rihla_private.trip_inputs_fingerprint($1) where trip_id=$1', [p.trip])
+  const { rows } = await db.query('select data from public.proposals where trip_id=$1', [p.trip])
+  const data = rows[0].data
+  data.start_date = '2026-11-10'; data.end_date = '2026-11-12'
+  data.flights[0].price_per_person = { amount_sar: '100' }
+  data.flights[1].price_per_person = { amount_sar: '400' }
+  data.cities[0].activities[0].price_per_person = { amount_sar: '325' }
+  // The old reserve must not replace the member's cheaper actual choice.
+  data.activity_allowance_per_person = { amount_sar: '675' }
+  await db.query('update public.proposals set data=$2::jsonb where trip_id=$1', [p.trip, JSON.stringify(data)])
+  await role(ALICE)
+  assert.deepEqual((await putSelection(p, [p.activity])).activity_ids, [p.activity])
+  await putSelection(p, [])
+  await root()
+  data.cities[0].activities[0].price_per_person.amount_sar = '325.01'
+  await db.query('update public.proposals set data=$2::jsonb where trip_id=$1', [p.trip, JSON.stringify(data)])
+  await role(ALICE)
+  await denied(() => putSelection(p, [p.activity]), '23514')
+  assert.deepEqual((await getSelection(p)).activity_ids, [])
+})
+
+test('direct activity RPC cannot save when no member budget can be verified', async () => {
+  const p = await tripWithActivities()
+  await root()
+  await db.query('delete from public.member_preferences where trip_id=$1', [p.trip])
+  await role(ALICE)
+  await denied(() => putSelection(p, [p.activity]), '23514')
+})
+
+test('direct activity RPC rejects a stale preference snapshot', async () => {
+  const p = await tripWithActivities()
+  await role(BOB)
+  await savePreferences(p.trip, member({ departure_city: 'Jeddah', interests: essential('Museums') }))
+  await role(ALICE)
+  await denied(() => putSelection(p, [p.activity]), 'P0001')
+})
+
+test('direct activity RPC counts reviewed admission guides for legacy unpriced landmarks', async () => {
+  const p = await tripWithActivities()
+  await root()
+  await db.query("update public.member_preferences set available_end=available_start, max_budget_sar=230 where trip_id=$1", [p.trip])
+  await db.query('update public.proposal_generations set input_fingerprint=rihla_private.trip_inputs_fingerprint($1) where trip_id=$1', [p.trip])
+  const { rows } = await db.query('select data from public.proposals where trip_id=$1', [p.trip])
+  const data = rows[0].data
+  data.start_date = '2026-11-10'; data.end_date = '2026-11-10'
+  data.cities[0].city = 'Madrid'
+  data.cities[0].activities[0].name = { value: 'Prado Museum (متحف برادو)' }
+  const royal = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  data.cities[0].activities.push({ id: royal, name: { value: 'Royal Palace of Madrid' } })
+  await db.query('update public.proposals set data=$2::jsonb where trip_id=$1', [p.trip, JSON.stringify(data)])
+  await role(ALICE)
+  // Admission guides are date-limited. After expiry they are unknown again;
+  // the allowance remains, and the frontend reports the missing prices.
+  const { rows: clock } = await db.query("select (now() at time zone 'UTC')::date <= date '2026-12-06' as active")
+  await putSelection(p, [p.activity])
+  if (clock[0].active) await denied(() => putSelection(p, [p.activity, royal]), '23514')
+  else await putSelection(p, [p.activity, royal])
+})
+
+test('reviewed Istanbul admission replaces an unsupported model price in the direct budget guard', async () => {
+  const p = await tripWithActivities()
+  await root()
+  await db.query('update public.member_preferences set available_end=available_start, max_budget_sar=300 where trip_id=$1', [p.trip])
+  await db.query('update public.proposal_generations set input_fingerprint=rihla_private.trip_inputs_fingerprint($1) where trip_id=$1', [p.trip])
+  const { rows } = await db.query('select data from public.proposals where trip_id=$1', [p.trip])
+  const data = rows[0].data
+  data.start_date = '2026-11-10'; data.end_date = '2026-11-10'
+  data.cities[0].city = 'Istanbul'
+  data.cities[0].activities[0].name = { value: 'Topkapı Palace' }
+  data.cities[0].activities[0].price_per_person = { amount_sar: '120', status: 'Unconfirmed', evidence: [] }
+  await db.query('update public.proposals set data=$2::jsonb where trip_id=$1', [p.trip, JSON.stringify(data)])
+  await role(ALICE)
+  const { rows: clock } = await db.query("select (now() at time zone 'UTC')::date <= date '2026-12-06' as active")
+  if (clock[0].active) await denied(() => putSelection(p, [p.activity]), '23514')
+  else await putSelection(p, [p.activity])
+})
+
 const TOKEN = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const NEXT_TOKEN = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const claim = (p, user = ALICE, token = TOKEN, version = 1) => rpc('rihla_begin_activity_research', [p.trip, p.proposal, user, version, token])
@@ -154,14 +236,42 @@ test('cost aggregate adds each member choices without revealing them', async () 
   const totals = () => rpc('rihla_get_activity_costs', [p.trip])
   let data = (await totals()).proposals[0]
   assert.deepEqual(data.activity_ids, [])
+  assert.equal(data.has_selection, false)
+  assert.equal(data.saved_members, 1)
   assert.equal(data.group_cost.amount_sar, '65.50')
   await putSelection(p, [p.activity])
   data = (await totals()).proposals[0]
   assert.deepEqual(data.activity_ids, [p.activity])
+  assert.equal(data.has_selection, true)
+  assert.equal(data.saved_members, 2)
   assert.equal(data.group_cost.amount_sar, '131.00')
   assert.equal(data.group_cost.partial, false)
+  await putSelection(p, [])
+  data = (await totals()).proposals[0]
+  assert.equal(data.has_selection, true)
+  assert.equal(data.saved_members, 2)
+  assert.equal(data.group_cost.amount_sar, '65.50')
   await role(CAROL)
   await denied(totals)
+})
+
+test('structured event fields and partial source notices survive the existing research save', async () => {
+  const p = await tripWithActivities()
+  await root()
+  await db.query("update public.proposals set data=jsonb_set(data,'{cities,0,order}','1') where trip_id=$1", [p.trip])
+  await asServiceRole()
+  assert.equal((await claim(p)).started, true)
+  const event = {
+    id: p.activity, name: { value: 'Synthetic concert', status: 'Unconfirmed', evidence: [] },
+    scheduled_date: { value: '2026-11-12', status: 'Unconfirmed', evidence: [] },
+    research_notes: ['guide_search_unavailable', 'events_only'],
+    price_per_person: { amount_sar: null, status: 'Not available', evidence: [] },
+  }
+  await complete(p, [{ order: 1, activities: [event] }])
+  await role(BOB)
+  const read = (await proposals(p.trip)).proposals[0]
+  assert.deepEqual(read.cities[0].activities[0], event)
+  assert.equal(read.flights[0].origin, 'Jeddah')
 })
 
 test('unknown prices are partial; no choices have a zero total', async () => {

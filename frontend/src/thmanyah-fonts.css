@@ -1,0 +1,7 @@
+/* Thmanyah Sans, used for Arabic only. The files are local and never committed (see
+   .gitignore): its license forbids hosting them. Without them the browser silently
+   falls back to the next font in each Arabic font stack. */
+@font-face { font-family:'Thmanyah Sans'; font-style:normal; font-weight:300; font-display:swap; src:url('/fonts/thmanyah/thmanyahsans-Light.woff2') format('woff2'); }
+@font-face { font-family:'Thmanyah Sans'; font-style:normal; font-weight:400; font-display:swap; src:url('/fonts/thmanyah/thmanyahsans-Regular.woff2') format('woff2'); }
+@font-face { font-family:'Thmanyah Sans'; font-style:normal; font-weight:500; font-display:swap; src:url('/fonts/thmanyah/thmanyahsans-Medium.woff2') format('woff2'); }
+@font-face { font-family:'Thmanyah Sans'; font-style:normal; font-weight:700; font-display:swap; src:url('/fonts/thmanyah/thmanyahsans-Bold.woff2') format('woff2'); }

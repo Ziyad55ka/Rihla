@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ArrowUpRight, SlidersHorizontal } from 'lucide-react'
 import { calendarDate, getPlanningStatus, missingFieldLabels } from '../lib/planning'
 import { tripStage } from '../lib/trip-stage'
 import type { PlanningStatus } from '../types/planning'
@@ -11,8 +12,8 @@ import '../planning.css'
 function planningStage(status: PlanningStatus) {
   if (status.all_members_ready === undefined && status.own_readiness.status === 'Ready' && status.shared_dates.status !== 'conflict') return { title: 'Your part of the plan is ready.', label: 'Group readiness unavailable', copy: 'Your preferences are complete. Group readiness will appear when the latest planning update is available.' }
   const stage = tripStage(status)
-  const titles = { you: 'Your preferences come first.', members: 'Good things take a little planning.', conflict: 'Let’s find dates that fit.', ai: 'Everyone’s on the same page.' }
-  return { title: titles[stage.key], label: stage.label, copy: stage.detail }
+  const titles = { you: 'Add your travel essentials', members: 'Waiting for your group', conflict: 'Choose dates that overlap', ai: 'Ready to plan together' }
+  return { title: titles[stage.key], label: stage.label, copy: stage.key === 'ai' ? 'Compare the trip options below, or update your preferences.' : stage.detail }
 }
 
 export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { trip: TripDetail; revision: number; onRefresh: () => void; onPreferences: () => void }) {
@@ -35,8 +36,8 @@ export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { tr
   return <section className="planning-panel" aria-label={t('Trip planning')}>
     <section className="planning-overview" aria-labelledby="trip-overview-title">
       <div className="planning-overview-top">
-        <div className="planning-overview-title"><p className="trip-eyebrow">{t('YOUR NEXT ADVENTURE')}</p><h1 id="trip-overview-title">{trip.title}</h1>{trip.description && <p>{trip.description}</p>}</div>
-        <span className="trip-role">{t(trip.role === 'administrator' ? 'You’re the administrator' : 'You’re a member')}</span>
+        <div className="planning-overview-title"><h1 id="trip-overview-title">{trip.title}</h1>{trip.description && <p>{trip.description}</p>}</div>
+        <div className="planning-overview-actions"><span className="trip-role">{t(trip.role === 'administrator' ? 'You’re the administrator' : 'You’re a member')}</span><button className="planning-preferences-button" type="button" onClick={onPreferences}><SlidersHorizontal size={17} aria-hidden="true" />{hasSaved === true ? t('Edit preferences') : hasSaved === false ? t('Enter preferences') : t('Your preferences')}<ArrowUpRight size={17} aria-hidden="true" /></button></div>
       </div>
       <div className="planning-overview-details">
         <div className="planning-people-summary">
@@ -60,10 +61,10 @@ export function PlanningPanel({ trip, revision, onRefresh, onPreferences }: { tr
       <button type="button" className="planning-refresh" disabled={busy} onClick={onRefresh}>{busy ? t("Checking…") : t("Refresh trip information")} <span aria-hidden="true">↻</span></button>
     </section>
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)} {t("Try Refresh planning.")}</p>}
-    <ProposalsPanel tripId={trip.id} isAdmin={trip.role === 'administrator'} revision={revision} />
+    <ProposalsPanel tripId={trip.id} isAdmin={trip.role === 'administrator'} revision={revision} sharedDays={current?.shared_dates.status === 'available' ? current.shared_dates.duration_days : null} />
     <section className="planning-members" aria-labelledby="members-title">
-      <div className="planning-members-heading"><div><p className="trip-eyebrow">{t("YOUR TRAVEL CIRCLE")}</p><h2 id="members-title">{t("Different people. One adventure.")}</h2><p>{trip.member_count === 1 ? t('1 person making the plan together.') : t('{count} people making the plan together.', { count: trip.member_count.toLocaleString(locale) })}</p></div>
-        <div className="planning-members-actions"><button className="planning-preferences-button" type="button" onClick={onPreferences}>{hasSaved === true ? t("Edit preferences") : hasSaved === false ? t("Enter preferences") : t("Your preferences")} <span aria-hidden="true">↗</span></button>{trip.role === 'administrator' && <InviteMembersControl tripId={trip.id} />}</div>
+      <div className="planning-members-heading"><div><h2 id="members-title">{t('Your travel group')}</h2><p>{trip.member_count === 1 ? t('1 person making the plan together.') : t('{count} people making the plan together.', { count: trip.member_count.toLocaleString(locale) })}</p></div>
+        <div className="planning-members-actions">{trip.role === 'administrator' && <InviteMembersControl tripId={trip.id} />}</div>
       </div>
       {current?.own_readiness.status === 'Incomplete' && <p className="planning-own-note">{t("For your readiness, add:")} {current.own_readiness.missing_fields.map((field) => t(missingFieldLabels[field])).join('، ')}{t('. Complete all required fields before saving.')}</p>}
       <ul className="planning-member-grid">{trip.members.map((member, index) => {

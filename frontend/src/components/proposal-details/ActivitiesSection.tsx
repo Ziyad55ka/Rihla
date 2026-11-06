@@ -24,12 +24,20 @@ export function ActivitiesSection({ proposal, onChanged = () => undefined }: { p
     } catch (err) { setError(err instanceof Error ? err.message : 'Activity search is unavailable. Try again later.') }
     finally { setBusy(false) }
   }
-  if (hasActivities) return <ActivitiesPanel key={`${proposal.id}:${proposal.version}`} proposal={proposal} showEstimate={false} onSaved={onChanged} />
+  const notes = proposal.cities.flatMap(city => city.activities?.flatMap(activity => activity.research_notes ?? []) ?? [])
+  if (hasActivities) return <>
+    {notes.includes('guide_search_unavailable') && <p className="trip-feedback" role="status">{t('Showing checked event listings only. Attraction and restaurant research is temporarily unavailable.')}</p>}
+    {notes.includes('event_source_unavailable') && <p className="trip-feedback" role="status">{t('The event source could not be reached. These suggestions may not include dated events.')}</p>}
+    <ActivitiesPanel key={`${proposal.id}:${proposal.version}`} proposal={proposal} showEstimate={false} onSaved={onChanged} />
+  </>
   return <section aria-labelledby="details-activities">
     <SectionTitle icon={<RouteTitleIcon />} id="details-activities" title={t('Activities and places')} />
     <div className="details-card">
-      <p>{t(proposal.activity_research_status === 'ready' ? 'No checkable suggestions were found for these cities and dates.' : 'Find activities, attractions and restaurants for the cities and dates in this proposal.')}</p>
-      {proposal.activity_research_status !== 'ready' && <button className="trip-primary" type="button" disabled={busy} onClick={() => void find()}>{t(busy ? 'Finding real activity suggestions…' : 'Find activity suggestions')}</button>}
+      {proposal.activity_research_status === 'ready' ? <p>{t('No checkable suggestions were found for these cities and dates.')}</p> : <>
+        <h4 className="details-activity-question">{t('Want us to suggest activities for your trip?')}</h4>
+        <p>{t('We will suggest sights, activities and places to eat in your cities, then build a plan for each day from what you choose. Days with nothing chosen stay as free time.')}</p>
+      </>}
+      {proposal.activity_research_status !== 'ready' && <button className="trip-primary" type="button" disabled={busy} onClick={() => void find()}>{t(busy ? 'Finding real activity suggestions…' : 'Yes, suggest activities')}</button>}
       {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     </div>
   </section>

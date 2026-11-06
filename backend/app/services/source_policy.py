@@ -70,7 +70,14 @@ def apply_source_policy(proposal: Proposal, booking_domains: list[str]) -> Propo
             )
             update["booking_url"] = _city_search(stay.booking_url)
         price = stay.hotel_price_per_night
-        if price.status != "Not available" and not backed(price):
+        rough_allowance = price.status == "Unconfirmed" and not price.evidence
+        if rough_allowance:
+            removed_price = True
+        if (
+            price.status != "Not available"
+            and not rough_allowance
+            and not backed(price)
+        ):
             update["hotel_price_per_night"] = SarPrice(
                 amount_sar=None, status="Not available", evidence=[]
             )
@@ -79,13 +86,30 @@ def apply_source_policy(proposal: Proposal, booking_domains: list[str]) -> Propo
     status = proposal.budget_status
     if removed_price and status == "within_group_budget":
         status = "includes_unconfirmed"
-    return proposal.model_copy(
-        update={
-            "cities": stays,
-            "budget_status": status,
-            "sources": [
-                item.model_copy(update={"kind": kinds[item.id]})
-                for item in proposal.sources
-            ],
-        }
+    from app.services.landmark_catalog import enrich_reviewed
+
+    return enrich_reviewed(
+        proposal.model_copy(
+            update={
+                "cities": stays,
+                "flights": [
+                    route.model_copy(
+                        update={
+                            "price_per_person": route.price_per_person.model_copy(
+                                update={"status": "Estimated"}
+                            )
+                            if route.price_source == "search"
+                            and route.price_per_person.status == "Sourced"
+                            else route.price_per_person
+                        }
+                    )
+                    for route in proposal.flights
+                ],
+                "budget_status": status,
+                "sources": [
+                    item.model_copy(update={"kind": kinds[item.id]})
+                    for item in proposal.sources
+                ],
+            }
+        )
     )

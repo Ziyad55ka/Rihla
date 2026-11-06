@@ -174,6 +174,17 @@ def test_older_proposal_from_booking_is_unchanged() -> None:
     assert result.sources[0].kind == "booking"
 
 
+def test_explicit_rough_room_allowance_remains_visible_as_unconfirmed():
+    proposal = saved("https://guide.example/article")
+    proposal.cities[0].hotel_price_per_night = SarPrice(
+        amount_sar="400", status="Unconfirmed", evidence=[]
+    )
+    result = apply_source_policy(proposal, DOMAINS)
+    assert result.cities[0].hotel_name.value is None
+    assert result.cities[0].hotel_price_per_night.amount_sar == Decimal("400")
+    assert result.cities[0].hotel_price_per_night.status == "Unconfirmed"
+
+
 def test_price_sources_count_but_only_google_hotels_of_google() -> None:
     domains = list(DEFAULT_BOOKING_DOMAINS)
     for url in (

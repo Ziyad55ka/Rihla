@@ -26,7 +26,7 @@ export async function longRequest<T>(path: `/api/${string}`, { body, timeoutMs }
     const message = typeof detail === 'string' ? detail
       : typeof detail === 'object' && detail !== null && 'message' in detail && typeof detail.message === 'string' ? detail.message
         : `The request failed (HTTP ${response.status}). Check your input and try again.`
-    throw new ApiError(message, response.status)
+    throw new ApiError(message, response.status, detail)
   }
   return response.json() as Promise<T>
 }

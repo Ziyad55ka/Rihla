@@ -12,12 +12,13 @@ import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Literal
 
 import httpx2 as httpx
+import openai
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -29,13 +30,15 @@ from app.services.flight_prices import (
     FlightFare,
     FlightQuery,
     airport_for_city,
+    complete_return_fare,
     fare_quote,
     format_duration,
     get_flight_provider,
 )
+from app.services.model_limits import quota_hint
 from app.services.source_policy import on_domain, search_hosts
 from app.services.travel_providers import find_hotel, live_hotel_providers
-from app.services.tripcom_provider import HotelQuery
+from app.services.tripcom_provider import HotelOffer, HotelQuery
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +53,8 @@ ResearchErrorCode = Literal[
     "model_unavailable",
     "model_invalid_output",
     "generation_limit",
+    "flight_source_unavailable",
+    "departure_airport_unknown",
 ]
 UnavailableReason = Literal[
     "absent_from_search",
@@ -235,6 +240,7 @@ class ResearchResult(BaseModel):
     # A live source's page and name for each city's hotel, by position.
     hotel_links: dict[int, str] = {}
     hotel_sources: dict[int, str] = {}
+    hotel_stars: dict[int, int] = {}
     fields: list[VerifiedField]
     sources: list[ResearchSource]
     cost: ResearchCost
@@ -254,6 +260,15 @@ class ResearchRequest(BaseModel):
     arrival_airport: str | None = None
     departure_date: date | None = None
     return_date: date | None = None
+    # Fare-first generation: a departure city with an airport must have a live fare
+    # with a booking link. Without one, research stops instead of guessing a price.
+    require_live_fares: bool = False
+    # Nights in each city, in order, so each hotel is priced for its own stay.
+    nights: list[int] = []
+    # The last city's airport, when the flight home leaves from there.
+    return_airport: str | None = None
+    hotel_stars: tuple[int, ...] = (3, 4)
+    strict_hotel_stars: bool = False
 
 
 @dataclass(frozen=True)
@@ -331,7 +346,8 @@ def build_search_plan(request: ResearchRequest) -> list[SearchGroup]:
     for index, city in enumerate(request.cities):
         plan.append(
             SearchGroup(
-                f"central hotels in {city}, {country} price per night {request.period}",
+                f"central {','.join(map(str, request.hotel_stars))} star hotels "
+                f"in {city}, {country} price per night {request.period}",
                 country=country,
                 booking_only=True,
                 fields=[
@@ -743,16 +759,151 @@ def to_sar_price(verified: VerifiedField) -> SarPrice:
     )
 
 
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+
+def _inline_refs(schema: dict) -> dict:
+    """Replace $ref with its definition: some providers reject $defs."""
+    defs = schema.get("$defs", {})
+
+    def walk(node: object) -> object:
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                return walk(defs[ref.removeprefix("#/$defs/")])
+            return {k: walk(v) for k, v in node.items() if k != "$defs"}
+        if isinstance(node, list):
+            return [walk(item) for item in node]
+        return node
+
+    return walk(schema)  # type: ignore[return-value]
+
+
+async def _call_openrouter[SchemaT: BaseModel](
+    contents: str,
+    system_prompt: str,
+    schema: type[SchemaT],
+    settings: Settings,
+    cost: ResearchCost,
+    thinking: str | None,
+) -> SchemaT:
+    """The same JSON request as call_gemini, paid through OpenRouter."""
+    model = settings.openrouter_model_id()
+    # The SDK's own retries are off: one retry below, after a wait.
+    client = openai.AsyncOpenAI(
+        base_url=OPENROUTER_BASE_URL,
+        api_key=settings.openrouter_api_key,
+        max_retries=0,
+        timeout=180,
+    )
+    extra_body: dict[str, object] = {}
+    if settings.openrouter_provider:
+        extra_body["provider"] = {
+            "only": [settings.openrouter_provider],
+            "allow_fallbacks": False,
+        }
+    if thinking:
+        extra_body["reasoning"] = {"effort": thinking, "exclude": True}
+    response_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": schema.__name__,
+            "strict": False,
+            "schema": _inline_refs(schema.model_json_schema()),
+        },
+    }
+    failure: ResearchError | None = None
+    async with client:
+        for attempt in range(2):
+            if attempt:
+                await asyncio.sleep(settings.gemini_retry_delay_seconds)
+            cost.gemini_requests += 1
+            try:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": contents},
+                    ],
+                    response_format=response_format,  # type: ignore[arg-type]
+                    extra_body=extra_body or None,
+                )
+            except openai.APIStatusError as error:
+                # Status and class only: the body can quote the prompt.
+                logger.info(
+                    "openrouter_call_failed attempt=%s status=%s error=%s model=%s",
+                    attempt + 1,
+                    error.status_code,
+                    type(error).__name__,
+                    model,
+                )
+                code = error.status_code
+                if code in (401, 403):
+                    raise ResearchError(
+                        "not_configured",
+                        "OPENROUTER_API_KEY was rejected. Use a normal API key.",
+                    ) from error
+                if code == 402:
+                    raise ResearchError(
+                        "model_quota", "OpenRouter credits have run out."
+                    ) from error
+                if code == 429 or code >= 500:
+                    failure = ResearchError(
+                        "model_quota" if code == 429 else "model_unavailable",
+                        "The model is busy. Try again later."
+                        if code == 429
+                        else "The model is temporarily unavailable.",
+                    )
+                    failure.__cause__ = error
+                    continue
+                raise ResearchError(
+                    "model_unavailable", "The model could not complete the request."
+                ) from error
+            except openai.APIError as error:  # Network errors and timeouts.
+                logger.info(
+                    "openrouter_call_failed attempt=%s status=none error=%s model=%s",
+                    attempt + 1,
+                    type(error).__name__,
+                    model,
+                )
+                failure = ResearchError(
+                    "model_unavailable", "The model could not be reached."
+                )
+                failure.__cause__ = error
+                continue
+            if response.usage:
+                cost.gemini_tokens += response.usage.total_tokens or 0
+            message = response.choices[0].message if response.choices else None
+            text = (message.content if message else None) or ""
+            # Some models wrap JSON in a code fence despite response_format.
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
+            try:
+                return schema.model_validate_json(text)
+            except ValidationError as error:
+                raise ResearchError(
+                    "model_invalid_output", "The model returned invalid JSON."
+                ) from error
+    assert failure is not None
+    raise failure
+
+
 async def call_gemini[SchemaT: BaseModel](
     contents: str,
     system_prompt: str,
     schema: type[SchemaT],
     settings: Settings,
     cost: ResearchCost,
+    thinking: str | None = None,
 ) -> SchemaT:
     """Ask for JSON. Wait and retry once on a quota limit or an outage."""
+    if settings.openrouter_api_key:
+        return await _call_openrouter(
+            contents, system_prompt, schema, settings, cost, thinking
+        )
     if not settings.gemini_api_key:
-        raise ResearchError("not_configured", "GEMINI_API_KEY is not configured.")
+        raise ResearchError(
+            "not_configured", "OPENROUTER_API_KEY or GEMINI_API_KEY is not configured."
+        )
     # The SDK's own retries are off: the free plan allows few requests per day.
     client = genai.Client(
         api_key=settings.gemini_api_key,
@@ -773,13 +924,37 @@ async def call_gemini[SchemaT: BaseModel](
                     system_instruction=system_prompt,
                     response_mime_type="application/json",
                     response_schema=schema,
+                    thinking_config=(
+                        types.ThinkingConfig(thinking_level=thinking.upper())
+                        if thinking
+                        else None
+                    ),
                 ),
             )
         except genai_errors.APIError as error:
+            # Status and class only: the body can quote the prompt or the key's project.
+            logger.info(
+                "gemini_call_failed attempt=%s status=%s error=%s model=%s",
+                attempt + 1,
+                error.code,
+                type(error).__name__,
+                settings.gemini_model,
+            )
             if error.code == 429:
+                hint = quota_hint(error.details)
                 failure = ResearchError(
-                    "model_quota", "The Gemini quota has been reached. Try again later."
+                    "model_quota",
+                    "The Gemini quota has been reached. Try again later.",
+                    retry_after=str(hint.retry_seconds)
+                    if hint.retry_seconds is not None
+                    else None,
                 )
+                failure.__cause__ = error
+                if hint.scope == "day" or (
+                    hint.retry_seconds is not None
+                    and hint.retry_seconds > settings.gemini_retry_delay_seconds
+                ):
+                    raise failure from error
             elif (error.code or 0) >= 500:
                 failure = ResearchError(
                     "model_unavailable", "Gemini is temporarily unavailable."
@@ -791,6 +966,12 @@ async def call_gemini[SchemaT: BaseModel](
             failure.__cause__ = error
             continue
         except Exception as error:  # The SDK raises its own network error types.
+            logger.info(
+                "gemini_call_failed attempt=%s status=none error=%s model=%s",
+                attempt + 1,
+                type(error).__name__,
+                settings.gemini_model,
+            )
             failure = ResearchError("model_unavailable", "Gemini could not be reached.")
             failure.__cause__ = error
             continue
@@ -830,7 +1011,16 @@ async def extract_facts(
         },
         ensure_ascii=False,
     )
-    draft = await call_gemini(payload, SYSTEM_PROMPT, ExtractionDraft, settings, cost)
+    # Passed only when set, so the call stays the same for older callers and fakes.
+    level = settings.gemini_extract_thinking
+    draft = await call_gemini(
+        payload,
+        SYSTEM_PROMPT,
+        ExtractionDraft,
+        settings.for_extraction(),
+        cost,
+        **({"thinking": level} if level else {}),
+    )
     return draft.facts
 
 
@@ -843,12 +1033,30 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
     origins = list(
         {item.strip().casefold(): item.strip() for item in request.origins}.values()
     )
-    fares, no_group_fare = await _find_fares(request, origins, settings, cost)
+    # Live hotel prices and live fares are asked together, before any web search.
+    (fares, no_group_fare), offers = await asyncio.gather(
+        _find_fares(request, origins, settings, cost),
+        _bounded_hotel_offers(request, settings),
+    )
+    if request.require_live_fares:
+        for index, origin in enumerate(origins):
+            airport = airport_for_city(origin)
+            if airport and airport != request.arrival_airport and index not in fares:
+                raise ResearchError(
+                    "no_flights", "No bookable flight was found for this option."
+                )
     # Flight groups come first in the plan, one per origin in this same order.
     groups = [
         group
         for index, group in enumerate(groups)
         if not (index < len(origins) and index in fares)
+    ]
+    # A city with a live hotel needs no web search for its hotel.
+    found_hotels = {f"cities.{index}.hotel_name" for index in offers}
+    groups = [
+        group
+        for group in groups
+        if not (group.fields and group.fields[0].id in found_hotels)
     ]
     fare_fields: list[VerifiedField] = []
     for index, (query, fare) in fares.items():
@@ -863,13 +1071,19 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         public_sources.append(source)
         fare_fields += _fare_fields(index, fare, source)
 
-    for group in groups:
+    async def run(group: SearchGroup) -> list[ResearchSource]:
         extra = (
             {"include_domains": search_hosts(settings.booking_domains)}
             if group.booking_only
             else {}
         )
         found, _ = await search_sources(group.query, settings, cost=cost, **extra)
+        return found
+
+    # The searches do not depend on each other, so they run together. Their
+    # results are then read in plan order, which keeps source ids stable.
+    found_by_group = await asyncio.gather(*(run(group) for group in groups))
+    for group, found in zip(groups, found_by_group, strict=True):
         for source in found:
             if group.country and describes_other_country(source, group.country):
                 continue
@@ -896,12 +1110,16 @@ async def research(request: ResearchRequest, settings: Settings) -> ResearchResu
         for group in groups
         for spec in group.fields
     ]
-    hotel_links, hotel_sources = await _apply_hotel_sources(
-        request, settings, fields, public_sources
-    )
+    fields += _hotel_placeholders(request, offers, fields)
+    hotel_links, hotel_sources = _apply_hotel_sources(offers, fields, public_sources)
     return ResearchResult(
         hotel_links=hotel_links,
         hotel_sources=hotel_sources,
+        hotel_stars={
+            i: offer.star_rating
+            for i, offer in offers.items()
+            if offer.star_rating and not offer.average_sample_size
+        },
         fields=fare_fields + fields,
         sources=public_sources,
         cost=cost,
@@ -926,22 +1144,41 @@ async def _find_fares(
     cache = SearchCache(
         settings.search_cache_db, settings.search_cache_ttl_hours * 3600
     )
-    provider = get_flight_provider(settings, cache)
+    # Kept fares must also be on Google Flights when proposals need live fares.
+    provider = get_flight_provider(settings, cache, verify=request.require_live_fares)
     fares: dict[int, tuple[FlightQuery, FlightFare]] = {}
     no_group: list[int] = []
+    queries: dict[int, FlightQuery] = {}
     for index, origin in enumerate(origins):
         airport = airport_for_city(origin)
         if airport is None or airport == request.arrival_airport:
             continue
-        query = FlightQuery(
+        queries[index] = FlightQuery(
             airport,
             request.arrival_airport,
             request.departure_date,
             request.return_date,
-            max(request.travelers.get(origin.casefold(), 1), 1),
+            max(
+                sum(
+                    count
+                    for city, count in request.travelers.items()
+                    if airport_for_city(city) == airport
+                ),
+                1,
+            ),
+            request.return_airport,
         )
-        fare = await provider.find(query)
-        if fare is not None and _fare_in_sar(fare) is not None:
+    # Every departure city is searched at the same time.
+    distinct = list(dict.fromkeys(queries.values()))
+    found = await asyncio.gather(*(provider.find(query) for query in distinct))
+    by_query = dict(zip(distinct, found, strict=True))
+    for index, query in queries.items():
+        fare = by_query[query]
+        if (
+            fare is not None
+            and _fare_in_sar(fare) is not None
+            and (not request.require_live_fares or complete_return_fare(fare, query))
+        ):
             fares[index] = (query, fare)
         elif query.adults > 1 and query in getattr(provider, "no_itinerary", ()):
             no_group.append(index)
@@ -949,31 +1186,125 @@ async def _find_fares(
     return fares, no_group
 
 
-async def _apply_hotel_sources(
-    request: ResearchRequest,
-    settings: Settings,
+def city_stays(request: ResearchRequest) -> list[tuple[str, date, date, str | None]]:
+    """Each city with its own check-in and check-out dates."""
+    assert request.departure_date is not None and request.return_date is not None
+    if len(request.nights) != len(request.cities):
+        return [
+            (city, request.departure_date, request.return_date, request.country)
+            for city in request.cities
+        ]
+    stays = []
+    check_in = request.departure_date
+    for city, nights in zip(request.cities, request.nights, strict=True):
+        check_out = check_in + timedelta(days=max(nights, 1))
+        stays.append((city, check_in, check_out, request.country))
+        check_in = check_out
+    return stays
+
+
+HOTEL_SEARCH_TIMEOUT_SECONDS = 20.0
+
+
+async def _bounded_hotel_offers(
+    request: ResearchRequest, settings: Settings
+) -> dict[int, HotelOffer]:
+    """A slow hotel source must not discard destinations with checked flights."""
+    try:
+        return await asyncio.wait_for(
+            _find_hotel_offers(request, settings), HOTEL_SEARCH_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        logger.info("hotel_search_timeout fallback=planning_estimate")
+        return {}
+
+
+async def _find_hotel_offers(
+    request: ResearchRequest, settings: Settings
+) -> dict[int, HotelOffer]:
+    """Each city's live hotel, by city position. None switched on, nothing found."""
+    providers = live_hotel_providers(settings)
+    if not providers or request.departure_date is None or request.return_date is None:
+        return {}
+    stays = city_stays(request)
+    found = await asyncio.gather(
+        *(
+            find_hotel(
+                providers,
+                HotelQuery(
+                    city,
+                    check_in,
+                    check_out,
+                    country,
+                    request.hotel_stars,
+                    request.strict_hotel_stars,
+                ),
+            )
+            for city, check_in, check_out, country in stays
+        )
+    )
+    return {
+        index: offer
+        for index, offer in enumerate(found)
+        if offer is not None and offer.url and offer.price_sar is not None
+    }
+
+
+def _hotel_placeholders(
+    request: ResearchRequest, offers: dict[int, HotelOffer], fields: list[VerifiedField]
+) -> list[VerifiedField]:
+    """Fields for hotels whose web search was skipped, filled in just after."""
+    known = {item.field_id for item in fields}
+    extra: list[VerifiedField] = []
+    for index in offers:
+        for field_id, category in (
+            (f"cities.{index}.hotel_name", "hotel_name"),
+            (f"cities.{index}.hotel_price_per_night", "hotel_price"),
+        ):
+            if field_id not in known:
+                extra.append(
+                    VerifiedField(
+                        field_id=field_id,
+                        category=category,
+                        value=None,
+                        status="Not available",
+                        evidence=[],
+                    )
+                )
+    return extra
+
+
+def _apply_hotel_sources(
+    offers: dict[int, HotelOffer],
     fields: list[VerifiedField],
     sources: list[ResearchSource],
 ) -> tuple[dict[int, str], dict[int, str]]:
-    """A live source's hotel replaces the web search's. None switched on, no change."""
-    providers = live_hotel_providers(settings)
-    if not providers or request.departure_date is None or request.return_date is None:
-        return {}, {}
+    """A live source's hotel replaces the web search's."""
     links: dict[int, str] = {}
     names: dict[int, str] = {}
     by_id = {item.field_id: position for position, item in enumerate(fields)}
-    for index, city in enumerate(request.cities):
-        offer = await find_hotel(
-            providers,
-            HotelQuery(city, request.departure_date, request.return_date),
-        )
-        if offer is None or not offer.url or offer.price_sar is None:
-            continue
+    for index, offer in sorted(offers.items()):
+        assert offer.url is not None and offer.price_sar is not None
         source = ResearchSource(
             id=max((item.id for item in sources), default=0) + 1,
             title=f"{offer.source}: {offer.name}"[:300],
-            url=offer.url,
-            content=f"{offer.name}: {offer.price_sar} SAR, {offer.source}.",
+            url=offer.source_url or offer.url,
+            content=(
+                f"{offer.name}: {offer.price_sar} SAR per room per night, "
+                f"{offer.source}."
+            )
+            + (
+                f" Reference dates {offer.reference_dates[0]} to "
+                f"{offer.reference_dates[1]}; requested-date availability "
+                "and price are not confirmed."
+                if offer.reference_dates
+                else ""
+            )
+            + (
+                f" Suggested hotel to search: {offer.suggested_name}."
+                if offer.suggested_name
+                else ""
+            ),
         )
         sources.append(source)
         evidence = [Evidence(source_id=source.id, quote=source.content)]
@@ -983,15 +1314,24 @@ async def _apply_hotel_sources(
             fields[by_id[name_id]] = VerifiedField(
                 field_id=name_id,
                 category="hotel_name",
-                value=offer.name,
-                status="Sourced",
-                evidence=evidence,
+                value=offer.suggested_name
+                or (None if offer.average_sample_size else offer.name),
+                status="Unconfirmed"
+                if offer.suggested_name
+                else "Not available"
+                if offer.average_sample_size
+                else "Sourced",
+                evidence=evidence
+                if offer.suggested_name or not offer.average_sample_size
+                else [],
             )
             fields[by_id[price_id]] = VerifiedField(
                 field_id=price_id,
                 category="hotel_price",
                 value=str(offer.price_sar),
-                status="Estimated",
+                # Hotel prices change by the hour, so they stay Estimated even
+                # when a seller showed this exact price (schema rule).
+                status="Unconfirmed" if offer.reference_dates else "Estimated",
                 evidence=evidence,
                 source_amount=offer.price_sar,
                 source_currency="SAR",
@@ -1007,7 +1347,7 @@ def sar_amount(value: str | None, currency: str | None) -> Decimal | None:
         amount = Decimal(value or "")
     except InvalidOperation:
         return None
-    if amount <= 0:
+    if not amount.is_finite() or amount <= 0:
         return None
     if currency == "SAR":
         return amount.quantize(Decimal("0.01"))
@@ -1025,7 +1365,7 @@ def _fare_fields(
     evidence = [Evidence(source_id=source.id, quote=source.content)]
     amount_sar = _fare_in_sar(fare)
     # Only a checked fare in SAR is Sourced; anything else remains an estimate.
-    is_live = fare.currency == "SAR" and fare.verified
+    is_live = fare.currency == "SAR" and fare.verified and fare.price_source == "seller"
     return [
         VerifiedField(
             field_id=f"flights.{index}.airline",

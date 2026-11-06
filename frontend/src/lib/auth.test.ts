@@ -41,11 +41,21 @@ describe('account authentication', () => {
   it('does not report a malformed session response as successful authentication', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')))
     const { client, auth } = fakeClient({ data: { session: null }, error: null })
-    await expect(submitCredentials(client, 'signin', 'user@example.test', 'password', 'http://localhost:5173')).rejects.toMatchObject({ code: 'backend_unavailable' })
+    await expect(submitCredentials(client, 'signin', 'user@example.test', 'password', 'http://localhost:5173')).rejects.toMatchObject({ code: 'service_unavailable' })
     expect(auth.setSession).not.toHaveBeenCalled()
   })
-  it.each(['invalid_credentials', 'email_not_confirmed', 'over_request_rate_limit', 'over_email_send_rate_limit', 'weak_password', 'login_locked', 'login_in_progress', 'backend_unavailable'])('gives a useful message for %s', (code) => {
+  it.each(['invalid_credentials', 'email_not_confirmed', 'over_request_rate_limit', 'over_email_send_rate_limit', 'weak_password', 'login_locked', 'login_in_progress', 'backend_unavailable', 'service_unavailable', 'invalid_email'])('gives a useful message for %s', (code) => {
     expect(authErrorMessage({ code })).not.toContain('could not be completed')
+  })
+  it('tells a wrong password apart from an unreachable or failing server', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('offline')))
+    const { client } = fakeClient({ data: { session: null }, error: null })
+    await expect(submitCredentials(client, 'signin', 'user@example.test', 'pw', 'http://x')).rejects.toMatchObject({ code: 'backend_unavailable' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"detail":"x"}', { status: 503 })))
+    await expect(submitCredentials(client, 'signin', 'user@example.test', 'pw', 'http://x')).rejects.toMatchObject({ code: 'service_unavailable' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"detail":[]}', { status: 422 })))
+    await expect(submitCredentials(client, 'signin', 'user@example.test', 'pw', 'http://x')).rejects.toMatchObject({ code: 'invalid_email' })
+    expect(authErrorMessage({ code: 'invalid_credentials' })).toBe('The email or password is incorrect.')
   })
   it('does not expose arbitrary upstream error details', () => {
     expect(authErrorMessage(new Error('sensitive details'))).not.toContain('sensitive details')

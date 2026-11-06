@@ -46,17 +46,18 @@ def refresh(check, adults: int, ceiling: str = "100000"):
     )
 
 
-def test_refresh_shows_the_cheaper_alone_price_and_budgets_on_it(tmp_path) -> None:
+def test_refresh_keeps_party_price_despite_cheaper_solo_search(tmp_path) -> None:
     fake = ByParty(group=2000, alone=900)
-    check = checker(tmp_path, fake, ignav_price_scope="total")
+    # Meals left out here so the figures below stay about flights and the stay.
+    check = checker(tmp_path, fake, ignav_price_scope="total", meals_per_day_sar=0)
 
     # 1000 for the stay plus 900 fits. The group's 1000 per person would not.
     result = refresh(check, 2, ceiling="1950")
 
-    assert result.flights.price_per_person.amount_sar == Decimal("900.00")
-    assert result.flights.fare_basis == "solo"
+    assert result.flights.price_per_person.amount_sar == Decimal("1000.00")
+    assert result.flights.fare_basis == "group"
     assert result.flights.solo_saving_sar == Decimal("100.00")
-    assert result.budget_status != "over_group_budget"
+    assert result.budget_status == "over_group_budget"
     assert [item.adults for item in fake.searches] == [2, 1]
 
 
@@ -147,11 +148,11 @@ def _generation_check(adults: int, body: dict):
     return asyncio.run(provider._cheaper_alone(_fare(), query)), calls
 
 
-def test_generation_takes_the_cheaper_alone_fare() -> None:
+def test_generation_does_not_subtract_unverified_solo_search_savings() -> None:
     fare, calls = _generation_check(2, {"itineraries": [_numbered(900)]})
 
     assert calls[0].adults == 1
-    assert Decimal(fare.amount) == Decimal(900)
+    assert Decimal(fare.amount) == Decimal(1000)
     assert Decimal(fare.solo_saving) == Decimal(100)
 
 

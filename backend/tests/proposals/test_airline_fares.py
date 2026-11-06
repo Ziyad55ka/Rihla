@@ -1,5 +1,6 @@
 """Each direction's price, and the airline fare table."""
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
@@ -132,7 +133,9 @@ def test_stop_airports_come_from_the_segments() -> None:
         ],
     }
     fare = fare_from_itinerary(
-        {**CHOICE, "outbound": connecting}, {"booking_options": [WHOLE]}, QUERY
+        {**CHOICE, "outbound": connecting},
+        {"booking_options": [WHOLE]},
+        replace(QUERY, destination_airport="CDG"),
     )
 
     assert fare.legs[0].stop_airports == ("BAH",)

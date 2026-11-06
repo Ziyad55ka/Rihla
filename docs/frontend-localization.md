@@ -11,3 +11,5 @@ For dynamic text use named placeholders: `t('Saved {date}', { date: formattedDat
 `PageMotion` reveals sections/cards when they enter the viewport and observes content added by navigation. CSS adds gentle background movement, floating travel artwork, button feedback and dialog entry. Controls remain immediately usable. The user's `prefers-reduced-motion` setting disables these effects and reveals all content.
 
 Browser review: English/Arabic landing and Arabic signup checked in local headless Edge at 1440px and 375px, including navbar adjacency, overflow, language persistence, scroll reveals and reduced-motion behavior. This review did not submit credentials or change hosted data.
+
+Arabic font: Thmanyah Sans is local only and never committed (its license forbids hosting the files). Each developer downloads it from https://thmanyah.com and places the Light, Regular, Medium and Bold woff2 files in `frontend/public/fonts/thmanyah/`; without them, Arabic falls back to IBM Plex Sans Arabic.

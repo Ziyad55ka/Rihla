@@ -3,6 +3,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def clean_proposal_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    # Retries never wait in tests.
+    from app.services import flight_prices
+
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(flight_prices, "_sleep", no_wait)
     # Tests must never count towards the real usage files, or reach an outside service.
     monkeypatch.setenv("FLIGHT_USAGE_DB", str(tmp_path / "flight-usage.sqlite3"))
     monkeypatch.setenv("PRICE_ACCURACY_DB", str(tmp_path / "price-accuracy.sqlite3"))
@@ -14,6 +21,7 @@ def clean_proposal_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
         "PROPOSALS_DEMO_MODE",
         "PROPOSALS_DEMO_FILE",
         "IGNAV_API_KEY",
+        "SERPAPI_API_KEY",
         "FLIGHT_PRICE_PROVIDER",
         "MIN_BUDGET_SAR_PER_DAY",
         "MAX_GEMINI_CALLS_PER_GENERATION",
@@ -29,3 +37,13 @@ def clean_proposal_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
         "SEARCH_CACHE_TTL_HOURS",
     ):
         monkeypatch.delenv(variable, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def clean_generation_progress():
+    """Progress lives in memory, so one test must not see another's."""
+    from app.services import generation_progress
+
+    generation_progress._progress.clear()
+    yield
+    generation_progress._progress.clear()

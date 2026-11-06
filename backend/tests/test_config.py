@@ -14,6 +14,16 @@ def test_optional_supabase_values_can_be_missing() -> None:
     assert settings.app_env == "development"
 
 
+def test_extraction_model_can_be_separate_without_changing_planner():
+    settings = Settings(
+        _env_file=None,
+        gemini_model="gemini-3.6-flash",
+        gemini_extractor_model="gemini-3.5-flash-lite",
+    )
+    assert settings.for_extraction().gemini_model == "gemini-3.5-flash-lite"
+    assert settings.gemini_model == "gemini-3.6-flash"
+
+
 def test_settings_load_a_dotenv_independently_of_cwd(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

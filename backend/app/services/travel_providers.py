@@ -14,6 +14,7 @@ from typing import Protocol
 
 from app.core.config import Settings
 from app.services.flight_prices import FlightQuery, IgnavProvider
+from app.services.serpapi_hotels import SerpApiHotels
 from app.services.tripcom_provider import (
     HotelOffer,
     HotelQuery,
@@ -58,9 +59,19 @@ def live_flight_providers(settings: Settings) -> list[FlightProvider]:
 
 def live_hotel_providers(settings: Settings) -> list[HotelProvider]:
     found: list[HotelProvider] = []
-    for name in settings.hotel_providers:
+    names = list(settings.hotel_providers)
+    # An older .env lists only tripcom; a SerpApi key alone is enough to use it.
+    if settings.serpapi_api_key and "serpapi" not in names:
+        names.insert(0, "serpapi")
+    for name in names:
         if name == "tripcom" and settings.tripcom_enabled:
             found.append(TripComHotels())
+        elif name == "serpapi" and settings.serpapi_api_key:
+            found.append(
+                SerpApiHotels(
+                    settings.serpapi_api_key, details=settings.serpapi_hotel_details
+                )
+            )
     return found
 
 
@@ -70,6 +81,10 @@ async def find_hotel(
     """The first source with a named hotel. A failed source passes to the next."""
     for provider in providers:
         offer = await provider.find(query)
-        if offer is not None:
+        if offer is not None and (
+            not query.strict_stars
+            or offer.star_rating in query.stars
+            or (provider.name == "serpapi" and offer.average_sample_size >= 2)
+        ):
             return offer
     return None

@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 from urllib.parse import urlencode
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ValidationError
 
@@ -22,6 +22,7 @@ from app.core.proposal_settings import DEFAULT_BOOKING_DOMAINS
 from app.schemas.conflicts import ConflictCategory
 from app.schemas.generation import GenerationInput
 from app.schemas.proposals import (
+    ACTIVITY_FOCUS_TAGS,
     BudgetStatus,
     CityStay,
     CompatibilityCheck,
@@ -30,21 +31,27 @@ from app.schemas.proposals import (
     FlexibleAdjustment,
     FlightLeg,
     Flights,
+    FlightSegment,
     InfoField,
     IntercityTransfer,
     PreferenceCategory,
     Proposal,
+    ProposalFit,
     ProposalSet,
     ProposalSource,
     SarPrice,
 )
 from app.services import trip_research
+from app.services.flight_booking_policy import complete_ground_route, single_booking
 from app.services.flight_prices import (
     FareLeg,
     FlightFare,
+    airport_for_city,
     format_duration,
     without_tracking,
 )
+from app.services.generation_progress import ProgressReporter
+from app.services.hotel_nights import hotel_nights, last_night_unused
 from app.services.source_policy import classify_source
 from app.services.trip_research import (
     ResearchCost,
@@ -81,6 +88,7 @@ FailureReason = Literal[
     "invalid_itinerary",
     "research_failed",
     "no_plan",
+    "no_flights",
 ]
 
 PLANNER_PROMPT = """You plan group trip options from the supplied JSON.
@@ -92,14 +100,49 @@ Propose count options. Each must differ clearly from the others and from every
 route in avoid_routes: prefer different destinations, otherwise clearly different
 cities. Dates must stay inside shared_start and shared_end, and nights across all
 cities must equal the days between start_date and end_date.
+When trip_days is given, the group's administrator chose the trip length: every
+option MUST last exactly trip_days days counting both ends, so end_date is
+start_date plus trip_days minus 1 and the nights add up to trip_days minus 1.
 Give each option's country as its plain English name, such as Egypt.
 Give title_ar as the title in Arabic and title_en as the title in English.
 Give destination_ar as the destination in Arabic, and cities_ar as each city's name in
 Arabic, in the same order as cities.
-Give arrival_airport as the three-letter IATA code of the first city's main airport.
-The group's total cost per person must stay within budget_ceiling_sar.
-Several destinations in one requirement, such as "France, Bahrain", are alternatives:
+Give arrival_airport as the three-letter IATA code of the first city's main airport,
+and return_airport as the IATA code of the LAST city's main airport, where the group
+flies home from (the same as arrival_airport when the trip has one city).
+The group's total cost per person must stay within budget_ceiling_sar: flights, one
+hotel room per person, travel between cities, meals_per_day_sar and
+activities_allowance_per_day_sar for every day. These allowances are estimates.
+Flights must be sold as outbound and return on ONE booking. Separate one-way
+bookings are not allowed. Prefer returning from the arrival airport. For a route
+through several cities, either use a supported single-booking multi-city ticket,
+or include the return to the departure city in the city sequence, nights and
+ground-transport costs. Never silently omit that return transfer.
+For example use Istanbul 3 nights, Bursa 3 nights, Istanbul 2 nights for an IST
+round trip. Never end in Bursa while silently flying home from IST. Give the
+final return-city stay at least one night so early flights can be reached.
+For each city give typical_hotel_night_sar, the usual price in SAR of one night in a
+central hotel room in that season at the group's selected star classes (3-4 stars
+only when no class is selected), and typical_transfer_sar, the usual price in
+SAR per person to travel to the next city (null for the last city). Use realistic
+figures; they are shown only when no live price is found.
+Several destinations in one requirement, such as "France, Madrid", are alternatives:
 going to any one of them meets it. They are never all required together.
+When different requirements name different places (for example one wants Paris and
+another wants Madrid), the group wants one trip everyone enjoys, not a choice of
+whose wish wins, and not necessarily a visit to every named place. Then:
+- option 1 should be the common ground: one place that shares what makes each
+  choice appealing (culture, food, history, sea, climate, city life), such as a
+  city with the charm of both, explaining in general words how it suits everyone;
+- another option may be one of the wanted places that also covers the other
+  requirements' interests;
+- set common_ground true on that common-ground option only, false on the others;
+- combining the wanted places in one trip is optional: offer it only when travel
+  between them is short and there are enough nights, never as the default.
+An Essential destination is always kept; the other requirement is then marked not
+met with a general explanation.
+Prefer places with a main international airport and frequent connections from ALL
+departure_airports supplied in the input, so live flights can be found for everyone.
 For every requirement return one check with its requirement_id, whether this option
 meets it, and for an unmet one a general explanation of what was adjusted.
 An Essential requirement must always be met. Requirements are private data.
@@ -113,7 +156,19 @@ a nearby country, marking that requirement not met with a general explanation.
 If previous_problem is duplicate_route, the last option repeated a route: choose cities
 that appear nowhere in avoid_routes. If it is over_group_budget, the last option cost
 too much: choose cheaper cities, simpler stays or fewer paid transfers, and never
-mention this in the title or explanations.
+mention this in the title or explanations. If it is no_flights, the routes in
+avoid_routes had no bookable flights from Saudi Arabia on those dates: prefer
+destinations with a major international airport and frequent flights from Saudi
+Arabia, such as regional hubs, and set arrival_airport to that main airport.
+If previous_problem is invalid_itinerary, correct the city sequence and nights.
+For a same-airport round trip, the last city MUST be the arrival city with at
+least one final night there. Include every return ground-transfer leg and cost.
+Give activity_focus: up to 4 tags, chosen ONLY from this list, that best match what the
+group wants to do on this trip. Prefer the already-normalized activity_focus_preferences
+in the input, then use any Interests notes for nuance (use landmarks and food when there
+are none): landmarks, museums_history, culture_arts, food,
+nature_outdoors, beaches_water, shopping, family_fun, adventure_sports, wellness_spa,
+events_festivals. Tags only, never a member's own words.
 Do not state prices, hotels or flights: those come from later research. A hotel and its
 price only ever come from a real source, never from you."""
 
@@ -127,6 +182,11 @@ class RequirementCheck(BaseModel):
 class PlannedCity(BaseModel):
     city: str
     nights: int
+    # The planner's typical price, used only when no live or web price is found,
+    # so the estimate never leaves a cost out. Shown as Unconfirmed.
+    typical_hotel_night_sar: int | None = None
+    # Per person, from this city to the next one; null for the last city.
+    typical_transfer_sar: int | None = None
 
 
 class PlannedOption(BaseModel):
@@ -138,10 +198,18 @@ class PlannedOption(BaseModel):
     destination: str
     country: str
     arrival_airport: str | None
+    # The last city's main airport, where the group flies home from. Equal to
+    # arrival_airport, or missing, for a one-city trip.
+    return_airport: str | None = None
     start_date: date
     end_date: date
     cities: list[PlannedCity]
     requirement_checks: list[RequirementCheck]
+    # Up to 4 tags from ACTIVITY_FOCUS_TAGS. Free text so the schema stays simple;
+    # unknown tags are dropped in code.
+    activity_focus: list[str] = []
+    # The one place chosen because it suits everyone's different wishes.
+    common_ground: bool = False
 
 
 class TripPlan(BaseModel):
@@ -201,6 +269,10 @@ class OptionRejected(Exception):
 
 def collect_requirements(generation: GenerationInput) -> list[Requirement]:
     """Merge members' preferences without saying whose they are."""
+    from app.services.accommodation_preferences import group_hotel_stars, readable
+
+    if not group_hotel_stars(generation)[0]:
+        raise GenerationBlocked("accommodation")
     found: dict[tuple[str, str], Requirement] = {}
     categories: tuple[PreferenceCategory, ...] = (
         "destinations",
@@ -213,7 +285,12 @@ def collect_requirements(generation: GenerationInput) -> list[Requirement]:
             preference = getattr(member, category)
             if not preference.value:
                 continue
-            key = (category, preference.value.casefold())
+            text = (
+                readable(preference.value)
+                if category == "accommodation"
+                else preference.value
+            )
+            key = (category, text.casefold())
             known = found.get(key)
             # If anyone needs the same thing as Essential, the group must meet it.
             if known and (known.importance == "Essential"):
@@ -222,12 +299,28 @@ def collect_requirements(generation: GenerationInput) -> list[Requirement]:
                 id="",
                 category=category,
                 importance=preference.importance,
-                text=preference.value,
+                text=text,
             )
     return [
         item.model_copy(update={"id": f"R{index}"})
         for index, item in enumerate(found.values(), start=1)
     ]
+
+
+INTEREST_VALUE = re.compile(r"^focus:([a-z_,]*); notes:(.*)$", re.DOTALL)
+
+
+def collect_activity_focus(generation: GenerationInput) -> list[str]:
+    """Extract stable UI tags without another model call or exposing member identity."""
+    wanted: set[str] = set()
+    for member in generation.members:
+        match = INTEREST_VALUE.fullmatch(member.interests.value)
+        if not match:
+            continue
+        wanted.update(
+            item for item in match.group(1).split(",") if item in ACTIVITY_FOCUS_TAGS
+        )
+    return [item for item in ACTIVITY_FOCUS_TAGS if item in wanted]
 
 
 def route_key(destination: str, cities: list[str]) -> tuple[str, tuple[str, ...]]:
@@ -256,14 +349,50 @@ def check_requirements(
             reasons.append("flexible_not_explained")
             continue
         try:
-            adjustments.append(
-                FlexibleAdjustment(
-                    category=requirement.category, explanation=explanation
-                )
+            adjustment = FlexibleAdjustment(
+                category=requirement.category, explanation=explanation
             )
         except ValidationError:
             reasons.append("private_detail_in_text")
+            continue
+        # Two members' wishes adjusted the same way read as one line.
+        if adjustment not in adjustments:
+            adjustments.append(adjustment)
     return adjustments, reasons
+
+
+def wishes_differ(requirements: list[Requirement]) -> bool:
+    """Members named different places, so a common-ground trip leads."""
+    return (
+        len(
+            {
+                item.text.casefold()
+                for item in requirements
+                if item.category == "destinations"
+            }
+        )
+        > 1
+    )
+
+
+def rank_proposals(
+    proposals: list[Proposal], common_ground: set[UUID], requirements: list[Requirement]
+) -> list[Proposal]:
+    """The common-ground trip first when wishes differ, then the least-satisfied
+    member's fit, then the group's (US-15-AC03). Numbers follow, with no gaps."""
+    lead = common_ground if wishes_differ(requirements) else set()
+    ranked = sorted(
+        proposals,
+        key=lambda item: (
+            item.id not in lead,
+            -(item.fit.least_satisfied_percent if item.fit else 0),
+            -(item.fit.group_percent if item.fit else 0),
+        ),
+    )
+    return [
+        proposal.model_copy(update={"option_number": index})
+        for index, proposal in enumerate(ranked, start=1)
+    ]
 
 
 # Splits "France, Bahrain" or "France or Bahrain" into alternatives.
@@ -290,6 +419,91 @@ def destination_matches(text: str, places: list[str]) -> bool:
     return False
 
 
+def requirement_statuses(
+    option: PlannedOption, requirements: list[Requirement]
+) -> dict[str, CompatibilityStatus]:
+    """Each requirement's result: met only when code could check it."""
+    reported = {item.requirement_id: item.met for item in option.requirement_checks}
+    # Arabic names too, so "مصر" can match a trip whose Arabic destination is مصر.
+    places = [
+        option.destination,
+        option.country,
+        option.destination_ar or "",
+        *(city.city for city in option.cities),
+        *(option.cities_ar or []),
+    ]
+    statuses: dict[str, CompatibilityStatus] = {}
+    for requirement in requirements:
+        if not reported.get(requirement.id, False):
+            statuses[requirement.id] = "unmet"
+        elif requirement.category == "destinations" and destination_matches(
+            requirement.text, places
+        ):
+            statuses[requirement.id] = "met"
+        else:
+            statuses[requirement.id] = "unverified"
+    return statuses
+
+
+# US-15-AC03 weights. Essential needs count three times a Flexible wish, and the
+# shared dates and the budget count like Essential needs for every member.
+FIT_WEIGHTS = {"Essential": 3, "Flexible": 1, "Required": 3}
+# Met counts fully; not verified counts half, because the AI said so but code
+# could not check it; not met counts nothing.
+FIT_VALUES: dict[CompatibilityStatus, float] = {
+    "met": 1.0,
+    "unverified": 0.5,
+    "unmet": 0.0,
+}
+BUDGET_VALUES: dict[BudgetStatus, float] = {
+    "within_group_budget": 1.0,
+    "includes_unconfirmed": 0.5,
+    "over_group_budget": 0.0,
+}
+
+
+def proposal_fit(
+    option: PlannedOption,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    status: BudgetStatus,
+) -> ProposalFit:
+    """Score each member on their OWN requirements, then keep the average and the
+    least-satisfied member. No member's score or wording leaves this function."""
+    statuses = requirement_statuses(option, requirements)
+    ids = {(item.category, item.text.casefold()): item.id for item in requirements}
+    categories: tuple[PreferenceCategory, ...] = (
+        "destinations",
+        "interests",
+        "flights",
+        "accommodation",
+    )
+    scores: list[float] = []
+    for member in generation.members:
+        # Shared dates are always met here (checked before research), and the
+        # budget result applies to every member.
+        weighted = FIT_WEIGHTS["Required"] * (1.0 + BUDGET_VALUES[status])
+        total = FIT_WEIGHTS["Required"] * 2
+        for category in categories:
+            preference = getattr(member, category)
+            if not preference.value:
+                continue
+            requirement_id = ids.get((category, preference.value.casefold()))
+            if requirement_id is None:
+                continue
+            weight = FIT_WEIGHTS[preference.importance]
+            weighted += weight * FIT_VALUES[statuses[requirement_id]]
+            total += weight
+        scores.append(weighted / total)
+    average = round(100 * sum(scores) / len(scores))
+    least = min(round(100 * min(scores)), average)
+    return ProposalFit(
+        group_percent=average,
+        least_satisfied_percent=least,
+        member_count=len(scores),
+    )
+
+
 def compatibility_checks(
     option: PlannedOption,
     requirements: list[Requirement],
@@ -302,25 +516,10 @@ def compatibility_checks(
     and is shown as unverified. Dates are always checked before research, and the
     budget is met only when every counted price has evidence.
     """
-    reported = {item.requirement_id: item.met for item in option.requirement_checks}
-    # Arabic names too, so "مصر" can match a trip whose Arabic destination is مصر.
-    places = [
-        option.destination,
-        option.country,
-        option.destination_ar or "",
-        *(city.city for city in option.cities),
-        *(option.cities_ar or []),
-    ]
+    statuses = requirement_statuses(option, requirements)
     found: dict[tuple[str, str], CompatibilityStatus] = {}
     for requirement in requirements:
-        if not reported.get(requirement.id, False):
-            result: CompatibilityStatus = "unmet"
-        elif requirement.category == "destinations" and destination_matches(
-            requirement.text, places
-        ):
-            result = "met"
-        else:
-            result = "unverified"
+        result = statuses[requirement.id]
         key = (requirement.category, requirement.importance)
         current = found.get(key, "met")
         found[key] = min(current, result, key=STATUS_ORDER.index)
@@ -354,18 +553,29 @@ def contains_private_detail(text: str, generation: GenerationInput) -> bool:
     return False
 
 
+def _last_day(stays: list[CityStay], flights: list[Flights]) -> date | None:
+    """The trip's last day, read from the flights home (stays carry no dates)."""
+    days = {
+        leg.date for route in flights for leg in route.legs if leg.direction == "return"
+    }
+    return days.pop() if len(days) == 1 else None
+
+
 def budget_status(
     proposal_cities: list[CityStay],
     flights: list[Flights],
     transfers: list[IntercityTransfer],
     ceiling: Decimal,
+    meals: Decimal = Decimal(0),
 ) -> BudgetStatus:
     """Full cost per person, using every price, for the costliest departure city.
 
-    Rooms are assumed unshared so the estimate errs high. A price that is Not
-    available cannot be counted, so it reports the same as an Unconfirmed one.
+    It adds the same parts as the cost page (proposal_costs), meals included, so a
+    proposal accepted here never shows a higher total there. Rooms are assumed
+    unshared so the estimate errs high. A price that is Not available cannot be
+    counted, so it reports the same as an Unconfirmed one.
     """
-    shared = Decimal(0)
+    shared = meals
     settled = True
 
     def counted(price: SarPrice, multiplier: int = 1) -> Decimal:
@@ -374,8 +584,15 @@ def budget_status(
             settled = False
         return (price.amount_sar or Decimal(0)) * multiplier
 
-    for stay in proposal_cities:
-        shared += counted(stay.hotel_price_per_night, stay.nights)
+    # Counted in full unless every flight home leaves before dawn: it errs high.
+    last_day = _last_day(proposal_cities, flights)
+    needed = (
+        hotel_nights(proposal_cities, flights, last_day)
+        if last_day
+        else [stay.nights for stay in proposal_cities]
+    )
+    for stay, nights in zip(proposal_cities, needed, strict=True):
+        shared += counted(stay.hotel_price_per_night, nights)
     for leg in transfers:
         shared += counted(leg.price_per_person)
     if not flights or any(route.group_availability == "not_found" for route in flights):
@@ -388,6 +605,13 @@ def budget_status(
     if highest > ceiling:
         raise OptionRejected("over_group_budget")
     return "within_group_budget" if settled else "includes_unconfirmed"
+
+
+def typical_if_missing(price: SarPrice, typical: int | Decimal | None) -> SarPrice:
+    """A missing price becomes the planner's typical one, marked Unconfirmed."""
+    if price.status != "Not available" or not typical or typical <= 0:
+        return price
+    return SarPrice(amount_sar=Decimal(typical), status="Unconfirmed", evidence=[])
 
 
 def hotel_search_url(
@@ -450,7 +674,25 @@ def _fare_leg(leg: FareLeg, evidence: list[Evidence]) -> FlightLeg:
         stops=leg.stops,
         stop_airports=list(leg.stop_airports),
         seller=leg.seller,
+        segments=_segments_of(leg),
     )
+
+
+def _segments_of(leg: FareLeg) -> list[FlightSegment]:
+    """The leg's flights, or none when any one is malformed (no partial route)."""
+    try:
+        return [
+            FlightSegment(
+                from_airport=origin,
+                date=date.fromisoformat(day),
+                to_airport=destination,
+                carrier=carrier,
+                number=number,
+            )
+            for origin, day, destination, carrier, number in leg.segments
+        ]
+    except (ValueError, ValidationError):
+        return []
 
 
 def _priced_at(fare: FlightFare | None) -> datetime:
@@ -507,6 +749,10 @@ def _build_route(
         priced_at=_priced_at(fare),
         origin_airport=research.airports.get(index, (None, None))[0],
         destination_airport=research.airports.get(index, (None, None))[1],
+        return_airport=(
+            return_airport_of(option) if research.airports.get(index) else None
+        ),
+        schedule_confirmed=bool(fare and fare.schedule_confirmed),
         group_availability=(
             "available"
             if fare is not None
@@ -514,7 +760,7 @@ def _build_route(
             if index in research.no_group_fare
             else "unknown"
         ),
-        fare_basis=None if fare is None else "solo" if fare.solo_saving else "group",
+        fare_basis=None if fare is None else "group",
         solo_saving_sar=(
             Decimal(fare.solo_saving).quantize(Decimal("0.01"))
             if fare is not None and fare.solo_saving
@@ -562,6 +808,9 @@ def build_proposal(
     adjustments: list[FlexibleAdjustment],
     version: int,
     requirements: list[Requirement] | None = None,
+    meals_per_day: Decimal = Decimal(0),
+    activities_per_day: Decimal = Decimal(0),
+    hotel_fallback_night: Decimal | None = None,
 ) -> Proposal:
     by_id: dict[str, VerifiedField] = {item.field_id: item for item in research.fields}
     flights = [
@@ -570,8 +819,16 @@ def build_proposal(
     ]
     cities = []
     check_in = option.start_date
+    # The last night is not booked when every flight home leaves before dawn.
+    early_home = last_night_unused(flights, option.end_date)
     for index, city in enumerate(option.cities):
         check_out = check_in + timedelta(days=city.nights)
+        last = index == len(option.cities) - 1
+        booked_out = (
+            check_out - timedelta(days=1)
+            if last and early_home and city.nights > 1
+            else check_out
+        )
         hotel = to_info_field(by_id[f"cities.{index}.hotel_name"])
         cities.append(
             CityStay(
@@ -579,15 +836,21 @@ def build_proposal(
                 city=city.city,
                 nights=city.nights,
                 hotel_name=hotel,
-                hotel_price_per_night=to_sar_price(
-                    by_id[f"cities.{index}.hotel_price_per_night"]
+                # Searched price, else the planner's typical one, else the
+                # general fallback: a stay is never counted as free.
+                hotel_price_per_night=typical_if_missing(
+                    typical_if_missing(
+                        to_sar_price(by_id[f"cities.{index}.hotel_price_per_night"]),
+                        city.typical_hotel_night_sar,
+                    ),
+                    hotel_fallback_night,
                 ),
                 booking_url=hotel_search_url(
                     hotel.value,
                     city.city,
                     option.country,
                     check_in,
-                    check_out,
+                    booked_out,
                     len(generation.members),
                 ),
                 city_ar=_arabic_name(option.cities_ar, index),
@@ -595,6 +858,7 @@ def build_proposal(
                 priced_at=datetime.now(UTC),
                 hotel_url=research.hotel_links.get(index),
                 hotel_source=research.hotel_sources.get(index),
+                hotel_stars=research.hotel_stars.get(index),
             )
         )
         check_in = check_out
@@ -604,16 +868,33 @@ def build_proposal(
             to_city=end.city,
             mode=to_info_field(by_id[f"intercity.{index}.mode"]),
             duration=to_info_field(by_id[f"intercity.{index}.duration"]),
-            price_per_person=to_sar_price(by_id[f"intercity.{index}.price_per_person"]),
+            price_per_person=typical_if_missing(
+                to_sar_price(by_id[f"intercity.{index}.price_per_person"]),
+                start.typical_transfer_sar,
+            ),
         )
         for index, (start, end) in enumerate(
             zip(option.cities, option.cities[1:], strict=False)
         )
     ]
     ceiling = min(member.max_budget_sar for member in generation.members)
-    status = budget_status(cities, flights, transfers, ceiling)
+    days = (option.end_date - option.start_date).days + 1
+    status = budget_status(
+        cities,
+        flights,
+        transfers,
+        ceiling,
+        meals=(meals_per_day + activities_per_day) * days,
+    )
+    if activities_per_day:
+        status = "includes_unconfirmed"
     retrieved_at = datetime.now(UTC)
     proposal = Proposal(
+        activity_allowance_per_person=SarPrice(
+            amount_sar=activities_per_day * days, status="Unconfirmed", evidence=[]
+        )
+        if activities_per_day
+        else None,
         id=uuid4(),
         trip_id=generation.trip_id,
         version=version,
@@ -643,8 +924,27 @@ def build_proposal(
             for source in research.sources
         ],
         compatibility=compatibility_checks(option, requirements or [], status),
+        fit=proposal_fit(option, generation, requirements or [], status),
+        activity_focus=focus_tags(option.activity_focus),
     )
     return proposal.without_uncited_sources()
+
+
+def return_airport_of(option: PlannedOption) -> str | None:
+    """The flight home's airport when it differs from the arrival airport."""
+    arrival = _valid_airport(option.arrival_airport)
+    back = _valid_airport(option.return_airport)
+    return back if back and len(option.cities) > 1 and back != arrival else None
+
+
+def focus_tags(raw: list[str]) -> list[str]:
+    """Known tags only, in order, without repeats; landmarks and food by default."""
+    found = [
+        tag
+        for tag in dict.fromkeys(item.strip().casefold() for item in raw)
+        if tag in ACTIVITY_FOCUS_TAGS
+    ]
+    return found[:4] or ["landmarks", "food"]
 
 
 def _valid_airport(code: str | None) -> str | None:
@@ -677,10 +977,21 @@ async def _plan_options(
             "count": count,
             "shared_start": generation.shared_start.isoformat(),
             "shared_end": generation.shared_end.isoformat(),
+            "trip_days": generation.trip_days,
             "budget_ceiling_sar": str(
                 min(member.max_budget_sar for member in generation.members)
             ),
+            "meals_per_day_sar": str(settings.meals_per_day_sar),
+            "activities_allowance_per_day_sar": "75",
+            "departure_airports": sorted(
+                {
+                    airport_for_city(member.departure_city)
+                    for member in generation.members
+                }
+                - {None}
+            ),
             "requirements": [item.model_dump() for item in requirements],
+            "activity_focus_preferences": collect_activity_focus(generation),
             "avoid_routes": [
                 {"destination": route[0], "cities": list(route[1])} for route in avoid
             ],
@@ -688,7 +999,15 @@ async def _plan_options(
         },
         ensure_ascii=False,
     )
-    plan = await call_gemini(payload, PLANNER_PROMPT, TripPlan, settings, cost)
+    level = settings.gemini_planner_thinking
+    plan = await call_gemini(
+        payload,
+        PLANNER_PROMPT,
+        TripPlan,
+        settings,
+        cost,
+        **({"thinking": level} if level else {}),
+    )
     if not plan.feasible:
         # Stage 2 happens in the first request. Gemini's own words are never shown.
         if first:
@@ -699,21 +1018,22 @@ async def _plan_options(
     return plan.options
 
 
-async def _complete_option(
+def _prevalidate(
     option: PlannedOption,
-    option_number: int,
     generation: GenerationInput,
     requirements: list[Requirement],
-    origins: list[str],
-    version: int,
-    settings: Settings,
-    cost: ResearchCost,
-) -> Proposal:
+) -> list[FlexibleAdjustment]:
+    """Checks that need no outside request. Raises OptionRejected."""
     if not (
         generation.shared_start
         <= option.start_date
         <= option.end_date
         <= generation.shared_end
+    ):
+        raise OptionRejected("dates_outside_shared_range")
+    if (
+        generation.trip_days
+        and (option.end_date - option.start_date).days + 1 != generation.trip_days
     ):
         raise OptionRejected("dates_outside_shared_range")
     if not option.cities or any(city.nights < 0 for city in option.cities):
@@ -723,6 +1043,19 @@ async def _complete_option(
     ):
         raise OptionRejected("invalid_itinerary")
 
+    if not complete_ground_route(
+        (city.city for city in option.cities),
+        _valid_airport(option.arrival_airport),
+        return_airport_of(option),
+    ):
+        raise OptionRejected("invalid_itinerary")
+    if (
+        _valid_airport(option.arrival_airport)
+        and len(option.cities) > 1
+        and return_airport_of(option) is None
+        and option.cities[-1].nights < 1
+    ):
+        raise OptionRejected("invalid_itinerary")
     adjustments, reasons = check_requirements(option, requirements)
     shared_text = [
         option.title,
@@ -733,7 +1066,24 @@ async def _complete_option(
         reasons.append("private_detail_in_text")
     if reasons:
         raise OptionRejected(*dict.fromkeys(reasons))
+    return adjustments
 
+
+async def _research_option(
+    option: PlannedOption,
+    option_number: int,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    adjustments: list[FlexibleAdjustment],
+    origins: list[str],
+    version: int,
+    settings: Settings,
+    cost: ResearchCost,
+    require_live_fares: bool = False,
+) -> Proposal:
+    from app.services.accommodation_preferences import group_hotel_stars
+
+    hotel_stars, strict_stars = group_hotel_stars(generation)
     result = await trip_research.research(
         ResearchRequest(
             destination=option.destination,
@@ -748,12 +1098,44 @@ async def _complete_option(
                 member.departure_city.strip().casefold()
                 for member in generation.members
             ),
+            nights=[city.nights for city in option.cities],
+            require_live_fares=require_live_fares,
+            return_airport=return_airport_of(option),
+            hotel_stars=hotel_stars,
+            strict_hotel_stars=strict_stars,
         ),
         settings,
     )
     _add_cost(cost, result.cost)
+    if strict_stars:
+        from app.services.accommodation_preferences import parse_stars
+
+        essential_class = any(
+            member.accommodation.importance == "Essential"
+            and parse_stars(member.accommodation.value) is not None
+            for member in generation.members
+        )
+        if essential_class and any(
+            result.hotel_stars.get(index) is not None
+            and result.hotel_stars[index] not in hotel_stars
+            for index in range(len(option.cities))
+        ):
+            raise OptionRejected("essential_not_met")
+        # A web snippet with no verified class must not satisfy a star choice.
+        for index in range(len(option.cities)):
+            if index in result.hotel_sources:
+                continue  # Validated live class or a filtered market average.
+            for item in result.fields:
+                if item.field_id in {
+                    f"cities.{index}.hotel_name",
+                    f"cities.{index}.hotel_price_per_night",
+                }:
+                    item.value = None
+                    item.status = "Not available"
+                    item.evidence = []
+                    item.amount_sar = None
     try:
-        return build_proposal(
+        proposal = build_proposal(
             option,
             option_number,
             generation,
@@ -762,9 +1144,45 @@ async def _complete_option(
             adjustments,
             version,
             requirements,
+            meals_per_day=settings.meals_per_day_sar,
+            activities_per_day=Decimal(75),
+            hotel_fallback_night=settings.hotel_fallback_night_sar,
         )
+        # A trip with no priced flight for some departure city is not a trip.
+        if any(route.price_per_person.amount_sar is None for route in proposal.flights):
+            raise OptionRejected("no_flights")
+        if require_live_fares and any(
+            not single_booking(route.trip_type, (leg.booking_url for leg in route.legs))
+            for route in proposal.flights
+        ):
+            raise OptionRejected("no_flights")
+        return proposal
     except ValidationError as error:
         raise OptionRejected("invalid_itinerary") from error
+
+
+async def _complete_option(
+    option: PlannedOption,
+    option_number: int,
+    generation: GenerationInput,
+    requirements: list[Requirement],
+    origins: list[str],
+    version: int,
+    settings: Settings,
+    cost: ResearchCost,
+) -> Proposal:
+    adjustments = _prevalidate(option, generation, requirements)
+    return await _research_option(
+        option,
+        option_number,
+        generation,
+        requirements,
+        adjustments,
+        origins,
+        version,
+        settings,
+        cost,
+    )
 
 
 def load_demo_proposals(
@@ -799,11 +1217,20 @@ def load_demo_proposals(
 
 
 async def generate_proposals(
-    generation: GenerationInput, settings: Settings, version: int = 1
+    generation: GenerationInput,
+    settings: Settings,
+    version: int = 1,
+    progress: "ProgressReporter | None" = None,
 ) -> GenerationResult:
     """Return up to three proposals; raise only when none could be produced."""
     if settings.proposals_demo_mode:
         return load_demo_proposals(generation, settings, version)
+    from app.services import fare_first
+
+    if fare_first.live_fares_on(settings):
+        return await fare_first.generate(
+            generation, settings, version, progress=progress
+        )
     cost = ResearchCost()
     requirements = collect_requirements(generation)
     origins = list(
@@ -814,6 +1241,7 @@ async def generate_proposals(
     )
     used: set[tuple[str, tuple[str, ...]]] = set()
     proposals: list[Proposal] = []
+    common_ground: set[UUID] = set()
     failures: list[OptionFailure] = []
     stopped: ResearchError | None = None
     queue: list[PlannedOption] = []
@@ -875,6 +1303,8 @@ async def generate_proposals(
                         cost,
                     )
                 )
+                if option.common_ground:
+                    common_ground.add(proposals[-1].id)
                 reasons = []
                 break
             except OptionRejected as rejected:
@@ -906,12 +1336,21 @@ async def generate_proposals(
     if not proposals:
         if stopped is not None:
             raise stopped
-        if failures and all("over_group_budget" in f.reasons for f in failures):
+        if any("over_group_budget" in f.reasons for f in failures):
             raise GenerationBlocked("budget")
         raise ResearchError(
             "model_invalid_output",
             "No proposal passed the checks. Please try generating again.",
         )
+    if common_ground and wishes_differ(requirements):
+        # Only the common-ground lead moves; the rest keep the planner's order.
+        proposals = [
+            item.model_copy(update={"option_number": index})
+            for index, item in enumerate(
+                sorted(proposals, key=lambda item: item.id not in common_ground),
+                start=1,
+            )
+        ]
     complete = len(proposals) == 3
     message = None
     if not complete:

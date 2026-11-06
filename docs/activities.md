@@ -70,3 +70,43 @@ Only activity browsing, selection persistence, and the US-12-AC03 cost integrati
 are added. Existing flights, bookings, rooms, compatibility and sources remain
 Developer 1/3's implementations. The flight-price review findings on PR #2 were
 not fixed by this change.
+
+## Tourist-only suggestions matched to the group (3 November 2026)
+
+Problem seen in testing: the single broad search ("attractions … events {dates}")
+returned conferences and medical events, and nothing used the group's interests.
+
+- **Interests, privately.** When proposals are generated, Gemini maps the group's
+  Interests to up to 4 general tags (`Proposal.activity_focus`: landmarks,
+  museums_history, culture_arts, food, nature_outdoors, beaches_water, shopping,
+  family_fun, adventure_sports, wellness_spa, events_festivals). Members' own words
+  are never stored. Older proposals fall back to landmarks and food.
+- **Searches.** Two per city, run at the same time: things to do for tourists (with
+  the tags as words) on travel guides (Tripadvisor, Lonely Planet, Time Out,
+  GetYourGuide, Viator, Klook …), and restaurants on food guides. An empty guide
+  search falls back once to the open web. About 2 Tavily credits per city.
+- **Prompt.** Says what a tourist suggestion is, lists what to never return
+  (conferences, trade shows, medical/academic/professional events, courses, job
+  fairs, services for residents, hotels, list titles), asks for `tourist` and `fits`.
+- **Code checks.** Off-topic words (English and Arabic) on the name and description,
+  exact quotes, sources from that city, event dates inside the stay. Ranked by how
+  many group interests match, then a fair mix per city: up to 6 attractions,
+  4 activities, 4 restaurants (12 per city, 36 in total).
+- **Page.** Each card shows "Matches the group's interests: …" when it does.
+- **Log.** `activity_research_counts` holds counts, the tags and the model only.
+
+A proposal whose activities were already found keeps them; regenerate the proposals
+to get the new focus tags and search again.
+
+## Live test feedback (5 November 2026)
+
+- A third search per city finds popular experiences: water parks, theme parks, haunted
+  houses, escape rooms, beach and boat activities, and newly opened places.
+- When no source states a price, Gemini's usual price per person (`typical_price_sar`)
+  is shown as "About X · Rough estimate, may change with the season" (`Unconfirmed`).
+- Cards are grouped as Top sights, Things to do and Where to eat, with the ones that
+  match the group's interests first, plus a "Picked for your group" filter.
+- US-11-AC02 photos: sights and activities get the free Wikipedia photo of the page
+  with that exact name, with its artist and licence (`Activity.image`, added when
+  proposals are read and never saved). Restaurants are not looked up. Lookups run six
+  at a time with a 5-second limit and are cached, so photos fill in on a later read.

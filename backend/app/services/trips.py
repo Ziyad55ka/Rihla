@@ -16,6 +16,7 @@ async def trip_rpc[T](
     if response.status_code == 401:
         raise invalid_token()
     if response.status_code not in (200, 201):
+        error = None
         try:
             error = response.json()
             code = error.get("code") if isinstance(error, dict) else None
@@ -26,6 +27,19 @@ async def trip_rpc[T](
         if response.status_code == 403 or code == "42501":
             raise HTTPException(403, "You do not have permission for this trip action.")
         if name in {"rihla_get_activity_selection", "rihla_set_activity_selection"}:
+            message = error.get("message") if isinstance(error, dict) else None
+            if code == "23514" and message == "activity_budget_exceeded":
+                raise HTTPException(
+                    422,
+                    "These activities exceed the group's budget. "
+                    "Choose fewer or less expensive activities.",
+                )
+            if code == "23514" and message == "activity_budget_unavailable":
+                raise HTTPException(
+                    503,
+                    "We couldn’t verify the group budget. "
+                    "Try again before saving activities.",
+                )
             if code == "P0001":
                 raise HTTPException(
                     409, "This proposal changed. Reload before saving activities."

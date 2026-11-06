@@ -107,3 +107,33 @@
   .trip-workspace .planning-invite-dialog h2,.planning-invite-dialog h2 { font-size:30px; }
   .planning-invite-close { top:14px; right:14px; width:38px; height:38px; }
 }
+
+/* Keep essentials and the edit action visible before the generation section. */
+.planning-overview { min-height:0; padding:28px; box-shadow:0 8px 24px #172b2210; }
+.trip-workspace .planning-overview-title h1 { font-size:clamp(32px,4vw,48px); line-height:1.15; letter-spacing:-1.4px; overflow-wrap:anywhere; }
+.planning-overview-title > p:last-child:not(.trip-eyebrow) { font-size:14px; }
+.planning-overview-top { padding-bottom:24px; }
+.planning-overview-actions { display:flex; flex-direction:column; align-items:flex-end; gap:14px; flex-shrink:0; }
+.planning-overview-actions .planning-preferences-button { min-height:48px; min-width:0; gap:12px; padding:10px 16px; border-radius:10px; color:var(--rihla-green,#345441); background:#f8f8f2; border-color:#f8f8f2; font-size:14px!important; }
+.planning-overview-actions .planning-preferences-button:hover { background:#e6ecdc; }
+.planning-overview-details { min-height:0; }
+.planning-overview-details > div { padding-block-start:24px; }
+.trip-workspace .planning-status-summary h2 { font-size:23px; line-height:1.35; letter-spacing:-.4px; }
+.planning-status-summary > p:last-child { font-size:13px; line-height:1.7; }
+.planning-refresh { min-height:44px; font-size:12px!important; margin-top:16px; }
+.planning-members { padding-top:34px; }
+.trip-workspace .planning-members-heading h2 { font-size:28px; font-weight:500; letter-spacing:-.5px; }
+.planning-member-card { padding:20px; }
+.planning-member-card-top { margin-bottom:16px; }
+.planning-members .planning-member-card h3 { font-size:20px; }
+.planning-panel :is(button,a,summary):focus-visible { outline:3px solid #bb8b41; outline-offset:3px; }
+html[dir=rtl] .planning-overview-title h1,html[dir=rtl] .planning-status-summary h2,html[dir=rtl] .planning-members-heading h2 { letter-spacing:normal; }
+@media(max-width:700px) {
+  .planning-overview { padding:22px 18px; }
+  .planning-overview-top { flex-direction:column; gap:18px; }
+  .planning-overview-actions { align-items:flex-start; width:100%; gap:10px; }
+  .planning-overview-actions .planning-preferences-button { width:100%; justify-content:center; }
+  .planning-overview-details { grid-template-columns:1fr; }
+  .planning-overview-details > div { padding:20px 0 0; border:0; }
+  .planning-members-heading { align-items:flex-start; }
+}

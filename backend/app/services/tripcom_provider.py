@@ -26,6 +26,10 @@ class HotelQuery:
     city: str
     check_in: date
     check_out: date
+    # Named in searches so that Alexandria, Egypt is not Alexandria, Virginia.
+    country: str | None = None
+    stars: tuple[int, ...] = (3, 4)
+    strict_stars: bool = False
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,16 @@ class HotelOffer:
     # Shown to the user next to the price and link.
     source: str
     address: str | None = None
+    # True when the price is what the seller showed for these exact dates.
+    exact_price: bool = False
+    # Where the quoted price was observed. This can differ from the hotel's
+    # website used for navigation (Google Hotels often returns both).
+    source_url: str | None = None
+    star_rating: int | None = None
+    average_sample_size: int = 0
+    # A market reference from other dates never establishes this stay's availability.
+    reference_dates: tuple[str, str] | None = None
+    suggested_name: str | None = None
 
 
 async def _post(
@@ -106,6 +120,9 @@ class TripComFlights:
         self.requests_made = 0
 
     async def search(self, query: FlightQuery) -> dict:
+        if query.open_jaw:
+            # This source only books round trips; the next source is asked.
+            raise IgnavError("unsupported_open_jaw")
         self.requests_made += 1
         text = (
             f"Round trip flights from {query.origin_airport} to "

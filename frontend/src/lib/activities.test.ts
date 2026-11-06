@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityProposalEstimate, isActivitySuitable, selectedActivityCost, validateSelection } from './activities'
+import { activityProposalEstimate, isActivitySuitable, modeFor, selectionFingerprint, selectedActivityCost, validateSelection } from './activities'
 import data from '../test-fixtures/activities.json'
 import type { Proposal, ProposalSet, ActivitySelections } from '../types/proposal'
 
@@ -7,6 +7,14 @@ const [proposal, other] = (data as ProposalSet).proposals
 const activities = proposal.cities[0].activities!
 
 describe('activity selections', () => {
+  it('reviews and confirms even an empty saved choice, and ties confirmation to the actual selection', () => {
+    expect(modeFor(0, false)).toBe('choose')
+    expect(modeFor(0, false, true)).toBe('review')
+    expect(modeFor(0, true)).toBe('confirmed')
+    expect(modeFor(2, true, true)).toBe('review')
+    expect(selectionFingerprint(['b', 'a'])).toBe(selectionFingerprint(['a', 'b']))
+    expect(selectionFingerprint(['a'])).not.toBe(selectionFingerprint(['b']))
+  })
   it('keeps saved selections after reopening, and isolates options and versions', async () => {
     const values = new Map<string, string>()
     const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value) } }
@@ -39,21 +47,22 @@ describe('activity selections', () => {
 describe('US-12 proposal estimate integration', () => {
   it('adds and removes selected activities from the full proposal total without counting flight legs twice', () => {
     const baseline = activityProposalEstimate(proposal, [])
-    expect(baseline.total.known_amount_sar).toBe('3000.00')
+    expect(baseline.total.known_amount_sar).toBe('3750.00')
+    expect(baseline.meals?.known_amount_sar).toBe('750.00')
     const chosen = activityProposalEstimate(proposal, [activities[0].id, activities[3].id])
     expect(chosen.activities.known_amount_sar).toBe('150.50')
-    expect(chosen.total.known_amount_sar).toBe('3150.50')
-    expect(activityProposalEstimate(proposal, [activities[3].id]).total.known_amount_sar).toBe('3065.00')
-    expect(activityProposalEstimate(proposal, []).total.known_amount_sar).toBe('3000.00')
+    expect(chosen.total.known_amount_sar).toBe('3900.50')
+    expect(activityProposalEstimate(proposal, [activities[3].id]).total.known_amount_sar).toBe('3815.00')
+    expect(activityProposalEstimate(proposal, []).total.known_amount_sar).toBe('3750.00')
   })
   it('persists the relevant estimate on explicit save and reload', async () => {
     const values = new Map<string, string>()
     const store = mockSelectionStore({ getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value) } })
-    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3000.00')
+    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3750.00')
     await store.save(proposal, [activities[3].id])
-    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3065.00')
+    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3815.00')
     await store.save(proposal, [])
-    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3000.00')
+    expect((await store.load(proposal)).estimate?.total.known_amount_sar).toBe('3750.00')
   })
   it('never replaces missing costs with confirmed zero and marks missing return flights', () => {
     const unknown = activityProposalEstimate(proposal, [activities[2].id])

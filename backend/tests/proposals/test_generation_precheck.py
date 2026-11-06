@@ -126,7 +126,7 @@ def test_stage_one_stops_when_not_ready_or_no_shared_dates(
     assert outside_calls == []
 
 
-def test_stage_one_stops_on_conflicting_essential_destinations(
+def test_different_places_never_block_and_are_treated_as_wishes(
     settings: Settings, outside_calls: list[str]
 ) -> None:
     generation = group(
@@ -134,11 +134,10 @@ def test_stage_one_stops_on_conflicting_essential_destinations(
         member(2, destinations={"value": "Japan", "importance": "Essential"}),
     )
 
-    blocked = blocked_by(generation, settings)
+    generation_precheck.check_input(generation, settings)
 
-    assert blocked.categories == ["destinations"]
+    assert {m.destinations.importance for m in generation.members} == {"Flexible"}
     assert outside_calls == []
-    assert "Turkey" not in str(blocked) and "Japan" not in str(blocked)
 
 
 @pytest.mark.parametrize(
@@ -160,19 +159,6 @@ def test_overlapping_or_doubtful_destinations_pass_stage_one(
     )
 
     assert generation_precheck.find_input_conflicts(generation, settings) == []
-
-
-def test_clearly_different_countries_in_arabic_are_a_conflict(
-    settings: Settings,
-) -> None:
-    generation = group(
-        member(1, destinations={"value": "مصر أو تركيا", "importance": "Essential"}),
-        member(2, destinations={"value": "اليابان", "importance": "Essential"}),
-    )
-
-    assert generation_precheck.find_input_conflicts(generation, settings) == [
-        "destinations"
-    ]
 
 
 def test_flexible_destinations_never_conflict(settings: Settings) -> None:
@@ -433,8 +419,10 @@ def test_all_options_over_budget_gives_a_clear_message_without_the_figure(
 
     monkeypatch.setattr(proposal_generation, "call_gemini", plan)
     monkeypatch.setattr(proposal_generation, "_complete_option", rejected)
+    # The web-search flow (no live fares). Fare-first has its own test.
+    web_only = settings.model_copy(update={"ignav_api_key": None})
 
-    blocked = blocked_by(group(), settings)
+    blocked = blocked_by(group(), web_only)
 
     assert blocked.categories == ["budget"]
     assert "4000" not in str(blocked)
@@ -481,17 +469,6 @@ def test_several_destinations_are_alternatives_not_a_conflict(
     )
 
     assert generation_precheck.find_input_conflicts(generation, settings) == []
-
-
-def test_alternatives_with_no_shared_country_are_a_conflict(settings: Settings) -> None:
-    generation = group(
-        member(1, destinations={"value": "فرنسا، البحرين", "importance": "Essential"}),
-        member(2, destinations={"value": "اليابان", "importance": "Essential"}),
-    )
-
-    assert generation_precheck.find_input_conflicts(generation, settings) == [
-        "destinations"
-    ]
 
 
 def test_planner_is_told_destinations_are_alternatives() -> None:

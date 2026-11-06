@@ -1,20 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { checkMessages } from '../../lib/aiStatus'
 import { airlineName } from '../../lib/airlines'
 import { useLanguage } from '../../lib/language'
 import type { AirlineFareNote } from '../../types/proposal'
-import { bookFlight, checkAndReload, type BookLeg, type FlightCheckResult, type FlightFacts, type FlightFallback, linkFractionLeft, linkMinutesLeft, localTime, priceChange, refreshFlights, safeLink, sourceLabel } from '../../lib/proposals'
+import { bookFlight, checkAndReload, type BookLeg, type FlightCheckResult, type FlightFacts, type FlightFallback, linkFractionLeft, linkMinutesLeft, localTime, priceChange, refreshFlights, reportFlightNotOffered, safeLink, sourceLabel } from '../../lib/proposals'
 import { AiStatus } from '../AiStatus'
 import { Hint } from './Hint'
-import { BagIcon, CheckIcon, ChevronIcon, ClockIcon, ExternalIcon, RefreshIcon } from './icons'
+import { BagIcon, CheckIcon, ChevronIcon, ClockIcon, ExternalIcon, InfoIcon, RefreshIcon } from './icons'
 import { useSar } from './useSar'
 
+// Say what happened and what to do; Google Flights is only the last resort.
 const fallbackMessages: Record<FlightFallback, string> = {
-  not_available: 'This flight is gone and we found no replacement in any source. These are search results for the same date.',
-  limit: 'We reached the update limit for now. These are direct search results for your trip.',
-  demo: 'Demo mode: no flight was checked. These are search results for the same date.',
-  check_failed: 'We could not reach the flight sources just now, so nothing was checked. These are search results for the same date.',
-  no_link: 'This flight exists, but its seller gives no page that opens it directly. These are search results for the same date.',
+  not_available: 'This flight is no longer offered on these dates, and no other flight was found. Change the trip dates, or try again later.',
+  limit: 'Flight checking is temporarily limited. Nothing was checked.',
+  demo: 'Demo mode: no flight was checked.',
+  check_failed: 'We could not reach the flight sources just now. Try again in a few minutes.',
+  no_link: 'We could not confirm outbound and return on one booking just now. Try again in a few minutes, or change the dates.',
+}
+
+/** Why there is no booking page, when to try again and, after a second failure,
+ * the search on Google Flights as the last resort. */
+function FallbackNote({ result, failures, onRetry }: { result: FlightCheckResult; failures: number; onRetry?: () => void }) {
+  const { t, locale } = useLanguage()
+  const fallback = result.fallback
+  if (!fallback) return null
+  const retry = result.retry_at ? new Date(result.retry_at) : null
+  const time = retry && Number.isFinite(retry.getTime()) ? retry.toLocaleString(locale, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null
+  const link = (failures >= 2 || fallback === 'demo') ? safeLink(result.url) : null
+  return <div className="details-fallback details-reveal" role="status">
+    <p className="details-note">{t(fallbackMessages[fallback])}{fallback === 'limit' && time && <> {t('Try again after {time}.', { time })}</>}</p>
+    {fallback !== 'limit' && fallback !== 'demo' && onRetry && <button type="button" className="trip-secondary" onClick={onRetry}>{t('Check again')}</button>}
+    {link && <a className="details-text-link" href={link} target="_blank" rel="noopener noreferrer">{t('Still not working? Search these dates on Google Flights')} <ExternalIcon /></a>}
+  </div>
 }
 
 const cabinLabels: Record<string, string> = { economy: 'Economy', premium_economy: 'Premium economy', business: 'Business', first: 'First class' }
@@ -29,6 +46,18 @@ function useNow(active: boolean): number {
     return () => window.clearInterval(timer)
   }, [active])
   return now
+}
+
+/** What the price may leave out. Rihla only gives the link and the price, so the
+ * airline's site decides any extra cost; the member reads this before paying. */
+export function ExtraFeesNote({ checkedBags }: { checkedBags?: number | null }) {
+  const { t, locale } = useLanguage()
+  const bag = checkedBags === 0
+    ? t('This fare does not include a checked bag.')
+    : checkedBags && checkedBags > 0
+      ? t('This fare includes {count} checked bags.', { count: checkedBags.toLocaleString(locale) })
+      : t('The price is for the cheapest fare, which may not include a checked bag.')
+  return <p className="details-fees" role="note"><InfoIcon /> <span>{bag} {t('The airline may charge extra for bags, seat choice or other options. Check them on the airline’s site before paying: Rihla gives the link and the price only.')}</span></p>
 }
 
 /** The source's own fare and bag first, then what is generally known of the airline. */
@@ -116,26 +145,35 @@ export function TimerRing({ fraction }: { fraction: number }) {
   </svg>
 }
 
-export function BookResultView({ result, leg = 'round_trip', onRecheck, now }: { result: FlightCheckResult; leg?: BookLeg; onRecheck?: () => void; now?: number }) {
+export function BookResultView({ result, leg = 'round_trip', onRecheck, onNotOffered, now, failures = 1 }: { result: FlightCheckResult; leg?: BookLeg; onRecheck?: () => void; onNotOffered?: () => void; now?: number; failures?: number }) {
   const { t, language, locale } = useLanguage()
   const ticking = useNow(!result.fallback && Boolean(result.checked_at))
   const time = now ?? ticking
   const left = linkMinutesLeft(result.checked_at, result.link_valid_minutes, time)
   const expired = !result.fallback && left === 0
   const link = safeLink(result.url)
+  // Both chosen flights already selected, which the airline's own link may not keep.
+  const itinerary = leg === 'round_trip' ? safeLink(result.itinerary_url ?? null) : null
+  // The seller's own page with the flights, fare and travellers already chosen.
+  const direct = !result.fallback && leg === 'round_trip' && result.exact_flight && Boolean(link)
   return <div className="details-book-result details-reveal">
     <PriceChange result={result} />
-    {result.fallback && <p className="details-note">{t(fallbackMessages[result.fallback])}</p>}
+    {result.fallback && <FallbackNote result={result} failures={failures} onRetry={onRecheck} />}
     {!result.fallback && <>
       {result.seller && <p className="details-hint details-inline">{t('Sold by {seller}', { seller: airlineName(result.seller, language) })}<Hint text={[t(sourceLabel({ ...result, price_source: result.seller_type ? 'seller' : 'search' })), ...(result.exact_flight ? [] : [t('This is a results page, so choose the flight yourself.')])].join(' · ')} /></p>}
-      <BookGuide result={result} leg={leg} />
+      {!direct && <BookGuide result={result} leg={leg} />}
     </>}
     {expired
       ? <><p className="details-note" role="status"><ClockIcon /> {t('This link may have expired. Check again.')}</p>{onRecheck && <button type="button" className="trip-secondary" onClick={onRecheck}>{t('Check again')}</button>}</>
       : <>
-        {link && <a className={result.fallback ? 'trip-secondary' : 'trip-primary'} href={link} target="_blank" rel="noopener noreferrer">{t(result.fallback ? 'Open the search results' : 'Open the booking page')} <ExternalIcon /></a>}
-        {!result.fallback && <p className="details-hint">{t('Skip optional extras (like seat selection) to get the closest price.')}</p>}
+        {link && !result.fallback && <a className="trip-primary" href={link} target="_blank" rel="noopener noreferrer">{t(direct ? 'Continue to the booking page' : 'Open the booking page')} <ExternalIcon /></a>}
+        {direct && <p className="details-hint">{t('This link requests both flights for your group. Check the dates, travellers and final fare on the airline’s page.')}</p>}
+        {itinerary && !direct && <a className="details-text-link" href={itinerary} target="_blank" rel="noopener noreferrer">{t('See these exact flights on Google Flights')} <ExternalIcon /></a>}
+        {!result.fallback && <ExtraFeesNote checkedBags={result.checked_bags} />}
         {!result.fallback && left !== null && <p className="details-timer" role="timer"><TimerRing fraction={linkFractionLeft(result.checked_at, result.link_valid_minutes, time)} /> {left === 1 ? t('The link should work for about a minute more. Finish booking now.') : t('The link should work for about {count} more minutes. Finish booking now.', { count: left.toLocaleString(locale) })}</p>}
+        {/* Search data can lag behind the airline (Nielsen 9: a way to recover). */}
+        {!result.fallback && onNotOffered && <p className="details-hint details-not-offered">{t('The site did not show this flight?')} <button type="button" className="details-text-button" onClick={onNotOffered}>{t('Find another flight')}</button></p>}
+        {!result.fallback && onRecheck && <button type="button" className="trip-secondary" onClick={onRecheck}>{t('Refresh the price')}</button>}
       </>}
     <Alternative result={result} />
   </div>
@@ -146,7 +184,7 @@ function useCooldown(minutes: number) {
   const [until, setUntil] = useState(0)
   const now = useNow(until > 0)
   const seconds = Math.max(0, Math.ceil((until - now) / 1000))
-  return { waitMinutes: Math.ceil(seconds / 60), start: () => setUntil(Date.now() + minutes * 60000) }
+  return { waitMinutes: Math.ceil(seconds / 60), start: () => setUntil(Date.now() + minutes * 60000), deferUntil: (deadline: number) => { if (Number.isFinite(deadline)) setUntil(previous => Math.max(previous, deadline)) } }
 }
 
 export function BookSteps({ busy, result }: { busy: boolean; result: FlightCheckResult | null }) {
@@ -161,49 +199,40 @@ export function BookFlight({ tripId, proposalId, leg, label, cooldownMinutes, on
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<FlightCheckResult | null>(null)
   const [error, setError] = useState('')
-  const { waitMinutes, start } = useCooldown(cooldownMinutes)
-  async function check() {
+  const [failures, setFailures] = useState(0)
+  const { waitMinutes, start, deferUntil } = useCooldown(cooldownMinutes)
+  const inFlight = useRef(false)
+  async function check(notOffered = false) {
+    if (inFlight.current || waitMinutes > 0) return
+    inFlight.current = true
     setBusy(true); setError(''); setResult(null); start()
-    try { setResult(await checkAndReload(() => bookFlight(tripId, proposalId, leg), onChanged)) }
+    try {
+      const found = await checkAndReload(() => notOffered ? reportFlightNotOffered(tripId, proposalId) : bookFlight(tripId, proposalId, leg), onChanged)
+      setFailures(count => found.fallback ? count + 1 : 0)
+      if (found.fallback === 'limit' && found.retry_at) deferUntil(Date.parse(found.retry_at))
+      setResult(found)
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not check this flight.') }
-    finally { setBusy(false) }
+    finally { inFlight.current = false; setBusy(false) }
   }
   return <div className="details-booking">
     {!result && <button type="button" className="trip-primary details-book-button" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={() => { void check() }}>{busy ? <AiStatus messages={checkMessages} /> : label}</button>}
-    {!result && !busy && waitMinutes > 0 && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
+    {!busy && waitMinutes > 0 && result?.fallback !== 'limit' && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
     <BookSteps busy={busy} result={result} />
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
-    {result && <BookResultView result={result} leg={leg} onRecheck={waitMinutes > 0 ? undefined : () => { void check() }} />}
+    {result && <BookResultView result={result} leg={leg} failures={failures} onRecheck={waitMinutes > 0 ? undefined : () => { void check() }} onNotOffered={leg === 'round_trip' && waitMinutes === 0 ? () => { void check(true) } : undefined} />}
   </div>
 }
 
-/** One "Book" button for two bookings: it opens the outbound step, then the return. */
-export function SplitBooking({ tripId, proposalId, cooldownMinutes, onChanged, initiallyOpen = false }: { tripId: string; proposalId: string; cooldownMinutes: number; onChanged: () => void; initiallyOpen?: boolean }) {
+export function RefreshView({ waitMinutes, busy, result, error, onRefresh, failures = 1 }: { waitMinutes: number; busy: boolean; result: FlightCheckResult | null; error: string; onRefresh: () => void; failures?: number }) {
   const { t, locale } = useLanguage()
-  const [open, setOpen] = useState(initiallyOpen)
-  const [step, setStep] = useState(0)
-  if (!open) return <button type="button" className="trip-primary details-book-button" onClick={() => setOpen(true)}>{t('Book')}</button>
-  const steps: { leg: BookLeg; label: string }[] = [{ leg: 'outbound', label: 'Outbound' }, { leg: 'inbound', label: 'Return' }]
-  return <div className="details-split details-reveal">
-    <div className="details-split-tabs" role="tablist">{steps.map((item, index) => <button type="button" role="tab" aria-selected={step === index} className={step === index ? 'is-now' : undefined} key={item.leg} onClick={() => setStep(index)}><span>{(index + 1).toLocaleString(locale)}</span>{t(item.label)}</button>)}</div>
-    {steps.map((item, index) => <div key={item.leg} role="tabpanel" hidden={step !== index} className="details-split-panel">
-      <BookFlight tripId={tripId} proposalId={proposalId} leg={item.leg} label={t('Check this flight')} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
-      {index === 0 && <button type="button" className="details-text-button" onClick={() => setStep(1)}>{t('Next: the return')}</button>}
-    </div>)}
-  </div>
-}
-
-export function RefreshView({ waitMinutes, busy, result, error, onRefresh }: { waitMinutes: number; busy: boolean; result: FlightCheckResult | null; error: string; onRefresh: () => void }) {
-  const { t, locale } = useLanguage()
-  const link = result?.fallback ? safeLink(result.url) : null
   return <div className="details-refresh">
     <button type="button" className="details-small-button" aria-busy={busy} disabled={busy || waitMinutes > 0} onClick={onRefresh}>{busy ? <AiStatus messages={checkMessages} /> : <><RefreshIcon /> {t('Refresh the price')}</>}</button>
     {waitMinutes > 0 && !busy && <p className="details-hint">{t('You can check again in {count} minutes.', { count: waitMinutes.toLocaleString(locale) })}</p>}
     {error && <p className="trip-feedback trip-feedback--error" role="alert">{t(error)}</p>}
     {result && <PriceChange result={result} />}
     {result?.now_over_budget && <p className="details-note details-reveal" role="status">{t('With the new price, this proposal is over the group budget.')}</p>}
-    {result?.fallback && <p className="details-note details-reveal" role="status">{t(fallbackMessages[result.fallback])}</p>}
-    {link && <a className="details-text-link" href={link} target="_blank" rel="noopener noreferrer">{t('Open the search results')} <ExternalIcon /></a>}
+    {result?.fallback && <FallbackNote result={result} failures={failures} />}
     {result && <Alternative result={result} />}
   </div>
 }
@@ -212,12 +241,17 @@ export function RefreshFlights({ tripId, proposalId, cooldownMinutes, onChanged 
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<FlightCheckResult | null>(null)
   const [error, setError] = useState('')
+  const [failures, setFailures] = useState(0)
   const { waitMinutes, start } = useCooldown(cooldownMinutes)
   async function refresh() {
     setBusy(true); setError(''); start()
-    try { setResult(await checkAndReload(() => refreshFlights(tripId, proposalId), onChanged)) }
+    try {
+      const found = await checkAndReload(() => refreshFlights(tripId, proposalId), onChanged)
+      setFailures(count => found.fallback ? count + 1 : 0)
+      setResult(found)
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Could not check this flight.') }
     finally { setBusy(false) }
   }
-  return <RefreshView waitMinutes={waitMinutes} busy={busy} result={result} error={error} onRefresh={() => { void refresh() }} />
+  return <RefreshView waitMinutes={waitMinutes} busy={busy} result={result} error={error} failures={failures} onRefresh={() => { void refresh() }} />
 }

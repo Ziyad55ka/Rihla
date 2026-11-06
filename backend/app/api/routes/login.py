@@ -22,6 +22,23 @@ class LoginSession(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+def auth_error_code(payload: object) -> str | None:
+    """Supabase Auth's reason. Newer versions put it in error_code and the
+    HTTP status in code; older ones used code, or error=invalid_grant."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("error_code", "code"):
+        if isinstance(payload.get(key), str):
+            return payload[key]
+    if payload.get("error") == "invalid_grant":
+        detail = str(payload.get("error_description") or "").casefold()
+        if "not confirmed" in detail:
+            return "email_not_confirmed"
+        if "invalid login credentials" in detail:
+            return "invalid_credentials"
+    return None
+
+
 @router.post("/login", response_model=LoginSession)
 async def login(body: LoginInput, request: Request, client: SupabaseHTTP):
     limits = LoginLimits(request.app.state.settings.login_limit_db)
@@ -52,12 +69,13 @@ async def login(body: LoginInput, request: Request, client: SupabaseHTTP):
             outcome = "success"
         elif (
             response.status_code in (400, 401)
-            and isinstance(payload, dict)
-            and payload.get("code") == "invalid_credentials"
+            and auth_error_code(payload) == "invalid_credentials"
         ):
             outcome = "invalid"
             session = None
-        elif isinstance(payload, dict) and payload.get("code") == "email_not_confirmed":
+        elif response.status_code < 500 and (
+            auth_error_code(payload) == "email_not_confirmed"
+        ):
             raise HTTPException(
                 403,
                 {

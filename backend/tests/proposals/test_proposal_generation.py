@@ -23,6 +23,7 @@ from app.services.proposal_generation import (
     PlannedOption,
     RequirementCheck,
     TripPlan,
+    collect_activity_focus,
     collect_requirements,
     contains_private_detail,
     generate_proposals,
@@ -172,7 +173,10 @@ def test_three_distinct_proposals_are_built(
     assert result.complete and result.message is None
     assert [p.option_number for p in result.proposals] == [1, 2, 3]
     assert {p.destination for p in result.proposals} == {"Istanbul", "Baku", "Tbilisi"}
-    assert all(p.budget_status == "within_group_budget" for p in result.proposals)
+    assert all(p.budget_status == "includes_unconfirmed" for p in result.proposals)
+    assert all(
+        p.activity_allowance_per_person.amount_sar == 375 for p in result.proposals
+    )
     assert [r.origin for r in result.proposals[0].flights] == ["Riyadh", "Jeddah"]
 
 
@@ -188,6 +192,35 @@ def test_planner_never_receives_members_or_departure_cities(
     assert "Riyadh" not in payloads[0]
     assert '"budget_ceiling_sar": "3000"' in payloads[0]
     assert "5000" not in payloads[0]
+
+
+def test_structured_interests_reach_the_existing_planner_call_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    check = [RequirementCheck(requirement_id="R1", met=True, explanation=None)]
+    payloads = fake_planner(
+        monkeypatch,
+        [
+            option("Istanbul", checks=check),
+            option("Baku", checks=check),
+            option("Tbilisi", checks=check),
+        ],
+    )
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    generation = group(
+        interests={
+            "value": "focus:adventure_sports,beaches_water,invalid; notes:Local events",
+            "importance": "Essential",
+        }
+    )
+
+    run(generation, tmp_path)
+
+    assert collect_activity_focus(generation) == ["beaches_water", "adventure_sports"]
+    assert json.loads(payloads[0])["activity_focus_preferences"] == [
+        "beaches_water",
+        "adventure_sports",
+    ]
 
 
 def test_over_budget_option_is_regenerated(
@@ -215,17 +248,70 @@ def test_missing_prices_are_kept_and_reported(
     async def research(request, config):
         result = await fake_research()(request, config)
         for item in result.fields:
-            if "price" in item.field_id:
+            if "price" in item.field_id and not item.field_id.startswith("flights"):
+                item.value, item.status = None, "Not available"
+                item.evidence, item.amount_sar = [], None
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+    config = settings(tmp_path).model_copy(
+        update={"hotel_fallback_night_sar": Decimal(10)}
+    )
+
+    result = asyncio.run(generate_proposals(group(), config))
+
+    assert result.complete
+    assert result.proposals[0].budget_status == "includes_unconfirmed"
+    # No hotel price was found, so the general estimate is counted, not zero.
+    night = result.proposals[0].cities[0].hotel_price_per_night
+    assert night.amount_sar == Decimal(10) and night.status == "Unconfirmed"
+
+
+def test_the_hotel_estimate_counts_against_the_lowest_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake_planner(monkeypatch, THREE, *([option(name)] for name in "ABCDEFGHI"))
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        for item in result.fields:
+            if "hotel_price" in item.field_id:
+                item.value, item.status = None, "Not available"
+                item.evidence, item.amount_sar = [], None
+        return result
+
+    monkeypatch.setattr(trip_research, "research", research)
+    config = settings(tmp_path).model_copy(
+        update={"hotel_fallback_night_sar": Decimal(5000)}
+    )
+
+    # A stay with no found price is still too dear for a 3000 SAR budget.
+    caplog.set_level(logging.INFO)
+    with pytest.raises(
+        (proposal_generation.GenerationBlocked, proposal_generation.ResearchError)
+    ):
+        asyncio.run(generate_proposals(group(), config))
+    assert "reasons=over_group_budget" in caplog.text
+
+
+def test_a_trip_without_a_flight_price_is_dropped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_planner(monkeypatch, THREE, *([option(name)] for name in "ABCDEFGHI"))
+
+    async def research(request, config):
+        result = await fake_research()(request, config)
+        for item in result.fields:
+            if item.field_id.startswith("flights") and "price" in item.field_id:
                 item.value, item.status = None, "Not available"
                 item.evidence, item.amount_sar = [], None
         return result
 
     monkeypatch.setattr(trip_research, "research", research)
 
-    result = run(group(), tmp_path)
-
-    assert result.complete
-    assert result.proposals[0].budget_status == "includes_unconfirmed"
+    # Every option lacks a flight, so none is returned: generation ends in an error.
+    with pytest.raises(proposal_generation.ResearchError):
+        run(group(), tmp_path)
 
 
 def test_failed_option_stops_after_two_regenerations_and_returns_the_rest(
@@ -253,7 +339,7 @@ def test_failed_option_stops_after_two_regenerations_and_returns_the_rest(
 def test_essential_not_met_is_rejected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    essential = {"value": "Direct flights", "importance": "Essential"}
+    essential = {"value": "Pool at the hotel", "importance": "Essential"}
     good = [RequirementCheck(requirement_id="R1", met=True, explanation=None)]
     bad = [RequirementCheck(requirement_id="R1", met=False, explanation="Not found")]
     fake_planner(
@@ -267,14 +353,14 @@ def test_essential_not_met_is_rejected(
     )
     monkeypatch.setattr(trip_research, "research", fake_research())
 
-    result = run(group(flights=essential), tmp_path)
+    result = run(group(accommodation=essential), tmp_path)
 
     assert {p.destination for p in result.proposals} == {"Muscat", "Baku", "Tbilisi"}
 
 
 def test_essential_wins_when_members_share_a_preference() -> None:
-    generation = group(flights={"value": "Direct", "importance": "Essential"})
-    generation.members[1].flights.value = "direct"
+    generation = group(accommodation={"value": "Pool", "importance": "Essential"})
+    generation.members[1].accommodation.value = "pool"
 
     [requirement] = collect_requirements(generation)
 
@@ -463,6 +549,27 @@ def test_quota_waits_retries_once_then_succeeds(
     assert len(sleeps) == 1
 
 
+def test_daily_quota_does_not_spend_another_request_immediately(tmp_path, monkeypatch):
+    error = genai_errors.APIError(
+        429,
+        {
+            "error": {
+                "details": [
+                    {
+                        "@type": "google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": "RequestsPerDay"}],
+                    },
+                ]
+            }
+        },
+    )
+    outcome, models, sleeps, _ = run_gemini(monkeypatch, tmp_path, [error])
+    assert isinstance(outcome, ResearchError)
+    assert outcome.code == "model_quota"
+    assert outcome.retry_after and int(outcome.retry_after) > 0
+    assert models.calls == 1 and sleeps == []
+
+
 @pytest.mark.parametrize(
     ("failure", "code"),
     [
@@ -489,6 +596,20 @@ def test_bad_request_is_not_retried(
 
     assert outcome.code == "model_unavailable"
     assert (models.calls, sleeps) == (1, [])
+
+
+def test_failed_calls_log_status_and_class_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO, logger="app.services.trip_research"):
+        run_gemini(monkeypatch, tmp_path, [api_error(400)])
+        run_gemini(monkeypatch, tmp_path, [ConnectionError("down"), EMPTY_PLAN])
+
+    lines = [m for m in caplog.messages if m.startswith("gemini_call_failed")]
+    assert lines[0].startswith("gemini_call_failed attempt=1 status=400 error=APIError")
+    assert "status=none error=ConnectionError" in lines[1]
+    # A rejected request is told apart from an outage, and no body is logged.
+    assert not any("secret detail" in m or "down" in m for m in caplog.messages)
 
 
 def test_invalid_json_is_reported_without_retry(
@@ -716,7 +837,9 @@ def test_generated_hotels_get_consecutive_dates_and_all_members(
 
     monkeypatch.setattr(trip_research, "research", research)
 
-    stays = run(group(), tmp_path).proposals[0].cities
+    generation = group(max_budget_sar="4000")
+    generation.members[1].max_budget_sar = Decimal(4000)
+    stays = run(generation, tmp_path).proposals[0].cities
 
     assert "checkin=2026-11-20&checkout=2026-11-23" in stays[0].booking_url
     assert "checkin=2026-11-23&checkout=2026-11-24" in stays[1].booking_url
@@ -890,3 +1013,136 @@ def test_new_links_have_no_tracking_ids(
 
     assert "gclid" not in body and "gclsrc" not in body
     assert "keep=2" in body
+
+
+def _fit_input(*members):
+    base = {"departure_city": "Riyadh", "max_budget_sar": "5000"}
+    return GenerationInput(
+        trip_id=UUID("00000000-0000-4000-8000-0000000000aa"),
+        shared_start=date(2026, 11, 20),
+        shared_end=date(2026, 11, 24),
+        members=[
+            {"label": f"Member {n}", **base, **m} for n, m in enumerate(members, 1)
+        ],
+    )
+
+
+def test_fit_scores_each_member_and_keeps_only_the_average_and_the_least() -> None:
+    from app.services.proposal_generation import proposal_fit
+
+    generation = _fit_input(
+        {"destinations": {"value": "Paris", "importance": "Essential"}},
+        {"interests": {"value": "museums", "importance": "Flexible"}},
+        {},
+    )
+    requirements = collect_requirements(generation)
+    paris = option("Paris")
+    ids = {item.text: item.id for item in requirements}
+    checks = [
+        RequirementCheck(requirement_id=ids["Paris"], met=True, explanation=None),
+        RequirementCheck(requirement_id=ids["museums"], met=False, explanation="x"),
+    ]
+    planned = paris.model_copy(update={"requirement_checks": checks})
+
+    fit = proposal_fit(planned, generation, requirements, "within_group_budget")
+
+    # Member 1: Paris met (3) + dates/budget (6) = 9/9 = 100.
+    # Member 2: museums not met (0 of 1) + 6 = 6/7 = 86. Member 3: 6/6 = 100.
+    assert fit.least_satisfied_percent == 86
+    assert fit.group_percent == 95
+    assert fit.member_count == 3
+    dumped = fit.model_dump_json()
+    assert "Paris" not in dumped and "museums" not in dumped and "Member" not in dumped
+
+
+def test_fit_counts_unverified_as_half_and_unconfirmed_budget_as_half() -> None:
+    from app.services.proposal_generation import proposal_fit
+
+    generation = _fit_input(
+        {"interests": {"value": "beaches", "importance": "Essential"}}
+    )
+    requirements = collect_requirements(generation)
+    planned = option("Doha").model_copy(
+        update={
+            "requirement_checks": [
+                RequirementCheck(
+                    requirement_id=requirements[0].id, met=True, explanation=None
+                )
+            ]
+        }
+    )
+
+    fit = proposal_fit(planned, generation, requirements, "includes_unconfirmed")
+
+    # beaches: AI says met but code cannot check -> 0.5 * 3; dates 3; budget 0.5 * 3.
+    assert fit.least_satisfied_percent == fit.group_percent == 67
+
+
+def test_focus_tags_keep_known_tags_only_with_a_default() -> None:
+    from app.services.proposal_generation import focus_tags
+
+    assert focus_tags(["Food", "beaches_water", "food", "medical"]) == [
+        "food",
+        "beaches_water",
+    ]
+    assert focus_tags([]) == ["landmarks", "food"]
+    assert (
+        len(
+            focus_tags(
+                list(
+                    __import__(
+                        "app.schemas.proposals", fromlist=["x"]
+                    ).ACTIVITY_FOCUS_TAGS
+                )
+            )
+        )
+        == 4
+    )
+
+
+def test_budget_counts_meals_like_the_cost_page() -> None:
+    from decimal import Decimal
+
+    from app.schemas.proposals import SarPrice
+    from app.services.proposal_generation import OptionRejected, budget_status
+
+    flights = []  # no flight: never settled, but still counted against the ceiling
+    hotel = SarPrice(amount_sar=Decimal("1000"), status="Unconfirmed", evidence=[])
+
+    class Stay:
+        hotel_price_per_night = hotel
+        nights = 8
+
+    assert (
+        budget_status([Stay()], flights, [], Decimal("9000")) == "includes_unconfirmed"
+    )
+    with pytest.raises(OptionRejected):
+        budget_status([Stay()], flights, [], Decimal("9000"), meals=Decimal("1350"))
+
+
+def test_a_missing_price_becomes_the_typical_one_marked_unconfirmed() -> None:
+    from decimal import Decimal
+
+    from app.schemas.proposals import SarPrice
+    from app.services.proposal_generation import typical_if_missing
+
+    missing = SarPrice(amount_sar=None, status="Not available", evidence=[])
+    filled = typical_if_missing(missing, 480)
+    assert (filled.amount_sar, filled.status) == (Decimal(480), "Unconfirmed")
+    assert typical_if_missing(missing, None) == missing
+    known = SarPrice(amount_sar=Decimal("300"), status="Unconfirmed", evidence=[])
+    assert typical_if_missing(known, 480) == known
+
+
+def test_the_administrators_trip_length_is_kept() -> None:
+    from pydantic import ValidationError
+
+    from app.services.proposal_generation import OptionRejected, _prevalidate
+
+    five_days = option("Baku")  # 20 to 24 November
+    _prevalidate(five_days, group().model_copy(update={"trip_days": 5}), [])
+    with pytest.raises(OptionRejected):
+        _prevalidate(five_days, group().model_copy(update={"trip_days": 3}), [])
+    # Longer than the days everyone is free together.
+    with pytest.raises(ValidationError):
+        GenerationInput.model_validate({**group().model_dump(), "trip_days": 6})

@@ -548,3 +548,75 @@ def test_estimate_is_not_used_for_text_or_absurd_values() -> None:
 
     assert verify_field(HOTEL, fact, [SOURCE]).value is None
     assert verify_field(PRICE, absurd, [SOURCE]).amount_sar is None
+
+
+def test_live_hotels_skip_their_web_search_and_fill_the_city(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import date as day
+    from decimal import Decimal as Dec
+
+    from app.services.tripcom_provider import HotelOffer
+
+    queries: list[str] = []
+
+    async def sources(query, settings, cost=None, include_domains=None):
+        queries.append(query)
+        return [
+            SOURCE.model_copy(update={"url": f"https://ex.example/{len(queries)}"})
+        ], False
+
+    async def facts(groups, settings, cost):
+        return []
+
+    class Hotels:
+        name = "fake"
+
+        async def find(self, query):
+            return HotelOffer(
+                "Souq Hotel",
+                Dec("420.00"),
+                "https://booking.example/x",
+                "Booking.com via Google",
+                exact_price=True,
+                source_url="https://www.google.com/travel/search?q=Souq+Hotel",
+            )
+
+    monkeypatch.setattr(trip_research, "search_sources", sources)
+    monkeypatch.setattr(trip_research, "extract_facts", facts)
+    monkeypatch.setattr(trip_research, "live_hotel_providers", lambda s: [Hotels()])
+    request = request_for("Doha").model_copy(
+        update={
+            "departure_date": day(2026, 12, 1),
+            "return_date": day(2026, 12, 5),
+            "nights": [4],
+        }
+    )
+
+    result = asyncio.run(research(request, make_settings(tmp_path)))
+
+    assert not any("hotels in" in query for query in queries)
+    by_id = {item.field_id: item for item in result.fields}
+    assert by_id["cities.0.hotel_name"].value == "Souq Hotel"
+    assert by_id["cities.0.hotel_price_per_night"].amount_sar == Dec("420.00")
+    assert result.hotel_links == {0: "https://booking.example/x"}
+    hotel_source = next(s for s in result.sources if "Souq Hotel" in s.title)
+    assert hotel_source.url == "https://www.google.com/travel/search?q=Souq+Hotel"
+
+
+def test_extraction_uses_low_thinking_and_the_planner_keeps_the_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[dict] = []
+
+    async def fake(payload, prompt, schema, settings, cost, **kwargs):
+        seen.append(kwargs)
+        return schema.model_validate({"facts": []})
+
+    monkeypatch.setattr(trip_research, "call_gemini", fake)
+    asyncio.run(
+        trip_research.extract_facts(
+            [], make_settings(tmp_path), trip_research.ResearchCost()
+        )
+    )
+    assert seen == [{"thinking": "low"}]

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { editablePreferences, getPreferences, preferenceError, preferencesForForm, savePreferences } from './preferences'
+import { editablePreferences, formatInterestPreference, getPreferences, parseInterestPreference, preferenceError, preferencesForForm, savePreferences } from './preferences'
 import type { SavedPreferences } from '../types/preferences'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }))
@@ -55,4 +55,22 @@ it.each(['0', '-1', '1.001', '10000000000', 'NaN', 'Infinity', '1e3'])('rejects 
 
 it('rejects reversed dates instead of silently changing a member’s range', () => {
   expect(preferenceError({ ...editablePreferences(saved), available_end: '2026-11-09' })).toContain('End date')
+})
+
+it('round-trips structured activity interests and keeps legacy free text editable', () => {
+  const value = formatInterestPreference(['beaches_water', 'adventure_sports', 'beaches_water'], 'Local events')
+  expect(value).toBe('focus:adventure_sports,beaches_water; notes:Local events')
+  expect(parseInterestPreference(value)).toEqual({ focus: ['adventure_sports', 'beaches_water'], notes: 'Local events' })
+  expect(parseInterestPreference('Museums and food')).toEqual({ focus: [], notes: 'Museums and food' })
+})
+
+it('preserves spaces and newlines while the person is still typing', () => {
+  const notes = 'nature \nislamic culture '
+  expect(parseInterestPreference(formatInterestPreference(['landmarks'], notes)).notes).toBe(notes)
+  expect(formatInterestPreference([], notes)).toBe(notes)
+})
+
+it('never truncates notes containing the serialization separator', () => {
+  const notes = 'My notes; notes: keep all of this'
+  expect(parseInterestPreference(formatInterestPreference(['landmarks'], notes)).notes).toBe(notes)
 })

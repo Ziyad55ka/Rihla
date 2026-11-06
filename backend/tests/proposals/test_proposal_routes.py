@@ -154,7 +154,7 @@ def test_conflicts_stop_generation_with_categories_only(api, pipeline, rpc_log) 
         200,
         json={
             "conflicts": ["destinations", "budget"],
-            "own_review": [],
+            "own_review": ["destinations"],
             "can_generate": False,
         },
     )
@@ -162,7 +162,8 @@ def test_conflicts_stop_generation_with_categories_only(api, pipeline, rpc_log) 
     response = post(api(rihla_get_group_conflicts=conflict))
 
     assert response.status_code == 409
-    assert response.json()["detail"]["categories"] == ["destinations", "budget"]
+    # Places are wishes the planner combines, so only the budget blocks.
+    assert response.json()["detail"]["categories"] == ["budget"]
     assert pipeline == {"fetch": [], "generate": []}
     assert rpc_log[-1] == "rihla_end_proposal_generation"
 
@@ -190,11 +191,27 @@ def test_request_body_cannot_choose_the_admin(api, pipeline) -> None:
     assert pipeline["fetch"] == []
 
 
+def test_quota_response_supplies_retry_time_without_provider_details(
+    api, pipeline, monkeypatch
+):
+    async def fail(*args, **kwargs):
+        raise ResearchError("model_quota", "private provider details", retry_after="60")
+
+    monkeypatch.setattr(routes, "generate_checked", fail)
+    response = post(api())
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "60"
+    suggestion = response.json()["detail"]["suggestions"][0]
+    assert suggestion["kind"] == "retry_after"
+    assert suggestion["params"]["retry_at"].endswith("+00:00")
+    assert "private provider details" not in response.text
+
+
 @pytest.mark.parametrize(
     ("failure", "status", "text"),
     [
         (GenerationBlocked("budget"), 409, "budget"),
-        (ResearchError("model_quota", "x"), 503, "allowance"),
+        (ResearchError("model_quota", "x"), 503, "request limit"),
         (ResearchError("search_quota", "x"), 503, "allowance"),
         (ResearchError("model_unavailable", "secret detail"), 503, "temporarily"),
         (GenerationInputsError("not_ready"), 409, "ready"),
@@ -220,10 +237,56 @@ def test_failures_are_clear_and_always_release_the_lock(
 
 def test_any_member_can_read_conflicts_and_proposals(api, rpc_log) -> None:
     client = api()
+    client.app.state.settings.price_review_minutes = 30
 
     assert client.get(f"/api/trips/{TRIP}/conflicts").json() == CLEAR
-    assert client.get(f"/api/trips/{TRIP}/proposals").json()["version"] == 1
+    stored = client.get(f"/api/trips/{TRIP}/proposals").json()
+    assert stored["version"] == 1
+    assert stored["price_review_minutes"] == 30
     assert rpc_log == ["rihla_get_group_conflicts", "rihla_get_proposals"]
+
+
+@pytest.mark.parametrize("kind", ["split", "one_way", "different_links", "joint"])
+def test_saved_proposals_must_regenerate_unless_the_flight_has_one_booking(
+    api, monkeypatch, kind
+):
+    from tests.proposals.test_flight_refresh import proposal
+
+    item = proposal()
+    route = item.flights[0]
+    for leg in route.legs:
+        leg.booking_url = "https://www.gulfair.com/joint"
+    if kind in {"split", "one_way"}:
+        route.trip_type = kind
+        if kind == "one_way":
+            route.legs = route.legs[:1]
+            item.budget_status = "includes_unconfirmed"
+    elif kind == "different_links":
+        route.legs[1].booking_url = "https://www.gulfair.com/return-only"
+
+    async def no_context(*args):
+        raise GenerationInputsError("unavailable")
+
+    async def no_images(items, config):
+        return items
+
+    monkeypatch.setattr(routes, "fetch_cost_context", no_context)
+    monkeypatch.setattr(routes, "with_place_images", no_images)
+    client = api(
+        rihla_get_proposals=httpx.Response(
+            200, json={**STORED, "proposals": [item.model_dump(mode="json")]}
+        ),
+        rihla_get_activity_costs=httpx.Response(403, json={"code": "42501"}),
+    )
+    response = client.get(f"/api/trips/{TRIP}/proposals")
+    if kind == "different_links":
+        # The stored-proposal schema rejects this contradiction before rendering.
+        assert response.status_code == 503
+        return
+    assert response.status_code == 200
+    body = response.json()
+    assert body["needs_regeneration"] is (kind != "joint")
+    assert body["proposals"][0]["flights"][0]["trip_type"] == route.trip_type
 
 
 def test_non_member_cannot_read_proposals(api) -> None:
@@ -233,3 +296,68 @@ def test_non_member_cannot_read_proposals(api) -> None:
         api(rihla_get_proposals=denied).get(f"/api/trips/{TRIP}/proposals").status_code
         == 403
     )
+
+
+def test_no_flights_returns_the_reason_and_suggested_changes(
+    api, pipeline, monkeypatch, rpc_log
+) -> None:
+    from app.services.generation_errors import no_flights_error
+
+    async def fail(*args, **kwargs):
+        raise no_flights_error(INPUT, ["Doha"], INPUT.shared_start, 3, 4)
+
+    monkeypatch.setattr(routes, "generate_checked", fail)
+
+    response = post(api())
+
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "no_flights" and "Doha" in detail["message"]
+    assert {item["action"] for item in detail["suggestions"]} >= {
+        "edit_dates",
+        "edit_preferences",
+        "retry",
+        "open_link",
+    }
+    google = next(
+        item
+        for item in detail["suggestions"]
+        if item["kind"] == "search_google_flights"
+    )
+    assert google["params"]["url"].startswith(
+        "https://www.google.com/travel/flights?q="
+    )
+    assert "Doha" in google["params"]["url"]
+    assert "4000" not in response.text and "Riyadh" not in response.text
+    assert rpc_log[-1] == "rihla_end_proposal_generation"
+
+
+def test_progress_is_for_members_and_shows_the_last_step(api, pipeline) -> None:
+    client = api()
+    assert client.get(f"/api/trips/{TRIP}/proposals/progress").json() is None
+
+    assert post(client).status_code == 200
+    state = client.get(f"/api/trips/{TRIP}/proposals/progress").json()
+    assert state["stage"] == "done"
+
+    denied = httpx.Response(403, json={"code": "42501"})
+    outsider = api(rihla_get_group_conflicts=denied)
+    assert outsider.get(f"/api/trips/{TRIP}/proposals/progress").status_code == 403
+
+
+def test_progress_requires_authentication(client) -> None:
+    assert client.get(f"/api/trips/{TRIP}/proposals/progress").status_code == 401
+
+
+def test_older_essential_places_alone_no_longer_block() -> None:
+    from app.schemas.conflicts import GroupConflicts
+
+    found = GroupConflicts.model_validate(
+        {
+            "conflicts": ["destinations"],
+            "own_review": ["destinations"],
+            "can_generate": False,
+        }
+    )
+
+    assert (found.conflicts, found.own_review, found.can_generate) == ([], [], True)

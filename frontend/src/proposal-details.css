@@ -29,6 +29,8 @@
 .details-booking { display:grid; gap:6px; justify-items:start; }
 .details-booking a { min-height:42px; padding:9px 16px; }
 .details-hint { margin:0; color:var(--rihla-muted); font-size:12px; line-height:1.6; }
+.details-fees { display:flex; gap:8px; align-items:flex-start; margin:8px 0 0; padding:10px 12px; border-radius:10px; background:#fff8ec; border:1px solid #f1dfbd; color:#5b4524; font-size:13px; line-height:1.6; }
+.details-fees svg { flex:none; margin-top:3px; }
 .details-route-top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
 .details-icon { flex:none; vertical-align:-3px; }
 .details-price-row { font-size:17px; }
@@ -237,6 +239,9 @@ html[dir='rtl'] .details-metro-icon { animation-name:details-travel-rtl; }
 /* The font, on these pages only. */
 .proposal-details, .proposals-panel { font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
 html[dir] :is(.proposal-details,.proposals-panel) :is(h1,h2,h3,p,label,legend,button,input,a,li,span,bdi,figcaption) { font-family:'IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
+/* Arabic only: Thmanyah Sans first. English keeps the rules above. */
+html[dir='rtl'] :is(.proposal-details,.proposals-panel) { font-family:'Thmanyah Sans','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
+html[dir='rtl'] :is(.proposal-details,.proposals-panel) :is(h1,h2,h3,p,label,legend,button,input,a,li,span,bdi,figcaption) { font-family:'Thmanyah Sans','IBM Plex Sans Arabic',Tahoma,Arial,sans-serif; }
 html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-panel :is(h2,h3) { letter-spacing:normal; }
 .proposal-details .details-hero h1 { font-weight:500; }
 .proposal-details h2 { font-weight:500; }
@@ -313,3 +318,23 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
   .details-match-legend, .details-status-legend { grid-template-columns:1fr; gap:2px; }
   .details-match-legend dd, .details-status-legend dd { margin-block-end:8px; }
 }
+
+/* US-15-AC03: the fit score and its criteria. */
+.details-fit { margin-top:16px; }
+.details-fit-scores { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin:8px 0; }
+.details-fit-scores div { padding:12px 14px; background:#f7f8f1; border:1px solid #dfe3d6; border-radius:12px; }
+.details-fit-scores dt { color:var(--rihla-muted); font-size:13px; }
+.details-fit-scores dd { margin:4px 0 0; font-size:24px; font-weight:600; color:var(--rihla-ink); font-variant-numeric:tabular-nums; }
+
+.details-match-more { margin-top:16px; border-top:1px solid var(--rihla-line, #dfe3d8); padding-top:12px; }
+.details-match-more > summary { cursor:pointer; font-size:14px; color:var(--rihla-green); }
+.details-match-more[open] > summary { margin-bottom:10px; }
+.details-ai-note { font-style:italic; }
+
+.details-sources-footer { margin-top:8px; }
+.details-sources-fold > summary { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--rihla-muted, #5f6b62); padding:10px 0; }
+.details-sources-fold > summary svg { width:18px; height:18px; }
+.details-sources-fold[open] > summary { color:var(--rihla-ink); }
+.details-photo-credit a { color:#fff; text-decoration:underline; text-underline-offset:3px; }
+.details-photo-info::before { content:""; position:absolute; inset:-8px; }
+.details-activity-question { font-size:20px; font-weight:500; margin:0 0 8px; }

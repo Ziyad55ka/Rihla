@@ -21,5 +21,6 @@ class ActivityProposalEstimate(StrictModel):
     flights: EstimateComponent
     accommodation: EstimateComponent
     transport: EstimateComponent
+    meals: EstimateComponent = Field(default_factory=EstimateComponent)
     activities: EstimateComponent
     total: EstimateComponent

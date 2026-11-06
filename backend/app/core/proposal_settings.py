@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -51,7 +51,39 @@ class ProposalSettings(BaseSettings):
     # Gemini writes the plan and reads the search results.
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
+    # Optional task-specific model. Empty preserves the existing planner model.
+    gemini_extractor_model: str | None = None
+
+    # OpenRouter: paid access to the same Gemini models. When its key is set, every
+    # model call goes through OpenRouter and GEMINI_API_KEY is not used.
+    openrouter_api_key: str | None = Field(default=None, repr=False)
+    # Empty uses "google/" + GEMINI_MODEL (or GEMINI_EXTRACTOR_MODEL for extraction).
+    openrouter_model: str | None = None
+    # Pin one provider, e.g. google-ai-studio. Empty lets OpenRouter choose.
+    openrouter_provider: str | None = None
+
+    @property
+    def model_configured(self) -> bool:
+        return bool(self.openrouter_api_key or self.gemini_api_key)
+
+    def openrouter_model_id(self) -> str:
+        if self.openrouter_model:
+            return self.openrouter_model
+        name = self.gemini_model
+        return name if "/" in name else f"google/{name}"
+
+    def for_extraction(self) -> Self:
+        if not self.gemini_extractor_model:
+            return self
+        # The extractor model wins over OPENROUTER_MODEL for extraction too.
+        update = {"gemini_model": self.gemini_extractor_model, "openrouter_model": None}
+        return self.model_copy(update=update)
+
     gemini_retry_delay_seconds: float = Field(default=20, ge=0)
+    # How much Gemini "thinks" before answering. Reading search results is simple,
+    # so it uses low thinking, which is much faster. Empty uses the model default.
+    gemini_extract_thinking: Literal["minimal", "low", "medium", "high"] | None = "low"
+    gemini_planner_thinking: Literal["minimal", "low", "medium", "high"] | None = None
     # Tavily searches the web. Results are cached to save the free credits.
     tavily_api_key: str | None = None
     tavily_search_depth: Literal["basic", "advanced"] = "basic"
@@ -66,9 +98,30 @@ class ProposalSettings(BaseSettings):
     ignav_price_scope: Literal["per_person", "total"] = "total"
     # Sources in the order they are preferred. Only sources switched on are asked.
     flight_providers: list[str] = Field(default_factory=lambda: ["tripcom", "ignav"])
-    hotel_providers: list[str] = Field(default_factory=lambda: ["tripcom"])
+    hotel_providers: list[str] = Field(default_factory=lambda: ["serpapi", "tripcom"])
     # Academic use only. Read docs/ai-proposals.md before switching this on.
     tripcom_enabled: bool = False
+    # Google Hotels through SerpApi: a real price per night in SAR. Off without a key.
+    serpapi_api_key: str | None = None
+    # One more request per city opens the hotel's page to find a Booking.com link.
+    serpapi_hotel_details: bool = True
+    # Optional dated event listings; no model call or reservation. Empty = off.
+    ticketmaster_api_key: str | None = Field(default=None, repr=False)
+    # Keep a flight only when Google Flights (same SerpApi key) also sells the same
+    # flight numbers that day, both ways. Two requests per departure city.
+    verify_flights_on_google: bool = True
+    # When Ignav fails or finds no bookable round trip, search Google Flights for
+    # the same dates and group (up to 3 requests each, this many per generation).
+    google_flights_backup_searches: int = Field(default=6, ge=0, le=50)
+
+    # Fare-first generation, used whenever live fares are switched on (Ignav key).
+    # A trip never starts sooner than this, so seats can still be booked.
+    min_departure_lead_days: int = Field(default=3, ge=0, le=60)
+    # Destinations Gemini suggests in its first request. Code keeps the first 3
+    # that have bookable flights from every departure city.
+    planner_option_count: int = Field(default=5, ge=3, le=8)
+    # Departure days tried, around the planned one, when it has no flights.
+    flight_date_shifts: list[int] = Field(default_factory=lambda: [1, -1, 2, -2])
 
     # A split trip must save this much, and may take only this much longer.
     split_min_saving_percent: Decimal = Field(default=Decimal(15), ge=0, lt=100)
@@ -94,9 +147,16 @@ class ProposalSettings(BaseSettings):
     # Price age: fresh below the first, old above the second.
     price_fresh_hours: int = Field(default=3, ge=1)
     price_stale_hours: int = Field(default=24, ge=1)
+    # Advisory price review window; providers do not guarantee a fare lifetime.
+    price_review_minutes: int = Field(default=15, ge=1, le=1440)
     # US-13: a general daily allowance per person for meals and small expenses.
     # It is not from a source, so the page always marks it Unconfirmed.
     meals_per_day_sar: Decimal = Field(default=Decimal(150), ge=0, decimal_places=2)
+    # A night's hotel when neither a search nor the planner gave a price, so a
+    # stay is never counted as free in the budget check. Marked Unconfirmed.
+    hotel_fallback_night_sar: Decimal = Field(
+        default=Decimal(400), gt=0, decimal_places=2
+    )
 
     # Free city photos from Wikimedia, kept locally with their licence.
     place_images_enabled: bool = True

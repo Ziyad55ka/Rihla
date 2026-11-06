@@ -27,6 +27,7 @@ from app.schemas.costs import (
     RoomPlan,
 )
 from app.schemas.proposals import PriceStatus, Proposal, SarPrice
+from app.services.hotel_nights import hotel_nights, last_night_unused
 
 CENT = Decimal("0.01")
 # Strongest first. A total takes the weakest status of its parts.
@@ -45,6 +46,7 @@ class RoutePrice(BaseModel):
     model_config = ConfigDict(extra="ignore")
     origin: str
     price_per_person: SarPrice
+    trip_type: str = "round_trip"
 
 
 class ProposalRoutes(BaseModel):
@@ -119,6 +121,32 @@ def _meals(days: int, per_day: Decimal) -> SarPrice | None:
     )
 
 
+def group_activity_cost(
+    proposal: Proposal, selections: list[list[UUID]], members: int
+) -> CostAmount:
+    """Saved choices replace their reserve; unsaved members retain a reserve."""
+    prices = {a.id: a.price_per_person for c in proposal.cities for a in c.activities}
+    totals = []
+    for ids in selections:
+        if not ids:
+            totals.append(CostAmount(amount_sar=Decimal(0), status="Estimated"))
+            continue
+        total = _amount(
+            [(prices[value], Decimal(1)) for value in set(ids) if value in prices]
+        )
+        if len(set(ids)) != len(ids) or any(value not in prices for value in ids):
+            total = total.model_copy(update={"partial": True})
+        totals.append(total)
+    for _ in range(max(0, members - len(selections))):
+        reserve = proposal.activity_allowance_per_person
+        totals.append(
+            _amount([(reserve, Decimal(1))])
+            if reserve is not None
+            else CostAmount(amount_sar=None, status="Not available", partial=True)
+        )
+    return _sum(totals)
+
+
 def _own_budget(
     total: CostAmount, lines: list[CostLine], budget: Decimal | None
 ) -> tuple[OwnBudget, Decimal | None]:
@@ -147,7 +175,10 @@ def _group_flights(proposal_id: UUID, context: CostContext) -> CostAmount:
         if price is None:
             price = SarPrice(amount_sar=None, status="Not available", evidence=[])
         parts.append((price, Decimal(origin.members)))
-    return _amount(parts)
+    amount = _amount(parts)
+    if routes and any(route.trip_type == "one_way" for route in routes.flights):
+        amount = amount.model_copy(update={"partial": True})
+    return amount
 
 
 def _scenario(
@@ -158,6 +189,7 @@ def _scenario(
     context: CostContext | None,
     activity_ids: list[UUID] | None = None,
     activity_group: CostAmount | None = None,
+    activity_saved_members: int | None = None,
 ) -> CostScenario:
     members = context.member_count if context else 1
     # Shared rooms: two people per room, so a group needs half as many, rounded up.
@@ -174,10 +206,14 @@ def _scenario(
             (SarPrice(amount_sar=None, status="Not available", evidence=[]), Decimal(1))
         ]
     )
+    if own_route and own_route.trip_type == "one_way":
+        flights = flights.model_copy(update={"partial": True})
+    # The member's own flight home decides whether the last night is slept in.
+    needed = hotel_nights(proposal.cities, proposal.flights, proposal.end_date)
     stays = [
-        (stay.hotel_price_per_night, Decimal(stay.nights))
-        for stay in proposal.cities
-        if stay.nights
+        (stay.hotel_price_per_night, Decimal(nights))
+        for stay, nights in zip(proposal.cities, needed, strict=True)
+        if nights
     ]
     accommodation = _times(_amount(stays), room_share) if stays else None
     transport = (
@@ -206,13 +242,24 @@ def _scenario(
         if selected
         else CostAmount(amount_sar=Decimal(0), status="Estimated")
     )
+    allowance = proposal.activity_allowance_per_person
+    # The planning reserve stands in only until the member saves their own choice;
+    # after that their total is exactly what they chose.
+    if (
+        activity_ids is None
+        and allowance
+        and (allowance.amount_sar or 0) > (activity_amount.amount_sar or 0)
+    ):
+        activity_amount = _amount([(allowance, Decimal(1))]).model_copy(
+            update={"partial": activity_amount.partial}
+        )
     lines.append(
         CostLine(
             category="activities",
             per_person=activity_amount
-            if activity_ids is not None
+            if activity_ids is not None or allowance is not None
             else CostAmount(amount_sar=None, status="Not available"),
-            counted=activity_ids is not None,
+            counted=activity_ids is not None or allowance is not None,
         )
     )
     if meals:
@@ -223,6 +270,25 @@ def _scenario(
     group: CostAmount | None = None
     if context:
         everyone = Decimal(members)
+        group_activity = activity_group
+        if members == 1 and activity_ids is not None:
+            group_activity = activity_amount
+        elif activity_saved_members is not None and activity_saved_members < members:
+            unsaved = Decimal(members - activity_saved_members)
+            reserve = (
+                _times(_amount([(allowance, Decimal(1))]), unsaved)
+                if allowance
+                else CostAmount(amount_sar=None, status="Not available", partial=True)
+            )
+            group_activity = (
+                _sum([group_activity, reserve]) if group_activity else reserve
+            )
+        elif allowance and activity_saved_members is None:
+            floor = _times(_amount([(allowance, Decimal(1))]), everyone)
+            if not group_activity or (floor.amount_sar or 0) > (
+                group_activity.amount_sar or 0
+            ):
+                group_activity = floor.model_copy(update={"partial": True})
         shared_parts = [
             line.per_person
             for line in lines
@@ -234,12 +300,14 @@ def _scenario(
                 *(_times(part, everyone) for part in shared_parts),
                 *(
                     [
-                        activity_group
+                        group_activity
                         or CostAmount(
                             amount_sar=None, status="Not available", partial=True
                         )
                     ]
-                    if activity_ids is not None
+                    if group_activity is not None or activity_ids is not None
+                    else [_times(activity_amount, everyone)]
+                    if allowance
                     else []
                 ),
             ]
@@ -263,6 +331,7 @@ def proposal_costs(
     context: CostContext | None,
     activity_ids: list[UUID] | None = None,
     activity_group: CostAmount | None = None,
+    activity_saved_members: int | None = None,
 ) -> ProposalCosts:
     days = (proposal.end_date - proposal.start_date).days + 1
     nights = sum(stay.nights for stay in proposal.cities)
@@ -275,6 +344,7 @@ def proposal_costs(
             context,
             activity_ids,
             activity_group,
+            activity_saved_members,
         )
     ]
     if context and context.member_count > 1 and nights:
@@ -287,6 +357,7 @@ def proposal_costs(
                 context,
                 activity_ids,
                 activity_group,
+                activity_saved_members,
             )
         )
 
@@ -298,13 +369,19 @@ def proposal_costs(
         assumptions.append("flights_own_city")
         if own_route.trip_type == "one_way":
             assumptions.append("flights_one_way")
+    if last_night_unused(proposal.flights, proposal.end_date):
+        assumptions.append("last_night_unused")
     assumptions.append("rooms_single")
     if len(scenarios) > 1:
         assumptions.append("rooms_shared")
     if meals_per_day > 0:
         assumptions.append("meals_allowance")
     assumptions.append(
-        "activities_selected" if activity_ids is not None else "activities_not_included"
+        "activities_selected"
+        if activity_ids is not None
+        else "activities_allowance"
+        if proposal.activity_allowance_per_person
+        else "activities_not_included"
     )
     assumptions.append(
         "group_total_all_cities" if context else "group_total_unavailable"

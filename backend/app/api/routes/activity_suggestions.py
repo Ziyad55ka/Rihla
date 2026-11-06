@@ -1,14 +1,17 @@
+import logging
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import Field
 
+from app.api.routes.proposals import RESEARCH_FAILURES
 from app.core.auth import CurrentIdentity
 from app.schemas.proposals import Proposal, StrictModel
 from app.services.activity_research import find_activities
 from app.services.generation_inputs import GenerationInputsError, _secret_rpc
 from app.services.trip_research import ResearchError
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trips", tags=["activities"])
 
 
@@ -26,7 +29,9 @@ async def suggestions(
 ):
     settings = request.app.state.settings
     # This feature never falls back to saved demo proposals or synthetic activities.
-    if not settings.gemini_api_key or not settings.tavily_api_key:
+    if not settings.ticketmaster_api_key and not (
+        settings.model_configured and settings.tavily_api_key
+    ):
         raise HTTPException(503, "Activity search is not configured on the backend.")
     token = uuid4()
     args = {
@@ -60,10 +65,17 @@ async def suggestions(
         )
         return {"ready": True}
     except ResearchError as error:
-        raise HTTPException(
-            503, "Activity search is unavailable. Try again later."
-        ) from error
+        # Codes only: the message and sources may describe the trip.
+        logger.info("activity_search_failed stage=research code=%s", error.code)
+        # Same wording as proposal generation, so a spent allowance is named as such.
+        status, message = RESEARCH_FAILURES.get(
+            error.code, (503, "Activity search is unavailable. Try again later.")
+        )
+        if error.code == "no_results":
+            message = "No checkable suggestions were found for these cities and dates."
+        raise HTTPException(status, message) from error
     except GenerationInputsError as error:
+        logger.info("activity_search_failed stage=database code=%s", error.code)
         code = (
             403
             if error.code == "access_denied"

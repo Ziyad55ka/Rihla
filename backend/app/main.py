@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,9 +13,25 @@ from app.api.routes.trips import router as trips_router
 from app.core.config import Settings
 
 
+def configure_logging() -> None:
+    """Show Rihla's own INFO lines (generation cost, failed options) in the console.
+
+    Only the "app" logger: httpx logs full request URLs at INFO, and SerpApi takes
+    its key in the URL, so third-party loggers are left at their defaults.
+    """
+    logger = logging.getLogger("app")
+    if logger.handlers:
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build an app that can run locally without any external credentials."""
     settings = settings if settings is not None else Settings()
+    configure_logging()
     application = FastAPI(
         title="Rihla API",
         description="Foundation for the SWE 444 group travel planning project.",

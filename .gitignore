@@ -33,3 +33,7 @@ supabase/.branches/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Thmanyah Sans: its license forbids uploading, hosting or redistributing the font
+# files, so they stay on each developer's machine and are never committed.
+frontend/public/fonts/thmanyah/

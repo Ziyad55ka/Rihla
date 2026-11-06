@@ -124,6 +124,10 @@ export interface Flights {
   origin_airport?: string | null
   /** Three-letter code, or null on older proposals. */
   destination_airport?: string | null
+  // Set when the flight home leaves from the last city's airport.
+  return_airport?: string | null
+  /** Google Flights also listed these exact flights, both ways, on these dates. */
+  schedule_confirmed?: boolean
   /** Whether the search for everyone from this city found the flight. Never a count. */
   group_availability?: 'available' | 'not_found' | 'unknown'
   /** solo: each person booking alone was cheaper, and the price shown is that one. */
@@ -159,6 +163,7 @@ export interface AirlineFareNote {
 
 /** A free photo with its credit. Added when reading, and never saved. */
 export interface PlaceImage {
+  fallback_url?: string | null
   url: string
   /** The picture's page, with its full licence. */
   source_url: string
@@ -176,6 +181,11 @@ export interface Activity {
   category?: ActivityCategory
   name: InfoField
   description: InfoField
+  name_en?: string | null
+  name_ar?: string | null
+  description_en?: string | null
+  description_ar?: string | null
+  content_urls?: string[]
   location: InfoField
   duration: InfoField
   scheduled_date: InfoField
@@ -183,7 +193,15 @@ export interface Activity {
   price_per_person: SarPrice
   booking_url: string | null
   image_url: string | null
+  /** A free photo with its credit, added when proposals are read. */
+  image?: PlaceImage | null
+  /** Which of the group's interests this suggestion matches. Missing on older ones. */
+  fits?: ActivityFocus[]
+  research_notes?: ('guide_search_unavailable' | 'event_source_unavailable' | 'events_only')[]
 }
+
+/** The group's interests as general tags; never a member's own words. */
+export type ActivityFocus = 'landmarks' | 'museums_history' | 'culture_arts' | 'food' | 'nature_outdoors' | 'beaches_water' | 'shopping' | 'family_fun' | 'adventure_sports' | 'wellness_spa' | 'events_festivals'
 
 export interface EstimateComponent {
   known_amount_sar: string
@@ -200,6 +218,7 @@ export interface ActivityProposalEstimate {
   flights: EstimateComponent
   accommodation: EstimateComponent
   transport: EstimateComponent
+  meals?: EstimateComponent
   activities: EstimateComponent
   total: EstimateComponent
 }
@@ -236,6 +255,7 @@ export interface CityStay {
   hotel_url?: string | null
   /** Who gave the hotel and price when it was a live source. Example: "Trip.com". */
   hotel_source?: string | null
+  hotel_stars?: number | null
   /** A photo of this city, or null. */
   image?: PlaceImage | null
 }
@@ -267,6 +287,7 @@ export interface FlexibleAdjustment {
 
 /** One complete trip option. */
 export interface Proposal {
+  activity_allowance_per_person?: SarPrice | null
   activity_research_status?: 'not_requested' | 'ready' | 'unavailable'
   /** This proposal's own id, a UUID. */
   id: string
@@ -306,6 +327,8 @@ export interface Proposal {
   image?: PlaceImage | null
   /** US-15: how this proposal matches the group's requirements. Empty on older proposals. */
   compatibility?: CompatibilityCheck[]
+  /** US-15-AC03: the group's average fit and the least-satisfied member's fit. Null on older proposals. */
+  fit?: ProposalFit | null
 }
 
 /**
@@ -332,8 +355,8 @@ export type RoomPlan = 'single' | 'shared'
 export type OwnBudget = 'within' | 'over' | 'unconfirmed' | 'unknown'
 export type CostAssumption =
   | 'rooms_single' | 'rooms_shared' | 'flights_own_city' | 'flights_one_way' | 'flights_missing'
-  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'group_total_all_cities'
-  | 'group_total_unavailable' | 'prices_may_change'
+  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'activities_allowance' | 'group_total_all_cities'
+  | 'group_total_unavailable' | 'prices_may_change' | 'last_night_unused'
 
 export interface CostAmount {
   /** The sum of the known parts, as a string such as `"3750.00"`, or null. */
@@ -402,6 +425,8 @@ export interface StoredProposals {
   price_fresh_hours?: number
   /** A price is old above this many hours. Set by the backend. */
   price_stale_hours?: number
+  /** Advisory reminder, not an expiry or a held fare. */
+  price_review_minutes?: number
   /** Minutes before the flight price can be refreshed again. */
   refresh_cooldown_minutes?: number
   /** US-13: the caller's own costs for each proposal. Absent from older backends. */
@@ -422,4 +447,65 @@ export interface GeneratedProposals extends StoredProposals {
 export interface ProposalSet {
   /** Options 1, 2 and 3. */
   proposals: Proposal[]
+}
+
+
+/** What a running generation is doing. Holds no private data. */
+export type GenerationStage = 'planning' | 'checking_flights' | 'researching' | 'saving' | 'done' | 'failed'
+export type OptionStage = 'checking_flights' | 'flights_found' | 'dates_moved' | 'no_flights' | 'researching' | 'ready' | 'failed'
+
+export interface OptionProgress {
+  key: string
+  title: string | null
+  title_ar: string | null
+  destination: string | null
+  destination_ar: string | null
+  status: OptionStage
+  start_date: string | null
+  end_date: string | null
+  /** Days the departure moved to find flights: + later, - earlier. */
+  date_shift_days: number
+  hotel_name: string | null
+  /** A decimal string in SAR, or null. */
+  hotel_price_per_night_sar: string | null
+  hotel_source: string | null
+}
+
+export interface GenerationProgress {
+  stage: GenerationStage
+  started_at: string
+  updated_at: string
+  options: OptionProgress[]
+  target: number
+  ready: number
+}
+
+export type SuggestionAction = 'edit_dates' | 'edit_preferences' | 'retry' | 'open_link'
+export type SuggestionKind = 'dates_too_soon' | 'widen_dates' | 'add_destination' | 'retry_later' | 'generate_again' | 'review_essentials' | 'wait_and_retry' | 'check_departure_city' | 'retry_after' | 'review_budget' | 'search_google_flights' | 'try_other_dates'
+
+export interface GenerationSuggestion {
+  action: SuggestionAction
+  kind: SuggestionKind
+  /** English copy; the page shows its own translation for the kind. */
+  text: string
+  params: Record<string, string>
+}
+
+/** Why generation produced nothing, and what the group can change. */
+export interface GenerationIssue {
+  code: string
+  message: string
+  places: string[]
+  /** Why the flight searches found nothing, most frequent first. */
+  causes?: { kind: string; text: string }[]
+  suggestions: GenerationSuggestion[]
+}
+
+/** How well a proposal fits the group. Anonymous: nobody's own score is stored. */
+export interface ProposalFit {
+  /** The average member's fit, 0-100. */
+  group_percent: number
+  /** The least-satisfied member's fit, 0-100. Proposals are ranked by this first. */
+  least_satisfied_percent: number
+  member_count: number
 }

@@ -1,0 +1,25 @@
+{
+  "daily": [
+    {"route": "RUH-JED", "adults": 2, "days_ahead": 21, "nights": 3, "note": "Domestic: Saudia, flynas and flyadeal compete"},
+    {"route": "DMM-IST", "adults": 2, "days_ahead": 42, "nights": 5, "note": "Eastern Province, often a connection"},
+    {"route": "RUH-LHR", "adults": 1, "days_ahead": 45, "nights": 6, "note": "Long haul: Riyadh Air, Saudia, British Airways"},
+    {"route": "RUH-GYD", "adults": 2, "days_ahead": 340, "nights": 4, "expect": "none", "note": "Not on sale yet: the reason must be named"}
+  ],
+  "weekly": [
+    {"route": "RUH-JED", "adults": 2, "days_ahead": 21, "nights": 3, "note": "Domestic, busiest route"},
+    {"route": "JED-RUH", "adults": 1, "days_ahead": 14, "nights": 2, "note": "Domestic, short notice"},
+    {"route": "DMM-JED", "adults": 3, "days_ahead": 30, "nights": 4, "note": "Domestic, larger group"},
+    {"route": "MED-RUH", "adults": 2, "days_ahead": 24, "nights": 3, "note": "Madinah"},
+    {"route": "AHB-RUH", "adults": 2, "days_ahead": 25, "nights": 3, "note": "Abha, a smaller airport"},
+    {"route": "TUU-JED", "adults": 1, "days_ahead": 28, "nights": 3, "note": "Tabuk, few daily flights"},
+    {"route": "JED-DXB", "adults": 1, "days_ahead": 28, "nights": 4, "note": "Gulf, low-cost carriers"},
+    {"route": "RUH-DOH", "adults": 2, "days_ahead": 32, "nights": 3, "note": "Gulf, Qatar Airways and Saudi carriers"},
+    {"route": "RUH-CAI", "adults": 3, "days_ahead": 35, "nights": 5, "note": "Larger group"},
+    {"route": "JED-IST", "adults": 2, "days_ahead": 40, "nights": 5, "note": "Saudia, Turkish, flynas"},
+    {"route": "DMM-IST", "adults": 2, "days_ahead": 42, "nights": 5, "note": "Often a connection"},
+    {"route": "RUH-LHR", "adults": 1, "days_ahead": 45, "nights": 6, "note": "Long haul: Riyadh Air, Saudia, British Airways"},
+    {"route": "RUH-KUL", "adults": 2, "days_ahead": 60, "nights": 7, "note": "Asia, overnight flights"},
+    {"route": "JED-CAI", "adults": 4, "days_ahead": 20, "nights": 4, "note": "Four seats on one flight"},
+    {"route": "RUH-GYD", "adults": 2, "days_ahead": 340, "nights": 4, "expect": "none", "note": "Not on sale yet: the reason must be named"}
+  ]
+}

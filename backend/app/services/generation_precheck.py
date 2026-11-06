@@ -9,7 +9,6 @@ import hashlib
 import hmac
 import json
 import logging
-import re
 import secrets
 import sqlite3
 import time
@@ -20,6 +19,7 @@ from app.core.config import Settings
 from app.schemas.conflicts import ConflictCategory
 from app.schemas.generation import GenerationInput
 from app.schemas.planning import PlanningStatus
+from app.services.generation_progress import ProgressReporter
 from app.services.proposal_generation import (
     GenerationBlocked,
     GenerationResult,
@@ -162,10 +162,13 @@ def input_hash(generation: GenerationInput, key: str | None = None) -> str:
     )
     payload = json.dumps(
         [
+            "single-booking-complete-route-v3-full-hotel-nights",
             str(generation.trip_id),
             generation.shared_start.isoformat(),
             generation.shared_end.isoformat(),
             members,
+            # Only when chosen, so proposals saved before this option still match.
+            *([f"days={generation.trip_days}"] if generation.trip_days else []),
         ]
     )
     secret = key.encode() if key else _RESTART_KEY
@@ -187,29 +190,12 @@ def check_planning(planning: PlanningStatus) -> None:
         raise GenerationBlocked(*conflicts)
 
 
-def _known_countries(text: str) -> set[str] | None:
-    """The countries named, or None if any word is not a known country."""
-    words = set(re.findall(r"\w+", text.casefold())) - STOP_WORDS
-    if not words or not words <= COUNTRY_WORDS.keys():
-        return None
-    return {COUNTRY_WORDS[word] for word in words}
-
-
 def find_input_conflicts(
     generation: GenerationInput, settings: Settings
 ) -> list[ConflictCategory]:
     """Stage 1 checks on the group's data. Makes no outside request."""
     conflicts: list[ConflictCategory] = []
-    wanted = [
-        _known_countries(member.destinations.value)
-        for member in generation.members
-        if member.destinations.importance == "Essential" and member.destinations.value
-    ]
-    # A clear conflict only: any doubtful value goes to stage 2 instead.
-    known = [item for item in wanted if item is not None]
-    if len(known) == len(wanted) > 1 and not set.intersection(*known):
-        conflicts.append("destinations")
-
+    # Different places are never a conflict: the planner combines them.
     days = (generation.shared_end - generation.shared_start).days + 1
     lowest = min(member.max_budget_sar for member in generation.members)
     if lowest < settings.min_budget_sar_per_day * days:
@@ -230,6 +216,7 @@ async def generate_checked(
     planning: PlanningStatus | None = None,
     version: int = 1,
     regenerate: bool = False,
+    progress: ProgressReporter | None = None,
 ) -> GenerationResult:
     """The entry point for generation. Raises GenerationBlocked when a check fails.
 
@@ -254,7 +241,9 @@ async def generate_checked(
     if saved is not None:
         return saved.model_copy(update={"reused": True, "cost": ResearchCost()})
 
-    result = await generate_proposals(generation, settings, version)
+    # Passed only when tracked, so the call stays the same for other callers.
+    extra = {"progress": progress} if progress is not None else {}
+    result = await generate_proposals(generation, settings, version, **extra)
     # Counts only, never values or queries.
     logger.info(
         "generation_cost gemini=%s tokens=%s tavily_credits=%s ignav=%s cached=%s",

@@ -10,3 +10,12 @@ export const GENERATE_STEP_MS = 8000
 export function nextStatusIndex(index: number, length: number): number {
   return Math.min(index + 1, length - 1)
 }
+
+/** Minutes and seconds since generation began, such as 1:05. */
+export function elapsedLabel(seconds: number, locale: string): string {
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.floor(seconds % 60)
+  const two = (value: number) => value.toLocaleString(locale, { minimumIntegerDigits: 2 })
+  return `${minutes.toLocaleString(locale)}:${two(rest)}`
+}
+
