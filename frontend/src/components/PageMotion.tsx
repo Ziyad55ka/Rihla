@@ -5,7 +5,7 @@ export function PageMotion() {
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)')
     if (reduced.matches || !('IntersectionObserver' in window)) return
-    const selector = '.landing-about-intro, .landing-step, .landing-closing, .trip-card, .planning-member-card, .preferences-fields, .account-card, .trip-state-panel, .dashboard-note'
+    const selector = '.landing-about-intro, .landing-step, .landing-closing, .trip-card, .planning-member-card, .account-card, .trip-state-panel, .dashboard-note'
     const observed = new Set<Element>()
     const reveal = (element: Element) => { element.setAttribute('data-reveal', 'visible'); intersection.unobserve(element); observed.delete(element) }
     const intersection = new IntersectionObserver(entries => {

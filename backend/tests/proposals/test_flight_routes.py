@@ -72,11 +72,12 @@ def test_book_returns_a_fresh_link_and_no_private_count(api) -> None:
     assert body["flights"][0]["direction"] == "outbound"
 
 
-def test_book_rejects_an_unknown_leg(api) -> None:
+@pytest.mark.parametrize("leg", ["everything", "outbound", "inbound", ""])
+def test_book_rejects_anything_except_the_whole_round_trip(api, leg) -> None:
     client, _ = api
 
     response = client.post(
-        f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=everything"
+        f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg={leg}"
     )
 
     assert response.status_code == 422
@@ -110,7 +111,7 @@ def test_outsiders_and_replaced_proposals_are_refused(
 
     assert (
         client.post(
-            f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=outbound"
+            f"/api/trips/{TRIP}/proposals/{PROPOSAL}/book-flight?leg=round_trip"
         ).status_code
         == status
     )

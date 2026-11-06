@@ -579,6 +579,7 @@ def test_live_hotels_skip_their_web_search_and_fill_the_city(
                 "https://booking.example/x",
                 "Booking.com via Google",
                 exact_price=True,
+                source_url="https://www.google.com/travel/search?q=Souq+Hotel",
             )
 
     monkeypatch.setattr(trip_research, "search_sources", sources)
@@ -599,6 +600,8 @@ def test_live_hotels_skip_their_web_search_and_fill_the_city(
     assert by_id["cities.0.hotel_name"].value == "Souq Hotel"
     assert by_id["cities.0.hotel_price_per_night"].amount_sar == Dec("420.00")
     assert result.hotel_links == {0: "https://booking.example/x"}
+    hotel_source = next(s for s in result.sources if "Souq Hotel" in s.title)
+    assert hotel_source.url == "https://www.google.com/travel/search?q=Souq+Hotel"
 
 
 def test_extraction_uses_low_thinking_and_the_planner_keeps_the_default(

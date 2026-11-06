@@ -3,6 +3,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def clean_proposal_environment(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    # Retries never wait in tests.
+    from app.services import flight_prices
+
+    async def no_wait(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(flight_prices, "_sleep", no_wait)
     # Tests must never count towards the real usage files, or reach an outside service.
     monkeypatch.setenv("FLIGHT_USAGE_DB", str(tmp_path / "flight-usage.sqlite3"))
     monkeypatch.setenv("PRICE_ACCURACY_DB", str(tmp_path / "price-accuracy.sqlite3"))

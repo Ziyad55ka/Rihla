@@ -60,12 +60,17 @@ export function useSectionReveal(root: RefObject<HTMLElement | null>) {
         entry.target.classList.remove('details-pending')
         observer.unobserve(entry.target)
       }
-    }, { threshold: 0.05 })
+    // Long activity lists can be taller than twenty viewports. A percentage
+    // threshold can never be reached on mobile and would hide the whole list.
+    }, { threshold: 0 })
     element.querySelectorAll<HTMLElement>(':scope>section').forEach((part, index) => {
       part.style.setProperty('--reveal-delay', `${Math.min(index, 3) * 90}ms`)
       part.classList.add('details-pending')
       observer.observe(part)
     })
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      element.querySelectorAll(':scope>section').forEach(part => part.classList.remove('details-pending'))
+    }
   }, [root])
 }

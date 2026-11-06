@@ -163,6 +163,7 @@ export interface AirlineFareNote {
 
 /** A free photo with its credit. Added when reading, and never saved. */
 export interface PlaceImage {
+  fallback_url?: string | null
   url: string
   /** The picture's page, with its full licence. */
   source_url: string
@@ -180,6 +181,11 @@ export interface Activity {
   category?: ActivityCategory
   name: InfoField
   description: InfoField
+  name_en?: string | null
+  name_ar?: string | null
+  description_en?: string | null
+  description_ar?: string | null
+  content_urls?: string[]
   location: InfoField
   duration: InfoField
   scheduled_date: InfoField
@@ -191,6 +197,7 @@ export interface Activity {
   image?: PlaceImage | null
   /** Which of the group's interests this suggestion matches. Missing on older ones. */
   fits?: ActivityFocus[]
+  research_notes?: ('guide_search_unavailable' | 'event_source_unavailable' | 'events_only')[]
 }
 
 /** The group's interests as general tags; never a member's own words. */
@@ -211,6 +218,7 @@ export interface ActivityProposalEstimate {
   flights: EstimateComponent
   accommodation: EstimateComponent
   transport: EstimateComponent
+  meals?: EstimateComponent
   activities: EstimateComponent
   total: EstimateComponent
 }
@@ -247,6 +255,7 @@ export interface CityStay {
   hotel_url?: string | null
   /** Who gave the hotel and price when it was a live source. Example: "Trip.com". */
   hotel_source?: string | null
+  hotel_stars?: number | null
   /** A photo of this city, or null. */
   image?: PlaceImage | null
 }
@@ -278,6 +287,7 @@ export interface FlexibleAdjustment {
 
 /** One complete trip option. */
 export interface Proposal {
+  activity_allowance_per_person?: SarPrice | null
   activity_research_status?: 'not_requested' | 'ready' | 'unavailable'
   /** This proposal's own id, a UUID. */
   id: string
@@ -345,8 +355,8 @@ export type RoomPlan = 'single' | 'shared'
 export type OwnBudget = 'within' | 'over' | 'unconfirmed' | 'unknown'
 export type CostAssumption =
   | 'rooms_single' | 'rooms_shared' | 'flights_own_city' | 'flights_one_way' | 'flights_missing'
-  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'group_total_all_cities'
-  | 'group_total_unavailable' | 'prices_may_change'
+  | 'meals_allowance' | 'activities_not_included' | 'activities_selected' | 'activities_allowance' | 'group_total_all_cities'
+  | 'group_total_unavailable' | 'prices_may_change' | 'last_night_unused'
 
 export interface CostAmount {
   /** The sum of the known parts, as a string such as `"3750.00"`, or null. */
@@ -415,6 +425,8 @@ export interface StoredProposals {
   price_fresh_hours?: number
   /** A price is old above this many hours. Set by the backend. */
   price_stale_hours?: number
+  /** Advisory reminder, not an expiry or a held fare. */
+  price_review_minutes?: number
   /** Minutes before the flight price can be refreshed again. */
   refresh_cooldown_minutes?: number
   /** US-13: the caller's own costs for each proposal. Absent from older backends. */
@@ -468,8 +480,8 @@ export interface GenerationProgress {
   ready: number
 }
 
-export type SuggestionAction = 'edit_dates' | 'edit_preferences' | 'retry'
-export type SuggestionKind = 'dates_too_soon' | 'widen_dates' | 'add_destination' | 'retry_later' | 'generate_again' | 'review_essentials' | 'wait_and_retry'
+export type SuggestionAction = 'edit_dates' | 'edit_preferences' | 'retry' | 'open_link'
+export type SuggestionKind = 'dates_too_soon' | 'widen_dates' | 'add_destination' | 'retry_later' | 'generate_again' | 'review_essentials' | 'wait_and_retry' | 'check_departure_city' | 'retry_after' | 'review_budget' | 'search_google_flights' | 'try_other_dates'
 
 export interface GenerationSuggestion {
   action: SuggestionAction
@@ -484,6 +496,8 @@ export interface GenerationIssue {
   code: string
   message: string
   places: string[]
+  /** Why the flight searches found nothing, most frequent first. */
+  causes?: { kind: string; text: string }[]
   suggestions: GenerationSuggestion[]
 }
 

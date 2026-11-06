@@ -30,9 +30,13 @@ from app.services.flight_prices import (
     FlightQuery,
     IgnavProvider,
     airport_for_city,
+    complete_return_fare,
     get_flight_provider,
 )
-from app.services.generation_errors import no_flights_error, no_proposals_error
+from app.services.generation_errors import (
+    no_flights_error,
+    no_proposals_error,
+)
 from app.services.generation_progress import ProgressReporter
 from app.services.proposal_generation import (
     STOPPING_ERRORS,
@@ -47,6 +51,7 @@ from app.services.proposal_generation import (
     _research_option,
     _valid_airport,
     collect_requirements,
+    rank_proposals,
     return_airport_of,
     route_key,
 )
@@ -117,6 +122,8 @@ async def probe_option(
         if airport and airport != arrival:
             airports[airport] = airports.get(airport, 0) + count
     starts = candidate_starts(option, generation, earliest, shifts)
+    over_budget = False
+    ceiling = min(member.max_budget_sar for member in generation.members)
     if not airports:
         return moved(option, starts[0]) if starts else None
     length = option.end_date - option.start_date
@@ -136,8 +143,44 @@ async def probe_option(
                 for origin, adults in airports.items()
             )
         )
-        if all(fare is not None and _fare_in_sar(fare) is not None for fare in fares):
+        if any(
+            FlightQuery(
+                origin,
+                arrival,
+                start,
+                start + length,
+                adults,
+                return_airport_of(option),
+            )
+            in provider.unavailable_queries
+            for origin, adults in airports.items()
+        ):
+            raise ResearchError(
+                "flight_source_unavailable",
+                "The flight source is temporarily unavailable. Try again later.",
+            )
+        if all(
+            fare is not None
+            and complete_return_fare(
+                fare,
+                FlightQuery(
+                    origin,
+                    arrival,
+                    start,
+                    start + length,
+                    adults,
+                    return_airport_of(option),
+                ),
+            )
+            and _fare_in_sar(fare) is not None
+            for (origin, adults), fare in zip(airports.items(), fares, strict=True)
+        ):
+            if any(_fare_in_sar(fare) > ceiling for fare in fares):
+                over_budget = True
+                continue
             return moved(option, start)
+    if over_budget:
+        raise OptionRejected("over_group_budget")
     return None
 
 
@@ -149,6 +192,14 @@ async def generate(
 ) -> GenerationResult:
     progress = progress or ProgressReporter(None)
     cost = ResearchCost()
+    if any(
+        airport_for_city(member.departure_city) is None for member in generation.members
+    ):
+        raise ResearchError(
+            "departure_airport_unknown",
+            "A departure city could not be matched to an airport. "
+            "Each member should check their departure city in preferences.",
+        )
     requirements = collect_requirements(generation)
     origins = list(
         {
@@ -163,11 +214,16 @@ async def generate(
     if not isinstance(provider, IgnavProvider):  # pragma: no cover - guarded above
         raise ResearchError("not_configured", "Live fares are not set up.")
     earliest = today() + timedelta(days=settings.min_departure_lead_days)
+    if generation.shared_end < earliest:
+        raise no_flights_error(
+            generation, [], today(), settings.min_departure_lead_days, None
+        )
 
     used: set[tuple[str, tuple[str, ...]]] = set()
     accepted: list[tuple[PlannedOption, list]] = []
     failures: list[FailureReason] = []
     no_flight_places: list[str] = []
+    source_error: ResearchError | None = None
     planned_nights: int | None = None
 
     progress.stage("planning")
@@ -222,9 +278,20 @@ async def generate(
                         settings.flight_date_shifts,
                     )
                     for option, _ in wave
-                )
+                ),
+                return_exceptions=True,
             )
             for (option, adjustments), result in zip(wave, found, strict=True):
+                if isinstance(result, OptionRejected):
+                    failures.extend(result.reasons)
+                    progress.option(option_key(option), status="failed")
+                    continue
+                if isinstance(result, ResearchError):
+                    source_error = result
+                    progress.option(option_key(option), status="failed")
+                    continue
+                if isinstance(result, BaseException):
+                    raise result
                 if result is None:
                     failures.append("no_flights")
                     no_flight_places.append(option.destination)
@@ -241,6 +308,8 @@ async def generate(
                 accepted.append((result, adjustments))
 
         needed = TARGET - len(accepted)
+        if source_error is not None:
+            break
         # One more Gemini request, and only when the limit still allows it.
         if (
             needed <= 0
@@ -258,7 +327,13 @@ async def generate(
                 used,
                 settings,
                 cost,
-                previous_problem="no_flights" if no_flight_places else None,
+                previous_problem="no_flights"
+                if no_flight_places
+                else "over_group_budget"
+                if "over_group_budget" in failures
+                else "invalid_itinerary"
+                if "invalid_itinerary" in failures
+                else None,
             )
         except ResearchError as error:
             if error.code in STOPPING_ERRORS and not accepted:
@@ -269,7 +344,11 @@ async def generate(
 
     cost.ignav_requests += provider.requests_made
     if not accepted:
-        if "over_group_budget" in failures and "no_flights" not in failures:
+        if source_error is not None:
+            raise source_error
+        # Flights found but too dear is a price problem, not a date problem, even
+        # when other places had no flights at all.
+        if "over_group_budget" in failures:
             raise GenerationBlocked("budget")
         if no_flight_places:
             raise no_flights_error(
@@ -278,6 +357,7 @@ async def generate(
                 today(),
                 settings.min_departure_lead_days,
                 planned_nights,
+                Counter(provider.miss_reasons.values()),
             )
         raise no_proposals_error()
 
@@ -348,23 +428,28 @@ async def generate(
         )
         option_failures.append(OptionFailure(option_number=number, reasons=reasons))
 
-    # Best for the least-satisfied member first, then the group average
-    # (US-15-AC03); numbers then follow that order, with no gaps.
-    proposals.sort(
-        key=lambda item: (
-            -(item.fit.least_satisfied_percent if item.fit else 0),
-            -(item.fit.group_percent if item.fit else 0),
-        )
-    )
-    proposals = [
-        proposal.model_copy(update={"option_number": index})
-        for index, proposal in enumerate(proposals, start=1)
-    ]
+    common = {
+        outcome.id
+        for outcome, (option, _) in zip(outcomes, accepted, strict=True)
+        if isinstance(outcome, Proposal) and option.common_ground
+    }
+    proposals = rank_proposals(proposals, common, requirements)
     if not proposals:
         if stopped is not None:
             raise stopped
-        if all("over_group_budget" in item.reasons for item in option_failures):
+        if any("over_group_budget" in item.reasons for item in option_failures):
             raise GenerationBlocked("budget")
+        if option_failures and all(
+            "no_flights" in item.reasons for item in option_failures
+        ):
+            raise no_flights_error(
+                generation,
+                [option.destination for option, _ in accepted],
+                today(),
+                settings.min_departure_lead_days,
+                planned_nights,
+                Counter(provider.miss_reasons.values()),
+            )
         raise no_proposals_error()
     complete = len(proposals) == TARGET
     message = None

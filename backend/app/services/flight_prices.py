@@ -1,7 +1,9 @@
 """Swappable flight fare sources. Returning None means use the web search instead."""
 
+import asyncio
 import hashlib
 import logging
+import random
 import re
 import time
 from collections.abc import Callable
@@ -14,6 +16,7 @@ from urllib.parse import unquote, urlsplit
 import httpx2 as httpx
 
 from app.core.config import Settings
+from app.services.flight_booking_policy import single_booking
 from app.services.flight_usage import FlightUsage
 from app.services.price_accuracy import PriceAccuracy
 
@@ -22,6 +25,37 @@ logger = logging.getLogger(__name__)
 IGNAV_BASE_URL = "https://ignav.com/api"
 MAX_BOOKING_URL_LENGTH = 2000
 CITY_AIRPORTS = {
+    "paris": "CDG",
+    "باريس": "CDG",
+    "london": "LHR",
+    "لندن": "LHR",
+    "dubai": "DXB",
+    "دبي": "DXB",
+    "abu dhabi": "AUH",
+    "أبوظبي": "AUH",
+    "doha": "DOH",
+    "الدوحة": "DOH",
+    "cairo": "CAI",
+    "القاهرة": "CAI",
+    "istanbul": "IST",
+    "إسطنبول": "IST",
+    "اسطنبول": "IST",
+    "barcelona": "BCN",
+    "برشلونة": "BCN",
+    "tokyo": "HND",
+    "طوكيو": "HND",
+    "kuala lumpur": "KUL",
+    "كوالالمبور": "KUL",
+    "bangkok": "BKK",
+    "بانكوك": "BKK",
+    "singapore": "SIN",
+    "سنغافورة": "SIN",
+    "new york": "JFK",
+    "نيويورك": "JFK",
+    "bahrain": "BAH",
+    "البحرين": "BAH",
+    "muscat": "MCT",
+    "مسقط": "MCT",
     "riyadh": "RUH",
     "الرياض": "RUH",
     "jeddah": "JED",
@@ -51,6 +85,9 @@ CITY_AIRPORTS = {
 
 
 def airport_for_city(city: str) -> str | None:
+    code = city.strip().upper()
+    if code in set(CITY_AIRPORTS.values()) | {"ORY", "LGW", "STN", "SAW", "NRT", "EWR"}:
+        return code
     return CITY_AIRPORTS.get(" ".join(city.casefold().split()))
 
 
@@ -94,6 +131,39 @@ class FareLeg:
     stops: int | None = None
     seller: str | None = None
     stop_airports: tuple[str, ...] = ()
+    # (from, local departure day, to, airline code, number) for each flight, in order.
+    segments: tuple[tuple[str, str, str, str, str], ...] = ()
+
+
+def leg_segments(part: dict) -> tuple[tuple[str, str, str, str, str], ...]:
+    """Every flight in a direction, or nothing when any detail is missing."""
+    found = []
+    for item in _segments(part):
+        values = (
+            str(item.get("departure_airport") or "").strip().upper(),
+            str(item.get("departure_time_local") or "")[:10],
+            str(item.get("arrival_airport") or "").strip().upper(),
+            str(item.get("marketing_carrier_code") or "").strip().upper(),
+            str(item.get("flight_number") or "").strip().upper(),
+        )
+        if not all(values):
+            return ()
+        found.append(values)
+    return tuple(found)
+
+
+# Retries for a failed Ignav lookup: 3 attempts, waits of about 1 s then 2 s.
+IGNAV_ATTEMPTS = 3
+IGNAV_BACKOFF_SECONDS = 1.0
+_sleep = asyncio.sleep  # Replaced in tests.
+# Why a search found no bookable round trip, shown to the group in plain words.
+MissReason = Literal[
+    "dates_not_searchable",
+    "no_seats",
+    "lands_after_trip",
+    "no_single_booking",
+    "not_on_sale",
+]
 
 
 @dataclass(frozen=True)
@@ -155,6 +225,32 @@ class FlightPriceProvider(Protocol):
     async def find(self, query: FlightQuery) -> FlightFare | None: ...
 
 
+def complete_return_fare(fare: FlightFare, query: FlightQuery) -> bool:
+    """Both requested directions must be sold together through one booking link."""
+    if not single_booking(fare.trip_type, (leg.booking_url for leg in fare.legs)):
+        return False
+    if not link_matches(fare.legs[0].booking_url, {"outbound", "inbound"}, query):
+        return False
+    legs = {leg.direction: leg for leg in fare.legs}
+    back = legs.get("return")
+    if back and back.arrival_time:
+        arrival = str(back.arrival_time)[:10]
+        if (
+            re.fullmatch(r"\d{4}-\d{2}-\d{2}", arrival)
+            and arrival > query.return_date.isoformat()
+        ):
+            return False
+    return all(
+        direction in legs
+        and legs[direction].date == day.isoformat()
+        and bool(legs[direction].booking_url)
+        for direction, day in (
+            ("outbound", query.departure_date),
+            ("return", query.return_date),
+        )
+    )
+
+
 class WebSearchOnly:
     """Always falls through to the Tavily search and Gemini extraction."""
 
@@ -172,6 +268,11 @@ class FareCache(Protocol):
 
 class IgnavError(Exception):
     """Holds only a status or short code, never a response body or the key."""
+
+    def __init__(self, status: str, code: str | None = None) -> None:
+        super().__init__(status)
+        # Ignav's own error code, such as "unsupported_search", when it sent one.
+        self.code = code
 
 
 class IgnavProvider:
@@ -191,9 +292,14 @@ class IgnavProvider:
         price_conflict_percent: Decimal = Decimal(10),
         cache_seconds: float = 900,
         verifier: Any = None,
+        backup: Any = None,
+        backup_searches: int = 6,
     ) -> None:
         # A second source (GoogleFlightsCheck) every kept flight must also be on.
         self.verifier = verifier
+        # Searched on the same dates when Ignav fails or finds no bookable trip.
+        self.backup = backup
+        self.backup_left = backup_searches
         self.price_conflict_percent = price_conflict_percent
         self.on_fare = on_fare
         self.cache_seconds = cache_seconds
@@ -207,25 +313,63 @@ class IgnavProvider:
         self.on_request = on_request
         # Searches that returned no trip, so the party may not fit on one flight.
         self.no_itinerary: set[FlightQuery] = set()
+        self.unavailable_queries: set[FlightQuery] = set()
+        # Why each search with no bookable fare had none, for the group's message.
+        self.miss_reasons: dict[FlightQuery, MissReason] = {}
+        # Stop exhausting the same source after credentials/quota are rejected.
+        # This object lives for one generation, not across users or days.
+        self._blocked_status: str | None = None
 
     async def _post(self, path: str, body: dict) -> dict:
-        self.requests_made += 1
-        if self.on_request:
-            self.on_request(path.rsplit("/", 1)[-1])
+        """One request, retried when Ignav says the lookup itself failed.
+
+        Ignav's advice (6 Nov 2026): a 424 "unable_to_complete_request" is a failed
+        lookup, not "no flights": retry with a 60 s timeout, up to three attempts
+        with exponential backoff and jitter, then report it as failed. Failed
+        requests use no credits. "unsupported_search" is never retried.
+        """
+        if self._blocked_status:
+            raise IgnavError(self._blocked_status)
+        failure: IgnavError | None = None
+        for attempt in range(IGNAV_ATTEMPTS):
+            if attempt:
+                delay = IGNAV_BACKOFF_SECONDS * 2 ** (attempt - 1)
+                await _sleep(delay + random.uniform(0, delay / 2))
+            self.requests_made += 1
+            if self.on_request:
+                self.on_request(path.rsplit("/", 1)[-1])
+            try:
+                async with httpx.AsyncClient(
+                    timeout=60.0,
+                    trust_env=False,
+                    transport=self.transport,
+                    headers={"X-Api-Key": self.api_key},
+                ) as client:
+                    response = await client.post(f"{IGNAV_BASE_URL}{path}", json=body)
+            except httpx.RequestError as error:
+                failure = IgnavError("unreachable")
+                failure.__cause__ = error
+                continue
+            if response.status_code == 200:
+                break
+            code = _error_code(response)
+            if response.status_code in {401, 403, 429}:
+                self._blocked_status = f"http_{response.status_code}"
+            failure = IgnavError(f"http_{response.status_code}", code)
+            retryable = response.status_code >= 500 or (
+                response.status_code == 424 and code != "unsupported_search"
+            )
+            if not retryable:
+                raise failure
+        else:
+            logger.info("ignav_failed_after_retries attempts=%s", IGNAV_ATTEMPTS)
+            assert failure is not None
+            raise failure
         try:
-            async with httpx.AsyncClient(
-                timeout=45.0,
-                trust_env=False,
-                transport=self.transport,
-                headers={"X-Api-Key": self.api_key},
-            ) as client:
-                response = await client.post(f"{IGNAV_BASE_URL}{path}", json=body)
-        except httpx.RequestError as error:
-            raise IgnavError("unreachable") from error
-        if response.status_code != 200:
-            raise IgnavError(f"http_{response.status_code}")
-        try:
-            return response.json()
+            result = response.json()
+            if not isinstance(result, dict):
+                raise ValueError("Expected an object")
+            return result
         except ValueError as error:
             raise IgnavError("invalid_json") from error
 
@@ -274,6 +418,8 @@ class IgnavProvider:
         links = await self.booking_links(str(choice["ignav_id"]))
         try:
             fare = fare_from_itinerary(choice, links, query, self.price_is_total)
+            if not complete_return_fare(fare, query):
+                return None
             if self.on_fare:
                 self.on_fare(fare, query)
             return fare
@@ -282,14 +428,43 @@ class IgnavProvider:
                 raise
             return None
 
-    async def _best_fare(self, body: dict, query: FlightQuery) -> FlightFare | None:
+    async def _best_fare(
+        self, body: dict, query: FlightQuery, attempts_left: int = 3
+    ) -> FlightFare | None:
         """Prefer one airline both ways, unless another trip is clearly better.
 
-        At most two links requests, because each one is a billed request.
+        Try another itinerary when a cheap result only has separate bookings.
+        The fallback is bounded rather than repeatedly requesting the same links.
         """
+        # A cheap result on the wrong day must not mask the next valid fare.
+        body = {
+            **body,
+            "itineraries": [
+                item
+                for item in usable_itineraries(body)
+                if itinerary_problem(item, query) is None
+            ],
+        }
         cheapest = cheapest_itinerary(body)
+        if cheapest is None:
+            return None
         steady = steady_itinerary(body) or cheapest
         fare = await self._fare(steady, query)
+        if fare is None:
+            if attempts_left <= 1:
+                return None
+            return await self._best_fare(
+                {
+                    **body,
+                    "itineraries": [
+                        item
+                        for item in body["itineraries"]
+                        if item.get("ignav_id") != steady.get("ignav_id")
+                    ],
+                },
+                query,
+                attempts_left - 1,
+            )
         worth_it = cheapest is not steady and clearly_better(
             cheapest, steady, self.split_saving, self.split_extra
         )
@@ -307,7 +482,7 @@ class IgnavProvider:
         return await self._fare(cheapest, query) or fare
 
     async def _cheaper_alone(self, fare: FlightFare, query: FlightQuery) -> FlightFare:
-        """Compare the same flight booked together and alone. One more request."""
+        """Record a possible solo saving; keep the checked group price unchanged."""
         if query.adults <= 1:
             return fare
         wanted = {leg.direction: leg.flight_number for leg in fare.legs}
@@ -336,8 +511,6 @@ class IgnavProvider:
             return fare
         return replace(
             fare,
-            amount=str(Decimal(fare.amount) - saving),
-            verified=fare.verified and alone["price"].get("status") == "verified",
             solo_saving=str(saving),
         )
 
@@ -394,34 +567,79 @@ class IgnavProvider:
         return None, False
 
     async def find(self, query: FlightQuery) -> FlightFare | None:
+        """Ignav first; Google Flights for the same dates and group if it has none."""
+        fare = await self._find_on_ignav(query)
+        if fare is not None or self.backup is None or self.backup_left <= 0:
+            return fare
+        self.backup_left -= 1
+        backup, answered = await self.backup.fare(query)
+        logger.info(
+            "flight_backup source=google_flights found=%s answered=%s",
+            backup is not None,
+            answered,
+        )
+        if backup is not None and complete_return_fare(backup, query):
+            self.unavailable_queries.discard(query)
+            self.no_itinerary.discard(query)
+            self.miss_reasons.pop(query, None)
+            return backup
+        if answered and query in self.unavailable_queries:
+            # Google answered with nothing bookable: a real answer, not an outage.
+            self.unavailable_queries.discard(query)
+            self.miss_reasons[query] = "no_seats"
+        elif not answered:
+            self.unavailable_queries.add(query)
+            self.no_itinerary.discard(query)
+            self.miss_reasons.pop(query, None)
+        return None
+
+    async def _find_on_ignav(self, query: FlightQuery) -> FlightFare | None:
         checked = "checked|" if self.verifier else ""
-        key = hashlib.sha256(f"ignav-legs|{checked}{query}".encode()).hexdigest()
+        key = hashlib.sha256(
+            f"ignav-one-booking-v6|total={self.price_is_total}|{checked}{query}".encode()
+        ).hexdigest()
         cached = self.cache.get(key) if self.cache else None
         if cached and time.time() - cached[0].get("cached_at", 0) < self.cache_seconds:
             saved = dict(cached[0])
             saved.pop("cached_at")
             saved["legs"] = tuple(
-                FareLeg(**{**leg, "stop_airports": tuple(leg.get("stop_airports", ()))})
+                FareLeg(
+                    **{
+                        **leg,
+                        "stop_airports": tuple(leg.get("stop_airports", ())),
+                        "segments": tuple(
+                            tuple(item) for item in leg.get("segments", ())
+                        ),
+                    }
+                )
                 for leg in saved["legs"]
             )
-            return FlightFare(**saved)
+            cached_fare = FlightFare(**saved)
+            if complete_return_fare(cached_fare, query):
+                return cached_fare
         try:
             body = await self.search(query)
+            if not isinstance(body.get("itineraries"), list):
+                raise IgnavError("invalid_response")
             observed = body.get("observed_at")
             if cheapest_itinerary(body) is None:
                 logger.info("flight_provider_fallback reason=no_itinerary")
                 self.no_itinerary.add(query)
+                # Results are for the whole party, so none means no seats for all.
+                self.miss_reasons[query] = "no_seats"
                 return None
             confirmed = False
             if self.verifier is not None:
                 listed = await self._keep_listed(body, query)
                 if listed is None:
+                    self.miss_reasons[query] = "not_on_sale"
                     return None
                 fare, confirmed = await self._confirmed(listed, query)
             else:
                 fare = await self._best_fare(body, query)
             if fare is None:
                 logger.info("flight_provider_fallback reason=no_booking_link")
+                self.miss_reasons[query] = miss_reason(body, query)
                 return None
             fare = await self._cheaper_alone(fare, query)
             fare = replace(
@@ -431,13 +649,43 @@ class IgnavProvider:
             )
         except IgnavError as error:
             logger.info("flight_provider_fallback reason=%s", error)
+            # Ignav (6 Nov 2026): "unsupported_search" rejects the date range, so
+            # other dates are the fix. Any other failure stays a failed lookup.
+            if str(error) == "http_424" and error.code == "unsupported_search":
+                self.miss_reasons[query] = "dates_not_searchable"
+                return None
+            if str(error).startswith("http_") or str(error) in {
+                "unreachable",
+                "invalid_json",
+                "invalid_response",
+            }:
+                self.unavailable_queries.add(query)
             return None
         except (KeyError, TypeError, ValueError, AttributeError):
             logger.info("flight_provider_fallback reason=unexpected_response")
+            self.unavailable_queries.add(query)
             return None
         if self.cache:
             self.cache.put(key, [{**asdict(fare), "cached_at": time.time()}])
         return fare
+
+
+def _error_code(response) -> str | None:
+    """Ignav's short error code from the body, never the message or the body."""
+    try:
+        code = (response.json().get("error") or {}).get("code")
+    except (ValueError, AttributeError):
+        return None
+    return str(code)[:40] if code else None
+
+
+def miss_reason(body: dict, query: FlightQuery) -> MissReason:
+    """Flights exist but none fit: say whether they all land after the trip."""
+    problems = [itinerary_problem(item, query) for item in usable_itineraries(body)]
+    late = {"return_outside_dates", "arrival_outside_dates"}
+    if problems and all(problem in late for problem in problems):
+        return "lands_after_trip"
+    return "no_single_booking"
 
 
 def as_round_trip(body: dict) -> dict:
@@ -461,7 +709,8 @@ def named_legs(links: dict) -> dict:
 
 def _amount(itinerary: dict) -> Decimal:
     try:
-        return Decimal(str(itinerary["price"]["amount"]))
+        amount = Decimal(str(itinerary["price"]["amount"]))
+        return amount if amount.is_finite() else Decimal(0)
     except (KeyError, TypeError, InvalidOperation):
         return Decimal(0)
 
@@ -557,7 +806,7 @@ def _url_date(url: str, parameter: str) -> date | None:
     match = re.search(rf"[?&#]{parameter}=([^&#]+)", unquote(url), re.IGNORECASE)
     if match is None:
         return None
-    for pattern in ("%m/%d/%Y", "%Y-%m-%d"):
+    for pattern in ("%m/%d/%Y", "%Y-%m-%d", "%Y%m%d"):
         try:
             return datetime.strptime(match.group(1), pattern).date()
         except ValueError:
@@ -613,8 +862,17 @@ def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
     """Reject a link whose own parameters contradict its direction or dates."""
     if not url.startswith("https://") or len(url) > MAX_BOOKING_URL_LENGTH:
         return False
+    if not single_booking("round_trip", (url, url)):
+        return False
     # These only accept a posted form, so opening them cannot show the flight.
     if re.search(r"posthandler|\.axd(?:$|\?)|\.ashx(?:$|\?)", url, re.IGNORECASE):
+        return False
+    party = re.search(
+        r"[?&#](?:adultCount|adults|adt|PaxAdult|PaxADT)=(\d+)\b",
+        unquote(url),
+        re.IGNORECASE,
+    )
+    if party and int(party.group(1)) != query.adults:
         return False
     origin, destination = query.origin_airport, query.destination_airport
     if directions == {"inbound"}:
@@ -630,14 +888,48 @@ def link_matches(url: str, directions: set[str], query: FlightQuery) -> bool:
     mode = re.search(r"flightMode=(\w+)", url, re.IGNORECASE)
     if mode and (mode.group(1).casefold() == "oneway") == both:
         return False
+    trip_type = re.search(r"[?&#]TripType=(\w+)", url, re.IGNORECASE)
+    if trip_type:
+        stated = trip_type.group(1).casefold()
+        if (both and stated in {"oneway", "ow"}) or (
+            not both and stated in {"roundtrip", "rt"}
+        ):
+            return False
     expected = query.return_date if directions == {"inbound"} else query.departure_date
-    departure = _url_date(url, "departureDate")
+    departure = _url_date(url, "(?:departureDate|departure_date)")
     if departure is not None and departure != expected:
         return False
     if both:
-        back = _url_date(url, "returnDate")
+        back = _url_date(url, "(?:returnDate|return_date)")
         if back is not None and back != query.return_date:
             return False
+    # Explicit parameters observed on airline deep links must agree as well.
+    host = (urlsplit(url).hostname or "").casefold()
+    if host == "turkishairlines.com" or host.endswith(".turkishairlines.com"):
+        for key, expected_value in (
+            ("dep", origin),
+            ("dst", destination),
+            ("depd", expected.strftime("%d%m%y")),
+            ("retd", query.return_date.strftime("%d%m%y") if both else None),
+        ):
+            match = re.search(rf"[?&#]{key}=([^&#]+)", unquote(url), re.IGNORECASE)
+            if match and expected_value and match.group(1).upper() != expected_value:
+                return False
+        adults = re.search(r"[?&#]pas=A:(\d+)\b", unquote(url), re.IGNORECASE)
+        if adults and int(adults.group(1)) != query.adults:
+            return False
+    if host == "omanair.com" or host.endswith(".omanair.com"):
+        for key, expected_value in (
+            ("Origin1", origin),
+            ("Destination1", destination),
+            ("Origin2", query.return_origin if both else None),
+            ("Destination2", query.origin_airport if both else None),
+            ("DepartureDate1", expected.isoformat()),
+            ("DepartureDate2", query.return_date.isoformat() if both else None),
+        ):
+            match = re.search(rf"[?&#]{key}=([^&#]+)", unquote(url), re.IGNORECASE)
+            if match and expected_value and match.group(1).upper() != expected_value:
+                return False
     return True
 
 
@@ -656,7 +948,11 @@ def _link_amount(link: dict | None, currency: str | None = None) -> Decimal | No
         amount = Decimal(str(price.get("amount")))
     except InvalidOperation:
         return None
-    if amount <= 0 or (currency and str(price.get("currency")).upper() != currency):
+    if (
+        not amount.is_finite()
+        or amount <= 0
+        or (currency and str(price.get("currency")).upper() != currency)
+    ):
         return None
     return amount
 
@@ -753,13 +1049,81 @@ def _leg(
             for item in segments[:-1]
             if item.get("arrival_airport")
         ),
+        segments=leg_segments(part),
     )
+
+
+def itinerary_problem(choice: dict, query: FlightQuery) -> str | None:
+    """Validate supplied route/time facts before choosing a fare or opening a link.
+
+    Older sources omit segment facts; missing facts remain unconfirmed rather than
+    being fabricated. Contradictory supplied facts are always rejected.
+    """
+    outbound, inbound = choice.get("outbound"), choice.get("inbound")
+    if not outbound:
+        return "invalid_response"
+    for part, origin, destination, day in (
+        (
+            outbound,
+            query.origin_airport,
+            query.destination_airport,
+            query.departure_date,
+        ),
+        (inbound, query.return_origin, query.origin_airport, query.return_date),
+    ):
+        if not part:
+            continue
+        segments = _segments(part)
+        if not segments:
+            continue
+        first, last = segments[0], segments[-1]
+        if (
+            first.get("departure_airport")
+            and str(first["departure_airport"]).upper() != origin
+        ) or (
+            last.get("arrival_airport")
+            and str(last["arrival_airport"]).upper() != destination
+        ):
+            return "route_mismatch"
+        departure = first.get("departure_time_local")
+        if departure and str(departure)[:10] != day.isoformat():
+            return "date_mismatch"
+        arrival = last.get("arrival_time_local")
+        if (
+            part is inbound
+            and arrival
+            and str(arrival)[:10] > query.return_date.isoformat()
+        ):
+            return "return_outside_dates"
+        if arrival and str(arrival)[:10] > query.return_date.isoformat():
+            return "arrival_outside_dates"
+        for segment in segments:
+            for key in ("departure_time_local", "arrival_time_local"):
+                if segment.get(key):
+                    try:
+                        datetime.fromisoformat(str(segment[key]))
+                    except ValueError:
+                        return "invalid_schedule"
+        for left, right in zip(segments, segments[1:], strict=False):
+            if (
+                left.get("arrival_airport")
+                and right.get("departure_airport")
+                and (
+                    str(left["arrival_airport"]).upper()
+                    != str(right["departure_airport"]).upper()
+                )
+            ):
+                return "airport_transfer_required"
+    return None
 
 
 def fare_from_itinerary(
     choice: dict, links: dict, query: FlightQuery, price_is_total: bool = False
 ) -> FlightFare:
     """Classify the trip from which booking options Ignav returned."""
+    problem = itinerary_problem(choice, query)
+    if problem:
+        raise IgnavError(problem)
     options = links.get("booking_options") or []
     outbound, inbound = choice["outbound"], choice.get("inbound")
     out_codes = carrier_codes(outbound)
@@ -786,6 +1150,8 @@ def fare_from_itinerary(
     price = choice["price"]
     currency = str(price["currency"]).upper()
     amount = Decimal(str(price["amount"]))
+    if not amount.is_finite() or amount <= 0:
+        raise IgnavError("invalid_price")
     source: Literal["seller", "search"] = "search"
     if whole:
         trip_type = "round_trip"
@@ -917,6 +1283,9 @@ def get_flight_provider(
         accuracy = PriceAccuracy(
             settings.price_accuracy_db, settings.price_gap_log_percent
         )
+        verifier = _verifier(settings) if verify else None
+        # The same SerpApi object when verifying, so its searches are reused.
+        backup = verifier or _backup(settings)
         return IgnavProvider(
             settings.ignav_api_key,
             cache,
@@ -931,7 +1300,9 @@ def get_flight_provider(
             ),
             price_conflict_percent=settings.price_conflict_percent,
             cache_seconds=settings.flight_cache_minutes * 60,
-            verifier=_verifier(settings) if verify else None,
+            verifier=verifier,
+            backup=backup,
+            backup_searches=settings.google_flights_backup_searches,
         )
     return WebSearchOnly()
 
@@ -940,6 +1311,14 @@ def _verifier(settings: Settings):
     from app.services.google_flights_check import google_flights_check
 
     return google_flights_check(settings)
+
+
+def _backup(settings: Settings):
+    if not settings.serpapi_api_key or not settings.google_flights_backup_searches:
+        return None
+    from app.services.google_flights_check import GoogleFlightsCheck
+
+    return GoogleFlightsCheck(settings.serpapi_api_key)
 
 
 def fare_quote(fare: FlightFare, query: FlightQuery) -> str:

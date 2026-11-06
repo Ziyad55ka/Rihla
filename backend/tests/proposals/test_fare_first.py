@@ -23,10 +23,38 @@ from app.services.proposal_generation import (
     TripPlan,
 )
 from app.services.trip_research import ResearchError
-from tests.proposals.test_proposal_generation import fake_research
+from tests.proposals.test_proposal_generation import fake_research as web_research
+from tests.proposals.test_proposal_generation import field
 
 TODAY = date(2026, 11, 3)
 TRIP = UUID("00000000-0000-4000-8000-0000000000bb")
+
+
+def fake_research(night="200"):
+    base = web_research(night=night)
+
+    async def researched(request, config):
+        result = await base(request, config)
+        for index, origin in enumerate(request.origins):
+            query = FlightQuery(
+                flight_prices.airport_for_city(origin),
+                request.arrival_airport,
+                request.departure_date,
+                request.return_date,
+            )
+            result.fares[index] = fare(query)
+            result.airports[index] = (query.origin_airport, query.destination_airport)
+        for index in range(len(request.cities) - 1):
+            result.fields.extend(
+                [
+                    field(f"intercity.{index}.mode", "Bus"),
+                    field(f"intercity.{index}.duration", "3 hours"),
+                    field(f"intercity.{index}.price_per_person", sar="40"),
+                ]
+            )
+        return result
+
+    return researched
 
 
 @pytest.fixture(autouse=True)
@@ -75,11 +103,121 @@ def option(place: str, airport: str, start=date(2026, 11, 20), nights=4):
     )
 
 
-def fare() -> FlightFare:
-    leg = FareLeg(
-        "outbound", "2026-11-20", "Saudia", 120, "900", "SAR", "https://x.example/b"
+def test_price_above_lowest_member_budget_stops_before_hotel_research(
+    tmp_path, monkeypatch
+):
+    from dataclasses import replace
+
+    call, _ = planner([option("Paris", "CDG")], [])
+
+    async def expensive(self, query):
+        return replace(fare(query), amount="9500")
+
+    async def should_not_research(*args, **kwargs):
+        raise AssertionError("Unneeded hotel/model research")
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", expensive)
+    monkeypatch.setattr(trip_research, "research", should_not_research)
+    with pytest.raises(GenerationBlocked) as caught:
+        run(group(), settings(tmp_path))
+    assert caught.value.categories == ["budget"]
+
+
+def test_separate_bookings_stop_before_hotel_research(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    call, _ = planner([option("Doha", "DOH")], [])
+
+    async def split(self, query):
+        return replace(fare(query), trip_type="split")
+
+    async def should_not_research(*args, **kwargs):
+        raise AssertionError("A split booking must stop before hotel/model work")
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", split)
+    monkeypatch.setattr(trip_research, "research", should_not_research)
+    with pytest.raises(GenerationNeedsChanges) as caught:
+        run(group(), settings(tmp_path))
+    assert caught.value.code == "no_flights"
+
+
+def test_research_cannot_replace_a_verified_joint_ticket_with_split_bookings(
+    tmp_path, monkeypatch
+):
+    from dataclasses import replace
+
+    call, _ = planner([option("Doha", "DOH")], [])
+    find, _ = flights({"DOH": None})
+    base = fake_research()
+
+    async def contradictory(request, config):
+        result = await base(request, config)
+        result.fares = {
+            index: replace(value, trip_type="split")
+            for index, value in result.fares.items()
+        }
+        return result
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", contradictory)
+    with pytest.raises(GenerationNeedsChanges) as caught:
+        run(group(), settings(tmp_path))
+    assert caught.value.code == "no_flights"
+
+
+def test_past_shared_dates_stop_before_any_model_request(tmp_path, monkeypatch):
+    call, asked = planner([])
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    with pytest.raises(GenerationNeedsChanges) as caught:
+        run(group(start=date(2026, 10, 1), end=date(2026, 10, 5)), settings(tmp_path))
+    assert caught.value.code == "dates_unavailable"
+    assert asked == []
+
+
+def test_one_source_failure_preserves_other_verified_options(tmp_path, monkeypatch):
+    call, asked = planner(
+        [option("Doha", "DOH"), option("Paris", "CDG"), option("Cairo", "CAI")]
     )
-    return FlightFare("Saudia", 240, "900", "SAR", True, "Saudia", "round_trip", (leg,))
+
+    async def find(self, query):
+        if query.destination_airport == "CDG":
+            raise ResearchError("flight_source_unavailable", "Temporary")
+        return fare(query)
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    result = run(group(), settings(tmp_path))
+    assert {p.destination for p in result.proposals} == {"Doha", "Cairo"}
+    assert result.complete is False
+    assert len(asked) == 1
+
+
+def fare(query: FlightQuery) -> FlightFare:
+    leg = FareLeg(
+        "outbound",
+        query.departure_date.isoformat(),
+        "Saudia",
+        120,
+        "900",
+        "SAR",
+        "https://x.example/b",
+    )
+    back = FareLeg(
+        "return",
+        query.return_date.isoformat(),
+        "Saudia",
+        120,
+        None,
+        None,
+        "https://x.example/b",
+    )
+    return FlightFare(
+        "Saudia", 240, "900", "SAR", True, "Saudia", "round_trip", (leg, back)
+    )
 
 
 def planner(*batches: list[PlannedOption]):
@@ -106,7 +244,7 @@ def flights(available: dict[str, set[date] | None]):
         calls.append(query)
         days = available.get(query.destination_airport, set())
         if days is None or query.departure_date in days:
-            return fare()
+            return fare(query)
         return None
 
     return find, calls
@@ -397,3 +535,186 @@ def test_one_city_or_same_airport_needs_no_separate_return() -> None:
         }
     )
     assert return_airport_of(same) is None
+
+
+@pytest.mark.parametrize("last_nights", [None, 0, 1])
+def test_same_airport_multicity_plan_needs_a_final_airport_city_stay(last_nights):
+    from app.services.proposal_generation import _prevalidate
+
+    cities = [
+        PlannedCity(city="Istanbul", nights=2),
+        PlannedCity(city="Bursa", nights=2),
+    ]
+    if last_nights is not None:
+        cities[1].nights -= last_nights
+        cities.append(PlannedCity(city="Istanbul", nights=last_nights))
+    candidate = option("Turkey", "IST").model_copy(update={"cities": cities})
+    if last_nights == 1:
+        assert _prevalidate(candidate, group(), []) == []
+    else:
+        with pytest.raises(OptionRejected) as caught:
+            _prevalidate(candidate, group(), [])
+        assert "invalid_itinerary" in caught.value.reasons
+
+
+def test_missing_return_transfer_stops_before_supplier_requests(tmp_path, monkeypatch):
+    candidate = option("Turkey", "IST").model_copy(
+        update={
+            "cities": [
+                PlannedCity(city="Istanbul", nights=2),
+                PlannedCity(city="Bursa", nights=2),
+            ]
+        }
+    )
+    call, _ = planner([candidate], [])
+
+    async def should_not_search(*args):
+        raise AssertionError("An incomplete ground route must not spend fare requests")
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", should_not_search)
+    with pytest.raises(GenerationNeedsChanges):
+        run(group(), settings(tmp_path))
+
+
+def test_loop_route_research_includes_both_ground_journeys(tmp_path, monkeypatch):
+    candidate = option("Turkey", "IST").model_copy(
+        update={
+            "cities": [
+                PlannedCity(city="Istanbul", nights=2),
+                PlannedCity(city="Bursa", nights=1),
+                PlannedCity(city="Istanbul", nights=1),
+            ]
+        }
+    )
+    call, _ = planner([candidate], [])
+    find, _ = flights({"IST": None})
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    result = run(group(), settings(tmp_path))
+    assert len(result.proposals) == 1
+    proposal = result.proposals[0]
+    assert [(leg.from_city, leg.to_city) for leg in proposal.intercity_transport] == [
+        ("Istanbul", "Bursa"),
+        ("Bursa", "Istanbul"),
+    ]
+    assert all(
+        leg.price_per_person.amount_sar > 0 for leg in proposal.intercity_transport
+    )
+
+
+def test_no_flights_says_why_in_plain_words(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    call, _ = planner([option("Doha", "DOH")], [option("Paris", "CDG")])
+
+    async def late_only(self, query):
+        self.miss_reasons[query] = "lands_after_trip"
+        return None
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", late_only)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    with pytest.raises(GenerationNeedsChanges) as caught:
+        run(group(start=date(2026, 11, 20), end=date(2026, 11, 24)), settings(tmp_path))
+    causes = caught.value.detail()["causes"]
+    assert [item["kind"] for item in causes] == ["lands_after_trip"]
+    assert "last day" in causes[0]["text"]
+
+
+def test_dates_the_source_cannot_search_ask_for_other_dates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    call, _ = planner([option("Doha", "DOH")], [option("Paris", "CDG")])
+
+    async def not_searchable(self, query):
+        self.miss_reasons[query] = "dates_not_searchable"
+        return None
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", not_searchable)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    with pytest.raises(GenerationNeedsChanges) as caught:
+        run(group(start=date(2026, 11, 20), end=date(2026, 11, 24)), settings(tmp_path))
+    causes = caught.value.detail()["causes"]
+    assert causes[0]["kind"] == "dates_not_searchable"
+    assert "earlier dates" in causes[0]["text"]
+
+
+def test_too_dear_somewhere_is_a_price_problem_even_with_no_flights_elsewhere(
+    tmp_path, monkeypatch
+):
+    from dataclasses import replace
+
+    call, _ = planner([option("Paris", "CDG"), option("Nowhere", "NWH")], [])
+
+    async def find(self, query):
+        # Paris has flights but above the lowest budget; Nowhere has none.
+        return (
+            replace(fare(query), amount="9500")
+            if query.destination_airport == "CDG"
+            else None
+        )
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    with pytest.raises(GenerationBlocked) as caught:
+        run(group(), settings(tmp_path))
+    assert caught.value.categories == ["budget"]
+
+
+def test_common_ground_leads_when_members_want_different_places(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.schemas.preferences import OptionalPreference
+    from app.schemas.proposals import ProposalFit
+    from app.services.proposal_generation import RequirementCheck
+
+    why = "A shared option with landmarks and food the group enjoys."
+
+    def checks(paris: bool, madrid: bool):
+        return [
+            RequirementCheck(
+                requirement_id="R1", met=paris, explanation=None if paris else why
+            ),
+            RequirementCheck(
+                requirement_id="R2", met=madrid, explanation=None if madrid else why
+            ),
+        ]
+
+    bridge = option("Barcelona", "BCN").model_copy(
+        update={"common_ground": True, "requirement_checks": checks(False, False)}
+    )
+    paris = option("Paris", "CDG").model_copy(
+        update={"requirement_checks": checks(True, False)}
+    )
+    madrid = option("Madrid", "MAD").model_copy(
+        update={"requirement_checks": checks(False, True)}
+    )
+    call, _ = planner([paris, madrid, bridge])
+    find, _ = flights({"BCN": None, "CDG": None, "MAD": None})
+    fits = {"Paris": (62, 69), "Madrid": (62, 69), "Barcelona": (62, 62)}
+
+    def fake_fit(option, generation, requirements, status):
+        least, average = fits[option.destination]
+        return ProposalFit(
+            group_percent=average, least_satisfied_percent=least, member_count=3
+        )
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", call)
+    monkeypatch.setattr(flight_prices.IgnavProvider, "find", find)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    monkeypatch.setattr(proposal_generation, "proposal_fit", fake_fit)
+    wishes = group()
+    members = [
+        m.model_copy(update={"destinations": OptionalPreference(value=place)})
+        for m, place in zip(wishes.members, ["Paris", "Madrid", "Paris"], strict=True)
+    ]
+
+    result = run(wishes.model_copy(update={"members": members}), settings(tmp_path))
+
+    assert [p.destination for p in result.proposals][0] == "Barcelona"
+    assert [p.option_number for p in result.proposals] == [1, 2, 3]
+    # Two wishes adjusted the same way read as one line.
+    assert len(result.proposals[0].flexible_adjustments) == 1

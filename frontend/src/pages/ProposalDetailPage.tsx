@@ -7,6 +7,7 @@ import { FlightsSection } from '../components/proposal-details/FlightsSection'
 import { BackIcon } from '../components/proposal-details/icons'
 import { ProposalHeader } from '../components/proposal-details/ProposalHeader'
 import { SmartSummary } from '../components/proposal-details/SmartSummary'
+import { FlightPriceReview } from '../components/FlightPriceReview'
 import { TransfersSection } from '../components/proposal-details/TransfersSection'
 import { openingMessages } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
@@ -31,14 +32,15 @@ export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChan
   const limits = { freshHours: stored.price_fresh_hours ?? 3, staleHours: stored.price_stale_hours ?? 24, fallback: stored.generated_at }
   return <article className="proposal-details" ref={root}>
     {back}
-    <ProposalHeader proposal={proposal} total={stored.proposals.length} />
-    <SmartSummary proposal={proposal} />
+    <ProposalHeader proposal={proposal} total={stored.proposals.length} stale={stored.needs_regeneration} />
+    <SmartSummary proposal={proposal} stale={stored.needs_regeneration} />
+    <FlightPriceReview routes={proposal.flights} minutes={stored.price_review_minutes ?? 15} />
     {stored.needs_regeneration && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
     <FlightsSection proposal={proposal} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 2} onChanged={onChanged} />
     <CityStaysSection proposal={proposal} limits={limits} />
     <TransfersSection proposal={proposal} />
     <ActivitiesSection proposal={proposal} onChanged={onChanged} />
-    <CostsAndCompatibility proposal={proposal} costs={stored.costs?.find((item) => item.proposal_id === proposal.id)} generatedAt={stored.generated_at} />
+    <CostsAndCompatibility proposal={proposal} costs={stored.costs?.find((item) => item.proposal_id === proposal.id)} stale={stored.needs_regeneration} />
   </article>
 }
 

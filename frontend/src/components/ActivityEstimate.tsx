@@ -2,7 +2,7 @@ import { useLanguage } from '../lib/language'
 import { combineEstimateComponents } from '../lib/activities'
 import type { ActivityProposalEstimate, EstimateComponent } from '../types/proposal'
 
-export function ActivityEstimate({ estimate, dirty }: { estimate: ActivityProposalEstimate; dirty: boolean }) {
+export function ActivityEstimate({ estimate, dirty, allowance = false }: { estimate: ActivityProposalEstimate; dirty: boolean; allowance?: boolean }) {
   const { t, locale } = useLanguage()
   function amount(part: EstimateComponent) {
     const formatted = Number(part.known_amount_sar).toLocaleString(locale, { style: 'currency', currency: 'SAR' })
@@ -11,7 +11,8 @@ export function ActivityEstimate({ estimate, dirty }: { estimate: ActivityPropos
   }
   const rows: { label: string; value: EstimateComponent }[] = [
     { label: 'Base proposal estimate', value: combineEstimateComponents([estimate.flights, estimate.accommodation, estimate.transport]) },
-    { label: 'Saved activities and places', value: estimate.activities },
+    ...(estimate.meals ? [{ label: 'Daily allowance for meals and small expenses', value: estimate.meals }] : []),
+    { label: allowance ? 'Activities (allowance or selections)' : 'Saved activities and places', value: estimate.activities },
   ]
   return <section className="activity-estimate" aria-label={t('Proposal estimate per person')}>
     <div className="activity-estimate-heading"><h4>{t('Proposal estimate per person')}</h4><span>{t('Based on saved choices')}</span></div>
@@ -21,6 +22,7 @@ export function ActivityEstimate({ estimate, dirty }: { estimate: ActivityPropos
     {estimate.total.missing_items > 0 && <p role="status">{t('This is a partial estimate. Unavailable costs are not counted as zero.')}</p>}
     {estimate.total.unconfirmed_items > 0 && <p>{t('This estimate includes unconfirmed prices.')}</p>}
     {estimate.total.estimated_items > 0 && <p>{t('Prices are estimates, not confirmed offers.')}</p>}
+    {allowance && <p>{t('Before you save activities, the estimate includes SAR 75 per day for planning. Your saved choices replace that allowance; unknown prices remain unconfirmed.')}</p>}
     <p>{t('One room per person; transport prices are per person. Only the listed cost categories are included.')}</p>
     {dirty && <p className="activity-estimate-pending" role="status">{t('Save your activity changes to update this proposal estimate.')}</p>}
   </section>

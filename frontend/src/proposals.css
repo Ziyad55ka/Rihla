@@ -53,7 +53,80 @@ html[dir='rtl'] .proposals-conflicts { padding:14px 34px 14px 18px; }
 .generation-suggestions { display:grid; gap:10px; margin:0; padding:0; list-style:none; }
 .generation-suggestions li { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:10px 12px; background:#fff; border:1px solid #efd8c8; border-radius:10px; font-size:14px; line-height:1.55; }
 .generation-suggestions button { flex:none; min-height:44px; }
+.generation-causes { margin:0 0 12px; padding-inline-start:20px; display:grid; gap:6px; font-size:14px; line-height:1.6; }
 @media (max-width:640px) { .generation-suggestions li { flex-direction:column; align-items:stretch; } }
 .visually-hidden { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 @media (prefers-reduced-motion:reduce) { .generation-progress .ai-status-spark { animation:none; } }
 .proposals-fit { margin:8px 0 0; color:var(--rihla-green); font-size:13px; font-weight:600; }
+.proposal-cost-preview { display:grid; gap:5px; margin-block:16px; padding-block:12px; border-block:1px solid #dfe3d6; }
+.proposal-cost-preview span { font-size:13px; color:var(--rihla-muted); }
+.proposal-cost-preview strong { font-size:24px; font-variant-numeric:tabular-nums; }
+.proposal-cost-preview small { font-size:12px; line-height:1.6; color:var(--rihla-muted); }
+
+/* Shared planning rhythm: a clear action, compact guidance, then comparable options. */
+.trip-workspace .proposals-panel { padding:28px; background:var(--rihla-paper,#f8f8f2); border-radius:18px; }
+.proposals-heading { align-items:center; gap:20px; }
+.proposals-heading-copy { max-width:620px; }
+.proposals-kicker { display:flex; align-items:center; gap:7px; margin:0 0 8px; color:var(--rihla-green,#345441); font-size:12px; letter-spacing:.04em; }
+.trip-workspace .proposals-heading h2 { margin:0; font-size:clamp(25px,2.8vw,33px); font-weight:500; letter-spacing:-.7px; line-height:1.3; }
+.proposals-heading-copy > p { margin:10px 0 0; color:#536357; font-size:14px; line-height:1.65; }
+.proposals-actions { display:flex; flex-direction:column; align-items:stretch; gap:5px; }
+.proposals-actions .trip-primary { display:flex; align-items:center; justify-content:center; gap:10px; min-height:50px; border-radius:10px; font-size:14px; }
+.proposals-preferences { display:flex; align-items:center; justify-content:center; gap:7px; min-height:44px; padding:8px; color:var(--rihla-green,#345441); font-size:13px; text-underline-offset:4px; }
+.generation-readiness { display:flex; align-items:center; gap:9px; padding:12px 14px; margin-top:20px; color:#536357; background:#ecefe5; border:1px solid #d4dccc; border-radius:10px; font-size:13px; line-height:1.6; }
+.generation-readiness--ready { color:#36542c; background:#eaf1e1; border-color:#cadbb9; }
+.generation-readiness svg { flex:none; }
+.proposals-empty { margin-top:20px; }
+.generation-includes { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0; padding:0; list-style:none; }
+.generation-includes li { display:grid; gap:7px; padding:18px; border:1px solid #dce2d4; border-radius:12px; background:#fff; }
+.generation-includes svg { margin-bottom:6px; color:var(--rihla-green,#345441); }
+.generation-includes span { color:var(--rihla-ink,#172b22); font-size:15px; font-weight:500; }
+.generation-includes small { color:#536357; font-size:12px; line-height:1.6; }
+.generation-explainer { margin-top:20px; padding-top:16px; border-top:1px solid #d7dece; }
+.generation-explainer summary { display:flex; align-items:center; gap:8px; min-height:44px; color:var(--rihla-green,#345441); font-size:13px; cursor:pointer; list-style:none; }
+.generation-explainer summary::after { content:'+'; margin-inline-start:auto; font-size:20px; }
+.generation-explainer[open] summary::after { content:'−'; }
+.generation-explainer p { max-width:760px; margin:4px 0 0; color:#536357; font-size:13px; line-height:1.8; }
+.proposals-panel :is(button,a,summary):focus-visible { outline:3px solid #9a6b20; outline-offset:3px; }
+.proposals-panel .proposals-card { padding:18px; border-radius:14px; background:#fff; }
+.proposals-card-body { min-width:0; }
+.proposals-card .planning-badge { white-space:normal; max-width:100%; font-size:11px; line-height:1.6; }
+.proposals-card:only-child { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:24px; align-items:center; }
+.proposals-panel .proposals-card:only-child > .details-photo { margin:0; }
+.proposals-card:only-child .details-photo img,.proposals-card:only-child .details-photo-empty { aspect-ratio:4/3; }
+@media(hover:hover) { .proposals-panel .proposals-card:hover { transform:translateY(-2px); box-shadow:0 8px 22px #172b2215; } }
+.proposals-panel .proposals-open { display:flex; width:fit-content; max-width:100%; min-height:44px; border-radius:9px; }
+.proposals-panel .details-photo-info { width:44px; height:44px; cursor:pointer; }
+.proposals-panel .generation-progress { margin-top:22px; padding:22px; background:#fff; }
+.generation-progress .generation-steps { grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-top:24px; }
+.generation-progress .generation-step { flex-direction:column; align-items:flex-start; gap:12px; padding-top:14px; border-top:3px solid #e1e6d8; font-size:13px; line-height:1.6; }
+.generation-progress .generation-step--done,.generation-progress .generation-step--current { border-top-color:var(--rihla-green,#345441); }
+.generation-progress .generation-summary { padding-top:20px; margin-top:20px; border-top:1px solid #e1e6d8; }
+.generation-progress .generation-options { grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+html[dir=rtl] .proposals-heading h2 { letter-spacing:normal; }
+@media(max-width:700px) {
+  .trip-workspace .proposals-panel { padding:22px 16px; }
+  .proposals-card:only-child { grid-template-columns:1fr; gap:14px; }
+  .proposals-card:only-child .details-photo img,.proposals-card:only-child .details-photo-empty { aspect-ratio:16/9; }
+  .proposals-heading { align-items:stretch; flex-direction:column; gap:18px; }
+  .proposals-actions { align-items:stretch; width:100%; }
+  .generation-includes { grid-template-columns:1fr; gap:8px; }
+  .generation-includes li { grid-template-columns:28px minmax(0,1fr); gap:4px 12px; padding:14px; }
+  .generation-includes svg { grid-row:span 2; margin:3px 0 0; }
+  .generation-includes small { grid-column:2; }
+  .proposals-panel .generation-progress { padding:18px 14px; }
+  .generation-progress .generation-steps { grid-template-columns:1fr; gap:12px; }
+  .generation-progress .generation-step { flex-direction:row; align-items:center; border:0; padding-top:0; gap:12px; }
+}
+.flight-price-review { margin:18px 0; padding:16px 18px; border:1px solid #cdd9c8; border-radius:12px; color:var(--rihla-green); background:#eef3e9; }
+.flight-price-review-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; font-size:14px; font-weight:600; line-height:1.6; }
+.flight-price-review-heading svg { flex:none; }
+.flight-price-review-clock { margin-inline-start:auto; font-variant-numeric:tabular-nums; font-size:20px; letter-spacing:.04em; }
+.flight-price-review p { margin:8px 0 0; color:var(--rihla-muted); font-size:12px; line-height:1.7; }
+.flight-price-review--due { background:#fbf1e5; border-color:#ead7bb; color:#82532b; }
+.flight-price-review--compact { padding:11px 12px; margin:12px 0; }
+.flight-price-review--compact .flight-price-review-heading { font-size:12px; }
+.flight-price-review--compact .flight-price-review-clock { font-size:17px; }
+.generation-length { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 18px; padding:14px 18px; border:1px solid var(--rihla-line); border-radius:12px; background:var(--rihla-paper); }
+.generation-length label { flex:1 1 260px; font-size:15px; }
+.generation-length select { min-height:44px; padding:0 14px; border:1px solid var(--rihla-line); border-radius:10px; background:#fff; font:inherit; }

@@ -12,11 +12,19 @@ import re
 import sqlite3
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx2 as httpx
+from pydantic import ValidationError
 
 from app.core.config import Settings
 from app.schemas.proposals import PlaceImage, Proposal
+from app.services.activity_content import ActivityContentCache, content_for
+from app.services.activity_images import (
+    fetch_activity_image,
+    image_name,
+    public_image_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +61,7 @@ class ImageCache:
             ).fetchone()
         finally:
             connection.close()
-        if row is None or time.time() - row[0] >= self.ttl_seconds:
+        if row is None or time.time() - row[0] >= (self.ttl_seconds if row[1] else 300):
             return False, None
         return True, PlaceImage(**json.loads(row[1])) if row[1] else None
 
@@ -104,6 +112,7 @@ async def fetch_place_image(
                 "titles": place,
             },
         )
+        page.raise_for_status()
         pages = (page.json().get("query") or {}).get("pages") or {}
         name = next((item.get("pageimage") for item in pages.values()), None)
         if not name or name.lower().endswith(".svg"):
@@ -119,6 +128,7 @@ async def fetch_place_image(
                 "titles": f"File:{name}",
             },
         )
+        file.raise_for_status()
     pages = (file.json().get("query") or {}).get("pages") or {}
     info = next(
         (item["imageinfo"][0] for item in pages.values() if item.get("imageinfo")),
@@ -155,35 +165,154 @@ async def _image_for(place: str, cache: ImageCache) -> PlaceImage | None:
 # Polite to Wikimedia: a few lookups at a time. Found photos are cached, so a
 # lookup cut off by the time limit is simply finished on a later read.
 ACTIVITY_LOOKUPS_AT_ONCE = 6
-ACTIVITY_TIMEOUT_SECONDS = 5.0
+ACTIVITY_TIMEOUT_SECONDS = 9.0
+# Photo searches per pass. Every photo is cached, so later reads fill the rest.
+# Activities with no photo are not shown, so this covers a full city list.
+ACTIVITY_PHOTO_SEARCHES = 36
+
+
+# Photos checked against the place's own Wikipedia article. An open photo search
+# only matches words in a title: a restaurant named "Beyaz İstanbul" matched a
+# personal photo titled the same on 6 Nov 2026, so restaurants use these only.
+CHECKED_PHOTO_HOSTS = ("wikipedia.org", "wikimedia.org")
+
+
+def _trusted_photo(category: str | None, image: dict | None) -> PlaceImage | None:
+    if not image:
+        return None
+    try:
+        photo = PlaceImage.model_validate(image)
+    except ValidationError:
+        return None
+    if not public_image_url(photo.url) or not public_image_url(photo.source_url):
+        return None
+    if category == "restaurant":
+        host = (urlparse(photo.source_url or "").hostname or "").casefold()
+        if photo.license != "Source website — rights reserved" and not any(
+            host == domain or host.endswith(f".{domain}")
+            for domain in CHECKED_PHOTO_HOSTS
+        ):
+            return None
+    return photo
+
+
+def sanitize_activity_photos(proposals: list[Proposal]) -> list[Proposal]:
+    """Apply the same identity policy to saved images, even when lookups fail."""
+    return [
+        proposal.model_copy(
+            update={
+                "cities": [
+                    stay.model_copy(
+                        update={
+                            "activities": [
+                                activity.model_copy(
+                                    update={
+                                        "image": _trusted_photo(
+                                            activity.category,
+                                            activity.image.model_dump()
+                                            if activity.image
+                                            else None,
+                                        ),
+                                        "image_url": None
+                                        if activity.category == "restaurant"
+                                        else activity.image_url,
+                                    }
+                                )
+                                for activity in stay.activities
+                            ]
+                        }
+                    )
+                    for stay in proposal.cities
+                ]
+            }
+        )
+        for proposal in proposals
+    ]
 
 
 async def _with_activity_images(
-    proposals: list[Proposal], cache: ImageCache
+    proposals: list[Proposal], cache: ImageCache, settings: Settings
 ) -> list[Proposal]:
-    """A photo for each suggested place whose Wikipedia page has a free one."""
+    """Resolve actual landmarks, with city context and linked Arabic descriptions."""
     names = sorted(
         {
-            activity.name.value
+            (activity.name.value, stay.city)
             for item in proposals
             for stay in item.cities
             for activity in stay.activities
-            if activity.name.value and activity.category != "restaurant"
+            if activity.name.value
         }
     )
     if not names:
         return proposals
     gate = asyncio.Semaphore(ACTIVITY_LOOKUPS_AT_ONCE)
-    found: dict[str, PlaceImage | None] = {}
+    found: dict[tuple[str, str], dict] = {}
+    content_cache = ActivityContentCache(cache.path)
+    examples = {
+        (a.name.value, city.city): a
+        for proposal in proposals
+        for city in proposal.cities
+        for a in city.activities
+        if a.name.value
+    }
+    source_requests = 0
 
-    async def one(name: str) -> None:
+    async def one(name: str, city: str) -> None:
+        nonlocal source_requests
         async with gate:
-            found[name] = await _image_for(name, cache)
+            activity = examples[(name, city)]
+            existing = _trusted_photo(
+                activity.category,
+                activity.image.model_dump() if activity.image else None,
+            )
+            cached = content_cache.get(name, city) or {}
+            cached_photo = _trusted_photo(activity.category, cached.get("image"))
+            needs_words = not (activity.description_ar and activity.description_en)
+            query_name = image_name(activity.name_en or name)
+            image_key = f"activity-web-v1|{activity.category}|{query_name}|{city}"
 
-    tasks = [asyncio.ensure_future(one(name)) for name in names]
+            async def web_photo():
+                nonlocal source_requests
+                if existing or cached_photo or not settings.serpapi_api_key:
+                    return None
+                known, photo = cache.get(image_key)
+                if known:
+                    return photo
+                if source_requests >= ACTIVITY_PHOTO_SEARCHES:
+                    return None
+                source_requests += 1
+                photo = await fetch_activity_image(
+                    query_name, city, activity.category, settings.serpapi_api_key
+                )
+                cache.put(image_key, photo)
+                return photo
+
+            async def words():
+                if existing and not needs_words:
+                    return {}
+                if not needs_words and settings.serpapi_api_key:
+                    return cached
+                return await content_for(name, city, content_cache)
+
+            details, web = await asyncio.gather(words(), web_photo())
+            photo = (
+                existing
+                or web
+                or _trusted_photo(activity.category, details.get("image"))
+            )
+            if photo is None and not needs_words and settings.serpapi_api_key:
+                details = await content_for(name, city, content_cache)
+                photo = _trusted_photo(activity.category, details.get("image"))
+            found[(name, city)] = {
+                **details,
+                "image": photo.model_dump() if photo else None,
+            }
+
+    tasks = [asyncio.ensure_future(one(name, city)) for name, city in names]
     _, pending = await asyncio.wait(tasks, timeout=ACTIVITY_TIMEOUT_SECONDS)
     for task in pending:
         task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
     if not any(found.values()):
         return proposals
     return [
@@ -195,7 +324,22 @@ async def _with_activity_images(
                             "activities": [
                                 activity.model_copy(
                                     update={
-                                        "image": found.get(activity.name.value or "")
+                                        **{
+                                            key: value
+                                            for key, value in found.get(
+                                                (activity.name.value or "", stay.city),
+                                                {},
+                                            ).items()
+                                            if key == "image"
+                                            or not getattr(activity, key, None)
+                                        },
+                                        "image": _trusted_photo(
+                                            activity.category,
+                                            found.get(
+                                                (activity.name.value, stay.city), {}
+                                            ).get("image"),
+                                        )
+                                        or activity.image,
                                     }
                                 )
                                 for activity in stay.activities
@@ -214,6 +358,7 @@ async def with_place_images(
     proposals: list[Proposal], settings: Settings
 ) -> list[Proposal]:
     """Adds photos for reading. They are not saved with the proposal."""
+    proposals = sanitize_activity_photos(proposals)
     if not settings.place_images_enabled or not proposals:
         return proposals
     cache = ImageCache(settings.place_images_db, settings.place_images_ttl_days * 86400)
@@ -227,9 +372,10 @@ async def with_place_images(
             READ_TIMEOUT_SECONDS,
         )
     except TimeoutError:
-        return proposals
+        # City photo latency must not suppress every activity photo.
+        found = [None] * len(places)
     images = dict(zip(places, found, strict=True))
-    proposals = await _with_activity_images(proposals, cache)
+    proposals = await _with_activity_images(proposals, cache, settings)
     return [
         item.model_copy(
             update={

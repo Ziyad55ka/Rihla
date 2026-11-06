@@ -55,7 +55,7 @@ def provider_with(*responses: httpx.Response) -> tuple[IgnavProvider, list]:
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        return remaining.pop(0)
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
 
     return IgnavProvider("secret-key", None, httpx.MockTransport(handler)), requests
 
@@ -164,6 +164,7 @@ def fare(amount="1450", currency="SAR", verified=True) -> FlightFare:
             FareLeg("outbound", "2026-12-13", "Saudia", 200, None, None, url),
             FareLeg("return", "2026-12-17", "Saudia", 210, None, None, url),
         ),
+        price_source="seller",
     )
 
 
@@ -456,3 +457,51 @@ def test_open_jaw_inbound_link_leaves_from_the_last_city() -> None:
     back = "https://a.example/?origin={}&departureDate=2026-12-20"
     assert link_matches(back.format("BCN"), {"inbound"}, OPEN_JAW)
     assert not link_matches(back.format("CDG"), {"inbound"}, OPEN_JAW)
+
+
+def test_a_failed_lookup_is_retried_three_times_then_reported_failed():
+    failed = {"error": {"type": "upstream_error", "code": "unable_to_complete_request"}}
+    provider, requests = provider_with(
+        httpx.Response(424, json=failed),
+        httpx.Response(424, json=failed),
+        httpx.Response(424, json=failed),
+    )
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 3
+    # A failed lookup is not "no flights": the group is told to try again.
+    assert QUERY in provider.unavailable_queries
+    assert QUERY not in provider.miss_reasons
+
+
+def test_a_failed_lookup_that_recovers_uses_the_answer():
+    failed = {"error": {"code": "unable_to_complete_request"}}
+    provider, requests = provider_with(
+        httpx.Response(424, json=failed),
+        httpx.Response(200, json={"itineraries": []}),
+    )
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 2
+    assert provider.miss_reasons[QUERY] == "no_seats"
+
+
+def test_flights_that_only_land_after_the_trip_are_named():
+    from app.services.flight_prices import miss_reason
+
+    late = itinerary(900)
+    late["inbound"]["segments"] = [
+        {
+            "departure_time_local": "2026-12-17T23:30:00",
+            "arrival_time_local": "2026-12-18T01:00:00",
+        }
+    ]
+    assert miss_reason({"itineraries": [late]}, QUERY) == "lands_after_trip"
+    assert miss_reason({"itineraries": [itinerary(900)]}, QUERY) == "no_single_booking"
+
+
+def test_unsupported_search_asks_for_other_dates_and_is_not_retried():
+    body = {"error": {"type": "invalid_request", "code": "unsupported_search"}}
+    provider, requests = provider_with(httpx.Response(424, json=body))
+    assert asyncio.run(provider.find(QUERY)) is None
+    assert len(requests) == 1
+    assert provider.miss_reasons[QUERY] == "dates_not_searchable"
+    assert QUERY not in provider.unavailable_queries

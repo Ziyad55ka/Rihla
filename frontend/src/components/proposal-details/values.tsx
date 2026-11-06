@@ -1,5 +1,4 @@
 import { useLanguage } from '../../lib/language'
-import { useCountUp } from '../../lib/motion'
 import { priceAge, type PriceAgeLimits, statusLabels } from '../../lib/proposals'
 import type { InfoStatus, SarPrice } from '../../types/proposal'
 import { ClockIcon, InfoIcon } from './icons'
@@ -27,12 +26,10 @@ export function PriceValue({ price, unit, startsFrom = false }: { price: SarPric
   const { t } = useLanguage()
   const sar = useSar()
   const known = price.status !== 'Not available' && price.amount_sar !== null
-  const target = Number(price.amount_sar ?? 0)
-  const { value: moving, ref } = useCountUp<HTMLSpanElement>(target)
-  // Whole riyals while it glides, then the exact price.
-  const amount = known ? sar(moving === target ? target : Math.round(moving)) : '—'
+  // Money must show the quoted amount immediately, including after a refresh.
+  const amount = known ? sar(price.amount_sar!) : '—'
   return <span className="details-value">
-    <span ref={ref}>
+    <span>
       {known && startsFrom ? t('From {amount}', { amount }) : known && price.status === 'Estimated' ? t('About {amount}', { amount }) : amount}
       {known && unit && ` ${t(unit)}`}
     </span>

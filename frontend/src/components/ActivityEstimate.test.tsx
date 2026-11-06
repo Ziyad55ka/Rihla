@@ -11,7 +11,8 @@ describe('saved proposal cost presentation', () => {
   it('shows activity costs as part of the proposal total, with explicit assumptions', () => {
     const ids = [proposal.cities[0].activities![3].id]
     const html = renderToStaticMarkup(<LanguageProvider><ActivityEstimate estimate={activityProposalEstimate(proposal, ids)} dirty={false} /></LanguageProvider>)
-    expect(html).toContain('3,065.00')
+    expect(html).toContain('3,815.00')
+    expect(html).toContain('Daily allowance for meals and small expenses')
     expect(html).toContain('Saved activities and places')
     expect(html).toContain('One room per person')
   })

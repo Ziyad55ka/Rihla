@@ -69,7 +69,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-1.jpg",
               "category": "attraction"
             },
             {
@@ -105,7 +105,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-2.jpg",
               "category": "activity"
             },
             {
@@ -141,7 +141,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-3.jpg",
               "category": "activity"
             },
             {
@@ -177,7 +177,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-4.jpg",
               "category": "restaurant"
             }
           ]
@@ -341,7 +341,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-5.jpg",
               "category": "attraction"
             },
             {
@@ -377,7 +377,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-6.jpg",
               "category": "activity"
             },
             {
@@ -413,7 +413,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-7.jpg",
               "category": "activity"
             },
             {
@@ -449,7 +449,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-8.jpg",
               "category": "restaurant"
             }
           ]
@@ -503,7 +503,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-9.jpg",
               "category": "attraction"
             },
             {
@@ -539,7 +539,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-10.jpg",
               "category": "activity"
             },
             {
@@ -575,7 +575,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-11.jpg",
               "category": "activity"
             },
             {
@@ -611,7 +611,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-12.jpg",
               "category": "restaurant"
             }
           ]
@@ -815,7 +815,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-13.jpg",
               "category": "attraction"
             },
             {
@@ -851,7 +851,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-14.jpg",
               "category": "activity"
             },
             {
@@ -887,7 +887,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-15.jpg",
               "category": "activity"
             },
             {
@@ -923,7 +923,7 @@
                 "evidence": []
               },
               "booking_url": null,
-              "image_url": null,
+              "image_url": "https://example.test/activity-16.jpg",
               "category": "restaurant"
             }
           ]

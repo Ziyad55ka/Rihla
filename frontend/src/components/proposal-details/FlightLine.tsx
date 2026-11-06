@@ -23,6 +23,7 @@ export function FlightLine({ leg, from, to, fromCode, toCode }: { leg: FlightLeg
   const stops = leg.stops ?? null
   const airports = leg.stop_airports ?? []
   const airline = leg.airline.value
+  const arrivalDate = /^\d{4}-\d{2}-\d{2}/.exec(leg.arrival_time ?? '')?.[0]
   const stopWords = stops === null ? null : stops === 0 ? t('Nonstop') : stops === 1 ? t('One stop') : stops === 2 ? t('Two stops') : t('{count} stops', { count: stops.toLocaleString(locale) })
   return <div className="details-line">
     <p className="details-line-meta">
@@ -48,5 +49,6 @@ export function FlightLine({ leg, from, to, fromCode, toCode }: { leg: FlightLeg
       </div>
       <End time={clock(leg.arrival_time)} code={toCode} city={to} />
     </div>
+    {arrivalDate && arrivalDate !== leg.date && <p className="details-hint">{t('Arrival date: {date} (local time)', { date: calendarDate(arrivalDate, locale) })}</p>}
   </div>
 }

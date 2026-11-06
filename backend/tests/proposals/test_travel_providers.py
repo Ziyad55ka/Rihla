@@ -255,7 +255,7 @@ def test_photos_are_off_when_switched_off() -> None:
     assert asyncio.run(with_place_images([], settings)) == []
 
 
-def test_suggested_places_get_a_photo_with_its_credit_but_restaurants_do_not(
+def test_suggested_places_get_identity_checked_content_and_credit(
     tmp_path, monkeypatch
 ) -> None:
     from uuid import uuid4
@@ -279,11 +279,18 @@ def test_suggested_places_get_a_photo_with_its_credit_but_restaurants_do_not(
     )
     asked: list[str] = []
 
-    async def fake(place, cache):
+    async def fake(place, city, cache):
         asked.append(place)
-        return photo if place == "Prado Museum" else None
+        return (
+            {"image": photo.model_dump(mode="json")} if place == "Prado Museum" else {}
+        )
 
-    monkeypatch.setattr(place_images, "_image_for", fake)
+    monkeypatch.setattr(place_images, "content_for", fake)
+
+    async def no_city_image(*args):
+        return None
+
+    monkeypatch.setattr(place_images, "_image_for", no_city_image)
 
     def suggestion(name: str, category: str) -> Activity:
         return Activity(
@@ -310,4 +317,4 @@ def test_suggested_places_get_a_photo_with_its_credit_but_restaurants_do_not(
 
     museum, restaurant = read.cities[0].activities
     assert museum.image == photo and restaurant.image is None
-    assert "Casa Lucio" not in asked
+    assert "Casa Lucio" in asked

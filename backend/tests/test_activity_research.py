@@ -101,6 +101,18 @@ def test_no_keys_means_error_and_never_mock_data():
         asyncio.run(ar.find_activities(proposal(), Settings(_env_file=None)))
 
 
+def test_events_search_targets_future_stay_dates_instead_of_today():
+    from datetime import date
+
+    queries = ar.search_queries(
+        "Paris", "France", ["events_festivals"], date(2027, 1, 10), date(2027, 1, 14)
+    )
+    assert len(queries) == 4
+    assert "2027-01-10" in queries[-1][0] and "2027-01-14" in queries[-1][0]
+    assert "official dates" in queries[-1][0]
+    assert all("right now" not in query for query, _ in queries)
+
+
 def test_real_search_uses_public_cities_only_and_discards_invalid_events(monkeypatch):
     p = proposal()
     calls = []
@@ -407,6 +419,7 @@ def test_counts_log_holds_only_integers_and_model(monkeypatch, caplog):
         "kept",
         "dropped_category",
         "dropped_offtopic",
+        "dropped_not_permitted",
         "dropped_quote",
         "dropped_source",
         "dropped_date",
@@ -423,6 +436,7 @@ def test_counts_log_holds_only_integers_and_model(monkeypatch, caplog):
         "kept": "1",
         "dropped_category": "1",
         "dropped_offtopic": "0",
+        "dropped_not_permitted": "0",
         "dropped_quote": "1",
         "dropped_source": "1",
         "dropped_date": "0",
@@ -442,3 +456,88 @@ def test_no_stated_price_falls_back_to_a_rough_typical_one():
     )
     assert typical_price(0).amount_sar == 0
     assert typical_price(None).status == "Not available"
+
+
+def test_a_city_visited_twice_lists_each_place_once(monkeypatch):
+    p = proposal()
+    first = p.cities[0]
+    assert first.nights >= 2
+    again = first.model_copy(update={"order": 2, "nights": 1})
+    p = Proposal.model_validate(
+        {
+            **p.model_dump(mode="json"),
+            "cities": [
+                first.model_copy(update={"nights": first.nights - 1}).model_dump(
+                    mode="json"
+                ),
+                again.model_dump(mode="json"),
+            ],
+            "intercity_transport": [
+                {
+                    "from_city": first.city,
+                    "to_city": first.city,
+                    "mode": {"value": None, "status": "Not available", "evidence": []},
+                    "duration": {
+                        "value": None,
+                        "status": "Not available",
+                        "evidence": [],
+                    },
+                    "price_per_person": {
+                        "amount_sar": None,
+                        "status": "Not available",
+                        "evidence": [],
+                    },
+                }
+            ],
+        }
+    )
+    content = "Old Museum. Grand Bazaar. River Walk."
+    source_id = max(s.id for s in p.sources) + 1
+
+    async def search(query, settings, **kwargs):
+        return [
+            ResearchSource(
+                id=1, title="Guide", url="https://g.example/", content=content
+            )
+        ], False
+
+    async def extract(contents, prompt, schema, settings, cost):
+        names = ("Old Museum", "Grand Bazaar", "River Walk")
+        return ar.Suggestions(
+            suggestions=[
+                draft(city_order=order, name=text(name, f"{name}.", source_id))
+                for order in (1, 2)
+                for name in names
+            ]
+        )
+
+    monkeypatch.setattr(ar.research, "search_sources", search)
+    monkeypatch.setattr(ar.research, "call_gemini", extract)
+    settings = Settings(_env_file=None, tavily_api_key="fake", gemini_api_key="fake")
+    result = asyncio.run(ar.find_activities(p, settings))
+    names = [a.name.value for stay in result.cities for a in stay.activities]
+    assert len(names) == len(set(names)) == 3
+    assert result.cities[1].activities == []
+
+
+def test_bars_alcohol_pork_and_gambling_are_never_suggested():
+    from app.services.activity_research import not_permitted
+
+    for name, description in [
+        ("Rooftop Bar 360", None),
+        ("Bodega de la Ardosa", None),
+        ("Bordeaux wine tasting", None),
+        ("Museo del Jamón", None),
+        ("Casino Gran Madrid", None),
+        ("Moulin Rouge", "A world-famous cabaret show."),
+        ("حانة المدينة", None),
+        ("جولة تذوق النبيذ", None),
+    ]:
+        assert not_permitted(name, description), name
+    for name, description in [
+        ("Plaza Mayor", "A grand square lined with cafes and bars."),
+        ("Barcelona Cathedral", None),
+        ("متحف اللوفر في باريس", None),
+        ("Mercado de San Miguel", "A food market with stalls of fresh produce."),
+    ]:
+        assert not not_permitted(name, description), name

@@ -45,6 +45,15 @@ describe('Arabic and English UI', () => {
     expect(link).toContain('Invitation link')
     expect(link).not.toContain('trip-code-box')
   })
+  it.each([
+    ['en', 'The email or password is incorrect.'],
+    ['ar', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'],
+  ] as const)('keeps the %s credential error separate from the signup action', (language, message) => {
+    const markup = render(language, <AuthForm sessionError="The email or password is incorrect." />)
+    const feedback = markup.match(/<p class="auth-feedback auth-feedback--error" role="alert">(.*?)<\/p>/)?.[1]
+    expect(feedback).toBe(message)
+    expect(markup).toContain(language === 'ar' ? 'انضم إلى رحلة' : 'Join Rihla')
+  })
   it('translates trip controls without translating user-entered trip/member names', () => {
     const trip = { id: 'demo', title: 'My London trip', description: '', role: 'administrator', member_count: 1,
       members: [{ user_id: 'demo-user', display_name: 'Ibrahim', role: 'administrator' }] } as TripDetail

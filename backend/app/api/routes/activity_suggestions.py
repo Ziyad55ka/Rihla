@@ -29,7 +29,9 @@ async def suggestions(
 ):
     settings = request.app.state.settings
     # This feature never falls back to saved demo proposals or synthetic activities.
-    if not settings.gemini_api_key or not settings.tavily_api_key:
+    if not settings.ticketmaster_api_key and not (
+        settings.model_configured and settings.tavily_api_key
+    ):
         raise HTTPException(503, "Activity search is not configured on the backend.")
     token = uuid4()
     args = {
@@ -69,6 +71,8 @@ async def suggestions(
         status, message = RESEARCH_FAILURES.get(
             error.code, (503, "Activity search is unavailable. Try again later.")
         )
+        if error.code == "no_results":
+            message = "No checkable suggestions were found for these cities and dates."
         raise HTTPException(status, message) from error
     except GenerationInputsError as error:
         logger.info("activity_search_failed stage=database code=%s", error.code)

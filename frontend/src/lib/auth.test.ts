@@ -55,7 +55,7 @@ describe('account authentication', () => {
     await expect(submitCredentials(client, 'signin', 'user@example.test', 'pw', 'http://x')).rejects.toMatchObject({ code: 'service_unavailable' })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"detail":[]}', { status: 422 })))
     await expect(submitCredentials(client, 'signin', 'user@example.test', 'pw', 'http://x')).rejects.toMatchObject({ code: 'invalid_email' })
-    expect(authErrorMessage({ code: 'invalid_credentials' })).toContain('Sign up')
+    expect(authErrorMessage({ code: 'invalid_credentials' })).toBe('The email or password is incorrect.')
   })
   it('does not expose arbitrary upstream error details', () => {
     expect(authErrorMessage(new Error('sensitive details'))).not.toContain('sensitive details')

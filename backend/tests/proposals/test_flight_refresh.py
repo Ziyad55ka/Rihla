@@ -322,9 +322,8 @@ def test_flight_with_no_usable_link_stays_and_offers_another(tmp_path) -> None:
 
     result = book(checker(tmp_path, fake))
 
-    assert result.fallback == "no_link"
-    assert "google.com" in result.url
-    assert result.flights.airline.value == "Gulf Air"
+    assert result.fallback is None
+    assert result.flights.airline.value == "Saudia"
     assert result.alternative.reason == "no_link"
     assert result.alternative.url == "https://www.saudia.com/book?x=1"
 
@@ -658,7 +657,7 @@ def test_refresh_saves_the_new_price_and_time(tmp_path) -> None:
 
     assert result.updated and result.fallback is None
     assert result.flights.price_per_person.amount_sar == Decimal("950.00")
-    assert result.flights.price_per_person.status == "Sourced"
+    assert result.flights.price_per_person.status == "Estimated"
     assert result.flights.priced_at is not None
     assert result.flights.group_availability == "available"
     assert result.flights.origin == before.origin
@@ -732,7 +731,7 @@ def test_refresh_at_the_limit_saves_nothing(tmp_path) -> None:
     assert "google.com" in result.url
 
 
-def test_refresh_of_a_split_trip_updates_each_direction(tmp_path) -> None:
+def test_refresh_never_promotes_separate_quotes_to_a_new_round_trip(tmp_path) -> None:
     fake = FakeIgnav(
         {"itineraries": [itinerary(amount=1000)]},
         {
@@ -763,11 +762,10 @@ def test_refresh_of_a_split_trip_updates_each_direction(tmp_path) -> None:
 
     result = refresh(checker(tmp_path, fake), proposal(route("split")))
 
-    assert [item.price.amount_sar for item in result.flights.legs] == [
-        Decimal("600.00"),
-        Decimal("400.00"),
-    ]
-    assert result.flights.price_per_person.status == "Estimated"
+    assert result.fallback == "no_link"
+    assert not result.updated
+    assert result.price_sar is None
+    assert result.flights.price_per_person.amount_sar == Decimal("900")
 
 
 def test_ignav_prices_are_for_the_whole_party_by_default() -> None:
@@ -879,14 +877,14 @@ def test_small_saving_keeps_one_booking(tmp_path) -> None:
     assert b'"adults":2' in seen[0].content.replace(b" ", b"")
 
 
-def test_clear_saving_chooses_the_split_trip(tmp_path) -> None:
+def test_even_a_large_saving_never_selects_separate_bookings(tmp_path) -> None:
     ignav, seen = provider(
         httpx.Response(200, json={"itineraries": [mixed(700), steady(1000)]}),
         httpx.Response(200, json=WHOLE_LINKS),
         httpx.Response(200, json=SPLIT_LINKS),
     )
 
-    assert asyncio.run(ignav.find(QUERY)).trip_type == "split"
+    assert asyncio.run(ignav.find(QUERY)).trip_type == "round_trip"
     assert len(seen) == 3
 
 

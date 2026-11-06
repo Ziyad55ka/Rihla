@@ -162,10 +162,13 @@ def input_hash(generation: GenerationInput, key: str | None = None) -> str:
     )
     payload = json.dumps(
         [
+            "single-booking-complete-route-v3-full-hotel-nights",
             str(generation.trip_id),
             generation.shared_start.isoformat(),
             generation.shared_end.isoformat(),
             members,
+            # Only when chosen, so proposals saved before this option still match.
+            *([f"days={generation.trip_days}"] if generation.trip_days else []),
         ]
     )
     secret = key.encode() if key else _RESTART_KEY

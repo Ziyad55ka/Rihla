@@ -21,8 +21,8 @@ export const DROPPED_VISIBLE_MS = 2500
 
 const optionLabels: Record<OptionStage, string> = {
   checking_flights: 'Checking flights…',
-  flights_found: 'Bookable flights found',
-  dates_moved: 'Bookable flights found',
+  flights_found: 'Round-trip flights found',
+  dates_moved: 'Round-trip flights found',
   no_flights: 'No bookable flights. Trying another place.',
   researching: 'Finding a hotel…',
   ready: 'Ready',
@@ -101,7 +101,7 @@ export function GenerationProgressView({ progress, elapsedSeconds }: { progress:
       {t('{ready} of {target} proposals ready', { ready: ready.toLocaleString(locale), target: (progress?.target ?? 3).toLocaleString(locale) })}
     </p>
     {shown.length > 0 && <ul className="generation-options">{shown.map((option) => <OptionRow key={option.key} option={option} />)}</ul>}
-    {skipped > 0 && <p className="generation-skipped">{t(skipped === 1 ? 'Skipped 1 place with no bookable flights' : 'Skipped {count} places with no bookable flights', { count: skipped.toLocaleString(locale) })}</p>}
-    <p className="proposals-note">{t('Only places with bookable flights from every departure city are kept. You can stay on this page.')}</p>
+    {skipped > 0 && <p className="generation-skipped">{t('Skipped {count} places that did not pass the checks', { count: skipped.toLocaleString(locale) })}</p>}
+    <p className="proposals-note">{t('Checking flights, stays and your group’s limits. Prices remain subject to availability.')}</p>
   </section>
 }

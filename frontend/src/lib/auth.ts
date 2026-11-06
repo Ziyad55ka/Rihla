@@ -4,7 +4,7 @@ import { API_BASE_URL } from './api'
 export function authErrorMessage(error: unknown): string {
   const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : ''
   switch (code) {
-    case 'invalid_credentials': return 'The email or password is incorrect. Check both for typos (the password is case-sensitive). New to Rihla? Choose Sign up.'
+    case 'invalid_credentials': return 'The email or password is incorrect.'
     case 'email_not_confirmed': return 'Confirm your email using the link in your inbox, then sign in.'
     case 'login_locked': return 'Five sign-in attempts failed within 15 minutes. Please wait 15 minutes before trying again.'
     case 'login_in_progress': return 'A sign-in attempt is already in progress. Wait a moment, then try again.'

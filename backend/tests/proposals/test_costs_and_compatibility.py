@@ -317,7 +317,13 @@ def test_reading_proposals_adds_costs_without_private_inputs(api, monkeypatch) -
 
     costs = body["costs"][0]
     assert costs["proposal_id"] == mock(0)["id"]
-    assert costs["scenarios"][0]["group_total"]["amount_sar"] == "11250.00"
+    # The fixture's hotel source is not approved. The same hidden price must
+    # also be excluded from costs rather than silently counted.
+    assert (
+        body["proposals"][0]["cities"][0]["hotel_price_per_night"]["amount_sar"] is None
+    )
+    assert costs["scenarios"][0]["group_total"]["amount_sar"] == "5850.00"
+    assert costs["scenarios"][0]["group_total"]["partial"] is True
     text = json.dumps(body)
     # The member's budget and how many fly from each city never leave the backend.
     assert "4321" not in text
@@ -335,3 +341,19 @@ def test_reading_proposals_survives_a_failed_group_read(api, monkeypatch) -> Non
     scenarios = response.json()["costs"][0]["scenarios"]
     assert scenarios[0]["group_total"] is None
     assert scenarios[0]["own_budget"] == "unknown"
+
+
+def test_saved_activities_replace_the_planning_reserve() -> None:
+    from app.schemas.proposals import SarPrice
+
+    reserve = SarPrice(amount_sar=Decimal("675"), status="Unconfirmed", evidence=[])
+    proposal = istanbul().model_copy(update={"activity_allowance_per_person": reserve})
+    picked = [a for city in proposal.cities for a in city.activities][:1]
+    before = proposal_costs(proposal, Decimal(150), context())
+    assert line(scenario(before, "single"), "activities").per_person.amount_sar == 675
+    assert "activities_allowance" in before.assumptions
+    after = proposal_costs(proposal, Decimal(150), context(), [a.id for a in picked])
+    chosen = sum((a.price_per_person.amount_sar or 0) for a in picked)
+    activities = line(scenario(after, "single"), "activities").per_person
+    assert activities.amount_sar == chosen and chosen < 675
+    assert "activities_selected" in after.assumptions

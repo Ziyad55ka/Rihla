@@ -46,9 +46,18 @@ class GenerationInput(BaseModel):
     shared_start: date
     shared_end: date
     members: list[GenerationMember] = Field(min_length=1)
+    # The trip's length in days, chosen by the administrator inside the shared
+    # dates. None lets the planner choose.
+    trip_days: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def dates_in_order(self):
         if self.shared_start > self.shared_end:
             raise ValueError("Shared end must be on or after shared start.")
+        if self.trip_days and self.trip_days > self.shared_days:
+            raise ValueError("The trip is longer than the group's shared dates.")
         return self
+
+    @property
+    def shared_days(self) -> int:
+        return (self.shared_end - self.shared_start).days + 1

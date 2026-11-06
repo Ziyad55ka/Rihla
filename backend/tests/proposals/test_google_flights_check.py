@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+from copy import deepcopy
 from datetime import date
 
 import httpx2 as httpx
+import pytest
 
 from app.services.flight_prices import FlightQuery, IgnavProvider
 from app.services.google_flights_check import GoogleFlightsCheck, flight_key
@@ -26,9 +28,24 @@ def google(outbound: list[dict], inbound: dict[str, list[dict]]):
         params = dict(request.url.params)
         calls.append(params)
         token = params.get("departure_token")
-        if token:
-            return httpx.Response(200, json={"best_flights": inbound.get(token, [])})
-        return httpx.Response(200, json={"best_flights": outbound})
+        options = deepcopy(inbound.get(token, []) if token else outbound)
+        for option in options:
+            first, last = option["flights"][0], option["flights"][-1]
+            first.setdefault(
+                "departure_airport",
+                {
+                    "id": "MAD" if token else "RUH",
+                    "time": "2026-11-16 09:00" if token else "2026-11-08 09:00",
+                },
+            )
+            last.setdefault(
+                "arrival_airport",
+                {
+                    "id": "RUH" if token else "MAD",
+                    "time": "2026-11-16 16:00" if token else "2026-11-08 16:00",
+                },
+            )
+        return httpx.Response(200, json={"best_flights": options})
 
     return GoogleFlightsCheck("key", httpx.MockTransport(handler)), calls
 
@@ -57,6 +74,66 @@ def test_an_outage_never_removes_a_flight() -> None:
     )
     assert asyncio.run(check.confirm(QUERY, ("RX531",), ("RX532",))) is None
     assert asyncio.run(check.listed_outbound(QUERY)) is None
+
+
+@pytest.mark.parametrize(
+    "missing", ["departure_airport", "arrival_airport", "id", "time"]
+)
+def test_partial_second_source_never_claims_the_schedule_was_confirmed(missing):
+    complete = {
+        "flights": [
+            {
+                "flight_number": "RX 531",
+                "departure_airport": {"id": "RUH", "time": "2026-11-08 09:00"},
+                "arrival_airport": {"id": "MAD", "time": "2026-11-08 16:00"},
+            }
+        ],
+        "departure_token": "t1",
+    }
+    if missing in {"id", "time"}:
+        del complete["flights"][0]["departure_airport"][missing]
+    else:
+        del complete["flights"][0][missing]
+    check = GoogleFlightsCheck(
+        "key",
+        httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"best_flights": [complete]})
+        ),
+    )
+    assert asyncio.run(check.confirm(QUERY, ("RX531",), ("RX532",))) is None
+
+
+def test_malformed_flight_options_are_source_unavailable_not_no_flights():
+    check = GoogleFlightsCheck(
+        "key",
+        httpx.MockTransport(
+            lambda request: httpx.Response(200, json={"best_flights": ["invalid"]})
+        ),
+    )
+    assert asyncio.run(check.listed_outbound(QUERY)) is None
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("departure_airport", {"id": "JED"}),
+        ("arrival_airport", {"id": "DXB"}),
+        ("departure_airport", {"time": "2026-11-17 09:00"}),
+        ("arrival_airport", {"time": "2026-11-17 01:00"}),
+    ],
+)
+def test_same_flight_number_cannot_confirm_wrong_airport_or_day(field, value):
+    back = google_option("RX 532")
+    back["flights"][0][field] = value
+    check, _ = google([google_option("RX 531", token="t1")], {"t1": [back]})
+    assert asyncio.run(check.confirm(QUERY, ("RX531",), ("RX532",))) is False
+
+
+def test_non_object_json_is_an_outage_not_a_crash():
+    check = GoogleFlightsCheck(
+        "key", httpx.MockTransport(lambda request: httpx.Response(200, json=[]))
+    )
+    assert asyncio.run(check.confirm(QUERY, ("RX531",), ("RX532",))) is None
 
 
 def test_open_jaw_is_checked_as_a_multi_city_search() -> None:

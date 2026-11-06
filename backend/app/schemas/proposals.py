@@ -128,6 +128,20 @@ class ProposalSource(StrictModel):
 
 
 # One direction of a flight trip.
+# One flight inside a direction, as the source listed it. Used to open the exact
+# round trip on Google Flights. Empty on older proposals.
+class FlightSegment(StrictModel):
+    # Three-letter codes. Example: "RUH".
+    from_airport: str = Field(pattern=r"^[A-Z]{3}$")
+    to_airport: str = Field(pattern=r"^[A-Z]{3}$")
+    # The local departure day of this segment. A connection can leave a day later.
+    date: date
+    # The marketing airline's two-character code. Example: "SV".
+    carrier: str = Field(pattern=r"^[A-Z0-9]{2}$")
+    # Digits, sometimes with a letter. Example: "1465".
+    number: str = Field(pattern=r"^[0-9]{1,4}[A-Z]?$")
+
+
 class FlightLeg(StrictModel):
     # Allowed: outbound, return.
     direction: Literal["outbound", "return"]
@@ -154,6 +168,8 @@ class FlightLeg(StrictModel):
     stop_airports: list[str] = []
     # Who sells this leg, or null. It can differ from the airline. Example: "Saudia".
     seller: str | None = None
+    # Each flight in this direction, in order, or empty on older proposals.
+    segments: list[FlightSegment] = []
 
 
 # General facts about an airline's cheapest fare, never a promise for a ticket.
@@ -239,6 +255,9 @@ class Flights(StrictModel):
 class PlaceImage(StrictModel):
     # The picture itself. Example: "https://upload.wikimedia.org/x.jpg".
     url: str = Field(pattern=r"^https://", max_length=2000)
+    fallback_url: str | None = Field(
+        default=None, pattern=r"^https://", max_length=2000
+    )
     # The picture's page, with its full licence.
     source_url: str = Field(pattern=r"^https://", max_length=2000)
     # Who made it, as plain text, or null. Example: "A. Photographer".
@@ -279,6 +298,12 @@ class Activity(StrictModel):
     category: Literal["activity", "attraction", "restaurant"] = "activity"
     name: InfoField
     description: InfoField = Field(default_factory=unavailable_info)
+    name_en: str | None = Field(default=None, max_length=150)
+    name_ar: str | None = Field(default=None, max_length=150)
+    description_en: str | None = Field(default=None, max_length=1200)
+    description_ar: str | None = Field(default=None, max_length=1200)
+    # Additional public reference pages for localized descriptions, not prices.
+    content_urls: list[str] = Field(default_factory=list, max_length=2)
     location: InfoField = Field(default_factory=unavailable_info)
     duration: InfoField = Field(default_factory=unavailable_info)
     # Null means the event date is unknown, not that it is available every day.
@@ -290,6 +315,11 @@ class Activity(StrictModel):
     image: PlaceImage | None = None
     # Which of the group's interests this suggestion matches. Empty on older ones.
     fits: list[ActivityFocus] = Field(default_factory=list, max_length=4)
+    # Stored with activities by the existing research RPC, so partial-source
+    # notices survive reloads without changing the database contract.
+    research_notes: list[
+        Literal["guide_search_unavailable", "event_source_unavailable", "events_only"]
+    ] = Field(default_factory=list, max_length=3)
 
     @field_validator("price_per_person")
     @classmethod
@@ -330,6 +360,7 @@ class CityStay(StrictModel):
     hotel_url: BookingUrl = None
     # Who gave the hotel and price when it was a live source. Example: "Trip.com".
     hotel_source: str | None = Field(default=None, max_length=50)
+    hotel_stars: int | None = Field(default=None, ge=1, le=5)
     # A photo of this city, or null.
     image: PlaceImage | None = None
 
@@ -426,6 +457,8 @@ class CompatibilityCheck(StrictModel):
 
 # One complete trip option.
 class Proposal(StrictModel):
+    # A conservative planning allowance, replaced only by a higher selected cost.
+    activity_allowance_per_person: SarPrice | None = None
     # This proposal's own id, a UUID.
     id: UUID
     # The trip it belongs to, a UUID.

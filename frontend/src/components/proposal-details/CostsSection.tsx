@@ -21,6 +21,7 @@ const roomLabels: Record<RoomPlan, string> = {
 }
 
 const assumptionText: Record<CostAssumption, string> = {
+  activities_allowance: 'Before you save activities, the estimate includes SAR 75 per day for planning. Your saved choices replace that allowance; unknown prices remain unconfirmed.',
   rooms_single: 'One person per room: each member pays for a whole room. This is how the group budget is checked, so it errs high.',
   rooms_shared: 'Two people per room: rooms are shared and their cost is split evenly across the group.',
   flights_own_city: 'Flights are the round-trip price from your own departure city. Other members may pay a different fare.',
@@ -32,6 +33,7 @@ const assumptionText: Record<CostAssumption, string> = {
   group_total_all_cities: 'The group total adds every member’s own flights and the shared costs for everyone.',
   group_total_unavailable: 'The group total could not be worked out right now.',
   prices_may_change: 'All prices are estimates from the last check and may change before booking.',
+  last_night_unused: 'Your flight home leaves after midnight on the last day, so you leave the hotel the evening before. That last night is not counted.',
 }
 
 const budgetMessages: Record<OwnBudget, string> = {
@@ -46,10 +48,10 @@ function Amount({ amount }: { amount: CostAmount }) {
   const sar = useSar()
   if (amount.amount_sar === null) return <span className="details-value">— <StatusBadge status="Not available" /></span>
   const value = sar(amount.amount_sar)
+  // One note under the table says these are estimates, instead of a badge on every row.
   return <span className="details-value">
     <span>{amount.status === 'Sourced' ? value : t('About {amount}', { amount: value })}</span>
-    <StatusBadge status={amount.status} />
-    {amount.partial && <span className="details-hint">{t('Some prices are missing, so the real cost is higher.')}</span>}
+    {amount.partial && <span className="details-hint">{t('Some costs are missing or not verified. This total is incomplete.')}</span>}
   </span>
 }
 
@@ -88,7 +90,7 @@ export function CostsSection({ costs }: { costs?: ProposalCosts }) {
         <thead><tr><th scope="col">{t('Cost')}</th><th scope="col">{t('Per person')}</th></tr></thead>
         <tbody>
           {plan.lines.map((line) => <tr key={line.category} className={line.counted ? undefined : 'is-muted'}>
-            <th scope="row">{t(categoryLabels[line.category])}</th>
+            <th scope="row">{t(line.category === 'activities' && costs.assumptions.includes('activities_allowance') ? 'Activities (allowance or selections)' : categoryLabels[line.category])}</th>
             <td>{line.counted ? <Amount amount={line.per_person} /> : <span className="details-hint">{t('Not added to the total yet')}</span>}</td>
           </tr>)}
         </tbody>
@@ -97,6 +99,7 @@ export function CostsSection({ costs }: { costs?: ProposalCosts }) {
           <tr><th scope="row">{t('Total for the group')}</th><td>{plan.group_total ? <Amount amount={plan.group_total} /> : <span className="details-hint">{t('Not available right now')}</span>}</td></tr>
         </tfoot>
       </table>
+      <p className="details-hint details-ai-note">{t('All amounts are estimates worked out by AI, which can make mistakes. Check the price on the booking site before you book.')}</p>
       <details className="details-assumptions" open>
         <summary>{t('How this is calculated')}</summary>
         <ul>{costs.assumptions.map((item) => <li key={item}>{t(assumptionText[item])}</li>)}</ul>

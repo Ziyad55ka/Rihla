@@ -2,7 +2,7 @@ import { useLanguage } from '../../lib/language'
 import { placeName } from '../../lib/places'
 import { type PriceAgeLimits, sourceLabel } from '../../lib/proposals'
 import type { Flights, Proposal, TripType } from '../../types/proposal'
-import { BookFlight, FareLine, RefreshFlights, SplitBooking } from './FlightActions'
+import { BookFlight, ExtraFeesNote, FareLine } from './FlightActions'
 import { FlightLine } from './FlightLine'
 import { Hint } from './Hint'
 import { CheckIcon, FlightsTitleIcon, ForwardIcon, UsersIcon } from './icons'
@@ -28,6 +28,9 @@ function PriceParts({ route }: { route: Flights }) {
 function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route: Flights; proposal: Proposal; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
   const { t, language } = useLanguage()
   const sar = useSar()
+  const jointBooking = route.trip_type === 'round_trip' && route.legs.length === 2
+    && route.legs.some((leg) => leg.direction === 'outbound') && route.legs.some((leg) => leg.direction === 'return')
+    && Boolean(route.legs[0].booking_url?.startsWith('https://')) && route.legs[0].booking_url === route.legs[1].booking_url
   const typeLabel = tripTypeLabels[route.trip_type]
   const home = placeName(route.origin, language)
   const away = placeName(proposal.cities[0].city, language, proposal.cities[0].city_ar)
@@ -39,10 +42,11 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
     <div className="details-route-top">
       <h3><bdi>{home}</bdi> <ForwardIcon rtl={language === 'ar'} /> <bdi>{away}</bdi></h3>
       {typeLabel && <span className="planning-badge details-badge--neutral">{t(typeLabel)}</span>}
-      {route.group_availability === 'available' && <span className="details-chip"><UsersIcon /> {t('Available for all travellers from your city')}</span>}
+      {route.group_availability === 'available' && <span className="details-chip"><UsersIcon /> {t('Found for your group at the last check')}</span>}
       {route.schedule_confirmed && <span className="details-chip details-chip--confirmed"><CheckIcon /> {t('Also on sale on Google Flights')}<Hint text={t('A second source shows the same flight numbers on these dates, both ways, so the airline still sells them.')} /></span>}
     </div>
     {route.group_availability === 'not_found' && <p className="details-note" role="status">{t('We could not find one flight with room for all travellers from your city. You may need different flights.')}</p>}
+    {!route.schedule_confirmed && <p className="details-note" role="status">{t('This saved flight has no independent availability confirmation. Refresh it before choosing the trip.')}</p>}
     {route.legs.map((leg) => {
       const out = leg.direction === 'outbound'
       return <FlightLine key={leg.direction} leg={leg} from={out ? home : back} to={out ? away : home} fromCode={out ? route.origin_airport : (route.return_airport ?? route.destination_airport)} toCode={out ? route.destination_airport : route.origin_airport} />
@@ -52,18 +56,19 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
         <span className="details-total-label">{t(route.trip_type === 'one_way' ? 'One way, per person' : 'Round trip, per person')}{route.provider && <Hint text={t(sourceLabel(route))} />}</span>
         <div className="details-value details-price-row"><PriceValue price={route.price_per_person} startsFrom /><PriceAgeBadge pricedAt={route.priced_at} limits={limits} canRefresh /></div>
       </div>
-      <RefreshFlights tripId={proposal.trip_id} proposalId={proposal.id} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
     </div>
     <PriceParts route={route} />
+    {route.trip_type !== 'one_way' && <ExtraFeesNote checkedBags={route.checked_bags} />}
+    {route.price_source === 'search' && <p className="details-hint">{t('Search price: confirm the final total with the seller before booking.')}</p>}
     <div className="details-chips">
       <FareLine facts={{ cabin_class: route.cabin_class ?? null, fare_name: route.fare_name ?? null, checked_bags: route.checked_bags ?? null, airline_fares: route.airline_fares }} />
       {route.trip_type === 'one_way' && <span className="details-chip">{t('The return price is not counted.')}</span>}
       {route.fare_basis === 'solo' && route.solo_saving_sar && <span className="details-chip">{t('The price shown is for each person booking alone.')}<Hint text={t('It could be {amount} per person cheaper if each person books alone, but you may not be on the same flight.', { amount: sar(route.solo_saving_sar) })} /></span>}
       {!partsShown && route.trip_type === 'round_trip' && <span className="details-chip details-chip--plain">{t('Sites may show the outbound price first')}<Hint text={t('The airline’s site may show the outbound price first, then add the return. The final total appears after you choose both flights.')} /></span>}
     </div>
-    {route.trip_type === 'split'
-      ? <SplitBooking tripId={proposal.trip_id} proposalId={proposal.id} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />
-      : <BookFlight tripId={proposal.trip_id} proposalId={proposal.id} leg={route.trip_type === 'one_way' ? 'outbound' : 'round_trip'} label={t('Book')} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />}
+    {!jointBooking
+      ? <p className="proposals-review" role="status">{t('This saved flight uses separate or incomplete bookings. Regenerate to get outbound and return on one booking.')}</p>
+      : <BookFlight tripId={proposal.trip_id} proposalId={proposal.id} leg="round_trip" label={t('Check price and book round trip')} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />}
   </div>
 }
 

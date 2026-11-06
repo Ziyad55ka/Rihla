@@ -14,8 +14,9 @@ export const getConflicts = (tripId: string, signal?: AbortSignal) =>
 export const getProposals = (tripId: string, signal?: AbortSignal) =>
   authenticatedRequest<StoredProposals>(path(tripId, 'proposals'), { signal })
 
-export const generateProposals = (tripId: string, regenerate: boolean) =>
-  longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
+/** `tripDays` is the administrator's chosen length; leave it out to let the AI choose. */
+export const generateProposals = (tripId: string, regenerate: boolean, tripDays?: number | null) =>
+  longRequest<GeneratedProposals>(path(tripId, 'proposals'), { body: tripDays ? { regenerate, trip_days: tripDays } : { regenerate }, timeoutMs: GENERATION_TIMEOUT_MS })
 
 export const getGenerationProgress = (tripId: string, signal?: AbortSignal) =>
   authenticatedRequest<GenerationProgress | null>(path(tripId, 'proposals/progress'), { signal })
@@ -32,6 +33,7 @@ export function generationIssue(detail: unknown): GenerationIssue | null {
     code: value.code,
     message: value.message,
     places: Array.isArray(value.places) ? value.places.filter((item): item is string => typeof item === 'string') : [],
+    causes: Array.isArray(value.causes) ? value.causes.filter((item) => typeof item === 'object' && item !== null && typeof item.kind === 'string' && typeof item.text === 'string') : [],
     suggestions: value.suggestions.filter((item) => typeof item === 'object' && item !== null && typeof item.action === 'string' && typeof item.kind === 'string')
       .map((item) => ({ ...item, params: item.params ?? {} })),
   }
@@ -53,14 +55,14 @@ export const reviewMessages: Partial<Record<ConflictCategory, string>> = {
 
 export const budgetStatusLabels: Record<BudgetStatus, string> = {
   within_group_budget: 'Within the group budget',
-  includes_unconfirmed: 'Within budget, with unconfirmed prices',
+  includes_unconfirmed: 'Budget not confirmed: some prices are estimates or missing',
   over_group_budget: 'Over the group budget',
 }
 
 export const statusLabels: Record<InfoStatus, string> = {
-  Sourced: 'Confirmed by the seller',
+  Sourced: 'Source-backed',
   Estimated: 'Estimated',
-  Unconfirmed: 'Rough estimate · Check before booking',
+  Unconfirmed: 'Rough estimate',
   'Not available': 'Not available',
 }
 
@@ -71,6 +73,17 @@ export function proposalTitle(proposal: Proposal, language: Language): string {
 // Saved data comes from outside services, so only web addresses become links.
 export function safeLink(url: string | null): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null
+}
+
+/** Old saved hotel results may contain an ad click instead of a hotel page. */
+export function hotelLink(url: string | null): string | null {
+  if (!url) return null
+  try {
+    const link = new URL(url)
+    if (link.protocol !== 'https:' || link.username || link.password) return null
+    if (['google.com', 'www.google.com'].includes(link.hostname) && ['/aclk', '/url'].includes(link.pathname)) return null
+    return link.toString()
+  } catch { return null }
 }
 
 function addDays(day: string, count: number): string {
@@ -129,6 +142,10 @@ export interface FlightCheckResult extends FlightFacts {
   /** Set means url, if any, is a Google Flights search. */
   fallback: FlightFallback | null
   alternative: FlightAlternative | null
+  /** Google Flights with both chosen flights selected for the group, or null. */
+  itinerary_url?: string | null
+  /** With fallback "limit": when a new check is allowed again (ISO time). */
+  retry_at?: string | null
   now_over_budget: boolean
   checked_at: string | null
   link_valid_minutes: number

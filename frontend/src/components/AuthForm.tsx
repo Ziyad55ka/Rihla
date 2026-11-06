@@ -84,7 +84,7 @@ export function AuthForm({ sessionError = '', initialMode = 'signin' }: { sessio
       {(error || sessionError) && <p className="auth-feedback auth-feedback--error" role="alert">{t(error || sessionError)}</p>}
       {notice && <p className="auth-feedback auth-feedback--success" role="status">{t(notice)}</p>}
       <button className="auth-submit" disabled={busy} type="submit">
-        <span>{busy ? (signingUp ? 'Creating your account…' : 'Signing you in…') : signingUp ? t("Create my account") : t("Let’s go")}</span>
+        <span>{busy ? t(signingUp ? 'Creating your account…' : 'Signing you in…') : signingUp ? t("Create my account") : t("Let’s go")}</span>
         {busy ? <span className="auth-spinner" aria-hidden="true" /> : <Arrow />}
       </button>
     </form>

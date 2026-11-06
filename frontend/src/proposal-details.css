@@ -29,6 +29,8 @@
 .details-booking { display:grid; gap:6px; justify-items:start; }
 .details-booking a { min-height:42px; padding:9px 16px; }
 .details-hint { margin:0; color:var(--rihla-muted); font-size:12px; line-height:1.6; }
+.details-fees { display:flex; gap:8px; align-items:flex-start; margin:8px 0 0; padding:10px 12px; border-radius:10px; background:#fff8ec; border:1px solid #f1dfbd; color:#5b4524; font-size:13px; line-height:1.6; }
+.details-fees svg { flex:none; margin-top:3px; }
 .details-route-top { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; }
 .details-icon { flex:none; vertical-align:-3px; }
 .details-price-row { font-size:17px; }
@@ -333,3 +335,6 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
 .details-sources-fold > summary { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--rihla-muted, #5f6b62); padding:10px 0; }
 .details-sources-fold > summary svg { width:18px; height:18px; }
 .details-sources-fold[open] > summary { color:var(--rihla-ink); }
+.details-photo-credit a { color:#fff; text-decoration:underline; text-underline-offset:3px; }
+.details-photo-info::before { content:""; position:absolute; inset:-8px; }
+.details-activity-question { font-size:20px; font-weight:500; margin:0 0 8px; }

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals } from './proposals'
+import { canPressGenerate, conflictMessages, generateProposals, getConflicts, getProposals, hotelLink } from './proposals'
 
 const { request } = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./http', () => ({ authenticatedRequest: request }))
@@ -29,4 +29,12 @@ it('allows generating only with no conflicts and no running generation', () => {
 
 it('conflict messages hold no figure', () => {
   for (const message of Object.values(conflictMessages)) expect(message).not.toMatch(/\d/)
+})
+
+it.each(['https://www.google.com/aclk?adurl', 'https://google.com/url?q=hotel', 'http://booking.com/hotel/test', 'https://user:secret@booking.com/hotel/test', 'not-a-url'])('does not offer an unusable saved hotel link: %s', url => {
+  expect(hotelLink(url)).toBeNull()
+})
+
+it('keeps a real hotel page and a dated price comparison intact', () => {
+  for (const url of ['https://booking.com/hotel/test?checkin=2027-01-10', 'https://www.google.com/travel/hotels/entity/test?dates=2027-01-10']) expect(hotelLink(url)).toBe(url)
 })

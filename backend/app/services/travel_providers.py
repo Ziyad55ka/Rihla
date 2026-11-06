@@ -81,6 +81,10 @@ async def find_hotel(
     """The first source with a named hotel. A failed source passes to the next."""
     for provider in providers:
         offer = await provider.find(query)
-        if offer is not None:
+        if offer is not None and (
+            not query.strict_stars
+            or offer.star_rating in query.stars
+            or (provider.name == "serpapi" and offer.average_sample_size >= 2)
+        ):
             return offer
     return None

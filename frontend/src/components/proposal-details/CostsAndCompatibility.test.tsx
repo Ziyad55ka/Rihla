@@ -90,7 +90,7 @@ describe('US-13 costs and budget', () => {
     const uncertain = scenario({ own_budget: 'unconfirmed', per_person_total: amount('2950.00', 'Unconfirmed', true) })
     const html = page(proposal(), { costs: [costs({ scenarios: [uncertain] })] })
     expect(html).toContain('some prices are unconfirmed or missing')
-    expect(html).toContain('Some prices are missing, so the real cost is higher.')
+    expect(html).toContain('Some costs are missing or not verified. This total is incomplete.')
   })
 
   it('still renders when the backend sent no costs', () => {
@@ -130,19 +130,21 @@ describe('US-15 match and trade-offs', () => {
   })
 })
 
-describe('US-14 sources and reliability', () => {
-  it('lists sources with their check time and hides internal fare notes', () => {
+describe('concise proposal details', () => {
+  it('omits the source footer while keeping costs and compatibility', () => {
     const html = page()
-    expect(html).toContain('Cairo hotel guide')
-    expect(html).toContain('guide.example')
-    expect(html).toContain('Checked ')
+    expect(html).not.toContain('Cairo hotel guide')
+    expect(html).not.toContain('Where this information comes from')
+    expect(html).not.toContain('details-sources')
     expect(html).not.toContain('Internal fare note')
-    expect(html).toContain('rel="noopener noreferrer"')
+    expect(html).toContain('Costs and budget')
+    expect(html).toContain('How it matches the group')
   })
 
-  it('explains every reliability label', () => {
+  it('keeps a clear uncertainty notice without the source legend', () => {
     const html = page()
-    for (const text of ['Not a guaranteed price', 'Check it before booking.', 'It is not counted as free']) expect(html).toContain(text)
+    expect(html).toContain('Prices and availability can change at any time.')
+    expect(html).not.toContain('details-status-legend')
   })
 
   it('never turns an unsafe address into a link', () => {

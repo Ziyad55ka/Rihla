@@ -6,6 +6,7 @@ from activity_fixture import mock_data
 
 from app.schemas.proposals import Proposal
 from app.services.activity_estimate import proposal_estimate
+from app.services.proposal_costs import proposal_costs
 
 
 def example():
@@ -15,15 +16,17 @@ def example():
 def test_saved_choices_update_relevant_proposal_estimate_and_can_be_removed():
     proposal = example()
     museum, walk, event, restaurant = proposal.cities[0].activities
-    assert proposal_estimate(proposal, []).total.known_amount_sar == Decimal("3000.00")
+    assert proposal_estimate(proposal, []).total.known_amount_sar == Decimal("3750.00")
     selected = proposal_estimate(proposal, [museum.id, restaurant.id])
     assert selected.activities.known_amount_sar == Decimal("150.50")
-    assert selected.total.known_amount_sar == Decimal("3150.50")
+    assert selected.total.known_amount_sar == Decimal("3900.50")
+    assert selected.meals.known_amount_sar == Decimal("750.00")
+    assert selected.meals.unconfirmed_items == 1
     assert selected.flights.known_amount_sar == Decimal("1200.00")
     assert selected.accommodation.known_amount_sar == Decimal("1800.00")
     assert proposal_estimate(
         proposal, [restaurant.id]
-    ).total.known_amount_sar == Decimal("3065.00")
+    ).total.known_amount_sar == Decimal("3815.00")
     assert proposal_estimate(proposal, [walk.id]).activities.known_amount_sar == 0
     assert proposal_estimate(proposal, [event.id]).activities.missing_items == 1
     assert proposal_estimate(proposal, []).activities.missing_items == 0
@@ -34,7 +37,7 @@ def test_missing_prices_and_return_costs_are_explicit_not_free():
     proposal.flights = []
     estimate = proposal_estimate(proposal, [])
     assert estimate.flights.missing_items == 1
-    assert estimate.total.known_amount_sar == Decimal("1800.00")
+    assert estimate.total.known_amount_sar == Decimal("2550.00")
     proposal = example()
     proposal.flights[0].trip_type = "one_way"
     assert proposal_estimate(proposal, []).flights.missing_items == 1
@@ -80,3 +83,21 @@ def test_estimate_is_recalculated_when_prices_change_and_preserves_trust_counts(
     )
     assert updated.activities.unconfirmed_items == 1
     assert updated.accommodation.estimated_items == 1
+
+
+@pytest.mark.parametrize("daily", ["0.00", "87.50", "150.00", "250.25"])
+@pytest.mark.parametrize("selected", [False, True])
+def test_activity_page_and_main_cost_page_always_agree(daily, selected):
+    proposal = example()
+    ids = [proposal.cities[0].activities[0].id] if selected else []
+    allowance = Decimal(daily)
+    estimate = proposal_estimate(proposal, ids, allowance)
+    main = proposal_costs(proposal, allowance, None, ids).scenarios[0]
+    assert estimate.total.known_amount_sar == main.per_person_total.amount_sar
+    assert estimate.meals.known_amount_sar == allowance * 5
+
+
+@pytest.mark.parametrize("invalid", ["NaN", "Infinity", "-1"])
+def test_invalid_allowance_cannot_change_a_trip_total(invalid):
+    with pytest.raises(ValueError, match="allowance"):
+        proposal_estimate(example(), [], Decimal(invalid))

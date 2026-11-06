@@ -1,0 +1,33 @@
+{
+  "reviewed_on": "2026-11-06",
+  "images": {
+    "prado museum|madrid": {
+      "url": "https://live.staticflickr.com/4031/4660401883_677916725b_b.jpg",
+      "fallback_url": "https://api.openverse.org/v1/images/f80285ee-0c95-4575-9cc8-f74f3240ee92/thumb/",
+      "source_url": "https://www.flickr.com/photos/72746018@N00/4660401883",
+      "artist": "dalbera",
+      "license": "CC BY 2.0"
+    },
+    "plaza mayor|madrid": {
+      "url": "https://live.staticflickr.com/1744/40986569440_73a7e1008b_b.jpg",
+      "fallback_url": "https://api.openverse.org/v1/images/c622f486-1ee9-4289-913b-abca9ac6f6ab/thumb/",
+      "source_url": "https://www.flickr.com/photos/59274709@N03/40986569440",
+      "artist": "GlobalQuiz.org",
+      "license": "CC BY 2.0"
+    },
+    "basilica de san francisco el grande|madrid": {
+      "url": "https://live.staticflickr.com/1404/545432687_85e1d0e5c1_b.jpg",
+      "fallback_url": "https://api.openverse.org/v1/images/5d5c43fa-0fdc-4c5c-9ccf-7596ed19ba1c/thumb/",
+      "source_url": "https://www.flickr.com/photos/8145878@N02/545432687",
+      "artist": "oft-quoted Mandrake Silvertongue",
+      "license": "CC BY 2.0"
+    },
+    "royal palace of madrid|madrid": {
+      "url": "https://live.staticflickr.com/4056/4660736871_34f496a401_b.jpg",
+      "fallback_url": "https://api.openverse.org/v1/images/a8b3d6f8-6734-4d11-83d8-d6c325240d19/thumb/",
+      "source_url": "https://www.flickr.com/photos/72746018@N00/4660736871",
+      "artist": "dalbera",
+      "license": "CC BY 2.0"
+    }
+  }
+}

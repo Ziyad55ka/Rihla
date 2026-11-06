@@ -50,6 +50,12 @@ describe('GenerationProgressView', () => {
 })
 
 describe('GenerationIssueCard', () => {
+  it('prevents an immediate retry before the provider reset time', () => {
+    const limited: GenerationIssue = { code: 'model_quota', message: 'Limit', places: [], suggestions: [{ action: 'retry', kind: 'retry_after', text: '', params: { retry_at: new Date(Date.now() + 60000).toISOString() } }] }
+    const html = wrap(<GenerationIssueCard issue={limited} isAdmin onAction={() => undefined} />)
+    expect(html).toContain('Try again after')
+    expect(html).toMatch(/<button[^>]*disabled/)
+  })
   it('names the places tried and offers a button for each fix', () => {
     const html = wrap(<GenerationIssueCard issue={issue} isAdmin onAction={() => undefined} />)
     expect(html).toContain('role="alert"')
@@ -58,6 +64,19 @@ describe('GenerationIssueCard', () => {
     expect(html).toContain('Change dates')
     expect(html).toContain('Open preferences')
     expect(html).toContain('Try again')
+  })
+  it('says why nothing was found, in words the group can act on', () => {
+    const late: GenerationIssue = { ...issue, causes: [{ kind: 'lands_after_trip', text: 'x' }, { kind: 'unknown', text: 'Plain fallback' }] }
+    const html = wrap(<GenerationIssueCard issue={late} isAdmin onAction={() => undefined} />)
+    expect(html).toContain('Why:')
+    expect(html).toContain('land after the group’s last day')
+    expect(html).toContain('Plain fallback')
+  })
+  it('asks for earlier dates when the source cannot search them', () => {
+    const far: GenerationIssue = { ...issue, causes: [{ kind: 'dates_not_searchable', text: '' }] }
+    const html = wrap(<GenerationIssueCard issue={far} isAdmin onAction={() => undefined} />)
+    expect(html).toContain('Try earlier dates')
+    expect(html).not.toContain('11 months')
   })
   it('does not offer members a generate button', () => {
     expect(wrap(<GenerationIssueCard issue={issue} isAdmin={false} onAction={() => undefined} />)).not.toContain('Try again')

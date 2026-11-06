@@ -88,6 +88,38 @@ class FlightUsage:
         self._write("INSERT INTO member_actions VALUES (?, ?)", (time.time(), key))
         return True
 
+    def _free_at(self, where: str, values: tuple, limit: int, window: int) -> float:
+        """When the oldest counted use leaves the window and one more is allowed."""
+        connection = self._connect()
+        try:
+            times = [
+                row[0]
+                for row in connection.execute(
+                    f"SELECT at FROM {where} AND at > ? ORDER BY at",
+                    (*values, time.time() - window),
+                )
+            ]
+        finally:
+            connection.close()
+        if len(times) < limit or limit <= 0:
+            return time.time()
+        return times[len(times) - limit] + window
+
+    def member_free_at(self, member: str, limit: int) -> float:
+        return self._free_at(
+            "member_actions WHERE member = ?", (self._member(member),), limit, HOUR
+        )
+
+    def source_free_at(
+        self, trip: str, provider: str, trip_limit: int, source_limit: int
+    ) -> float:
+        """The later of this trip's and the whole source's daily limits."""
+        base = "ignav_usage WHERE cached = 0 AND provider = ?"
+        return max(
+            self._free_at(f"{base} AND trip = ?", (provider, trip), trip_limit, DAY),
+            self._free_at(base, (provider,), source_limit, DAY),
+        )
+
     def summary(self) -> list[tuple]:
         connection = self._connect()
         try:

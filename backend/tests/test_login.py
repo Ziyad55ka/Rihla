@@ -147,6 +147,27 @@ def test_login_returns_only_supabase_session_and_never_caches_it(login_client):
     assert calls == [{"email": "user@example.test", "password": "private-password"}]
 
 
+@pytest.mark.parametrize("email", ["existing@example.test", "absent@example.test"])
+def test_invalid_email_or_password_uses_the_same_short_message(login_client, email):
+    client, calls = login_client(
+        lambda _: httpx.Response(
+            400,
+            json={"code": "invalid_credentials", "message": "private upstream detail"},
+        )
+    )
+    response = client.post(
+        "/api/auth/login", json={"email": email, "password": "wrong"}
+    )
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": {
+            "code": "invalid_credentials",
+            "message": "The email or password is incorrect.",
+        }
+    }
+    assert calls == [{"email": email, "password": "wrong"}]
+
+
 def test_lockout_is_server_enforced_and_does_not_send_a_sixth_request(login_client):
     client, calls = login_client(
         lambda _: httpx.Response(
