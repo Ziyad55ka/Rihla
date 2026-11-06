@@ -7,7 +7,7 @@
 .landing-nav a:hover,.landing-login:hover { text-decoration:underline; text-underline-offset:5px; }
 .landing-login { border:0; background:none; padding:12px 0; cursor:pointer; }
 .landing-signup { display:flex; align-items:center; gap:27px; padding:12px 17px; min-height:43px; border:1px solid #2b7d76; border-radius:5px; background:#2b7d76; color:#e8f6f5; font-size:11px; cursor:pointer; }
-.landing-signup:hover { background:#243740; }
+.landing-signup:hover { background:var(--rihla-green-deep); border-color:var(--rihla-green-deep); }
 .landing-hero { max-width:1320px; margin:0 auto; display:grid; grid-template-columns:1.1fr 1fr; align-items:center; gap:0; padding:61px 0 76px; min-height:665px; position:relative; }
 .landing-hero-copy { position:relative; z-index:2; padding-bottom:15px; }
 .landing-eyebrow { margin:0 0 27px; display:flex; align-items:center; gap:9px; color:#5c7271; font-size:9px; line-height:1.6; font-weight:400; letter-spacing:1.3px; }
@@ -18,7 +18,7 @@
 .landing-hero-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin-top:30px; }
 .landing-action { display:inline-flex; justify-content:space-between; align-items:center; min-height:48px; min-width:156px; padding:13px 18px; border:1px solid #2b7d76; border-radius:5px; font-size:12px; gap:28px; cursor:pointer; }
 .landing-action--primary { background:#2b7d76; color:#e8f6f5; box-shadow:0 4px 10px #23343d10; }
-.landing-action--primary:hover { background:#243740; border-color:#243740; }
+.landing-action--primary:hover { background:var(--rihla-green-deep); border-color:var(--rihla-green-deep); }
 .landing-action--secondary { background:transparent; border-color:#a2b9b8; color:#344c4b; }
 .landing-action--secondary:hover { background:#d5e5e4; border-color:#708c8b; }
 .landing-action svg { flex-shrink:0; }

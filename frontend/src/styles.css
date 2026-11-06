@@ -2,6 +2,8 @@
   --rihla-ink:#1e3442;
   --rihla-muted:#667372;
   --rihla-green:#2b7d76;
+  /* Hover for every main button: the same teal, a little deeper. */
+  --rihla-green-deep:#22655f;
   --rihla-cream:#edf2f1;
   --rihla-bg:#edf2f1;
   --rihla-paper:#fafcfb;

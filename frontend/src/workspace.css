@@ -21,7 +21,7 @@
 .trip-button-row,.trip-form-actions { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 .trip-primary,.trip-secondary { min-height:48px; padding:13px 19px; border:1px solid var(--rihla-green); background:var(--rihla-green); color:#fff; border-radius:5px; display:inline-flex; align-items:center; justify-content:space-between; gap:22px; cursor:pointer; font-size:13px!important; font-weight:500!important; text-decoration:none; }
 .trip-primary { box-shadow:0 3px 5px #16293312; }
-.trip-primary:hover:not(:disabled) { background:#253740; border-color:#253740; }
+.trip-primary:hover:not(:disabled) { background:var(--rihla-green-deep); border-color:var(--rihla-green-deep); }
 .trip-secondary { background:var(--rihla-paper); color:var(--rihla-ink); border-color:var(--rihla-line); }
 .trip-secondary:hover:not(:disabled) { background:#fff; border-color:#a4b6b5; }
 .trip-workspace button:disabled { opacity:.55; cursor:wait; }

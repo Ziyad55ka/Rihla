@@ -46,7 +46,7 @@
 .auth-password-hint,.auth-confirmation-note { font-size:10px; line-height:1.6; color:var(--auth-muted); margin:-10px 0 -3px; }
 .auth-confirmation-note { margin-top:-4px; }
 .auth-submit { display:flex; align-items:center; justify-content:space-between; gap:15px; min-height:49px; padding:13px 17px; margin-top:4px; border:1px solid var(--auth-accent); border-radius:5px; background:var(--auth-accent); color:#e8f6f5; font-size:12px; cursor:pointer; box-shadow:0 4px 10px #23343d10; }
-.auth-submit:hover:not(:disabled) { background:#243740; border-color:#243740; }
+.auth-submit:hover:not(:disabled) { background:var(--rihla-green-deep); border-color:var(--rihla-green-deep); }
 .auth-submit > svg { transition:transform .15s ease; }
 .auth-submit:hover:not(:disabled) > svg { transform:translateX(3px); }
 .auth-page button:disabled { cursor:wait; opacity:.6; }
