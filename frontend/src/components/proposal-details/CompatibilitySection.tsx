@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import { useLanguage } from '../../lib/language'
 import type { CompatibilityCheck, CompatibilityStatus, CompatibilityTopic, Proposal, ProposalFit } from '../../types/proposal'
 import { Hint } from './Hint'
@@ -37,13 +38,14 @@ function sorted(checks: CompatibilityCheck[]) {
 
 /** US-15: which requirements this proposal meets, which are not met or not verified, and its trade-offs. */
 export function CompatibilitySection({ proposal }: { proposal: Proposal }) {
+  const detailId = useDetailId()
   const { t, locale, language } = useLanguage()
   const checks = sorted(proposal.compatibility ?? [])
   const essentialProblems = checks.filter((item) => item.importance === 'Essential' && item.status !== 'met')
   const metCount = checks.filter((item) => item.status === 'met').length
   // The score and trade-offs lead; each check stays one click away (US-15-AC01/02).
-  return <section aria-labelledby="details-match">
-    <SectionTitle id="details-match" icon={<MatchTitleIcon />} title={t('How it matches the group')} hint={<Hint text={t('Grouped by topic. It never shows anyone’s own preferences or who asked for what.')} />} />
+  return <section aria-labelledby={detailId('details-match')}>
+    <SectionTitle id={detailId('details-match')} icon={<MatchTitleIcon />} title={t('How it matches the group')} hint={<Hint text={t('Grouped by topic. It never shows anyone’s own preferences or who asked for what.')} />} />
     <div className="details-card details-match">
       {essentialProblems.length > 0 && <p className="details-budget details-budget--over" role="status">
         <WarningIcon /> <span>{t('Check these Essential requirements yourself before deciding: {topics}', { topics: essentialProblems.map((item) => `${t(topicLabels[item.topic])} (${t(resultLabels[item.status])})`).join(language === 'ar' ? '، ' : ', ') })}</span>

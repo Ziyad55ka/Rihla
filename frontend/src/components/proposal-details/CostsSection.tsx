@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import { useState } from 'react'
 import { useLanguage } from '../../lib/language'
 import type { CostAmount, CostAssumption, CostCategory, OwnBudget, ProposalCosts, RoomPlan } from '../../types/proposal'
@@ -43,7 +44,7 @@ const budgetMessages: Record<OwnBudget, string> = {
   unknown: 'We could not check this against your budget',
 }
 
-function Amount({ amount }: { amount: CostAmount }) {
+export function Amount({ amount }: { amount: CostAmount }) {
   const { t } = useLanguage()
   const sar = useSar()
   if (amount.amount_sar === null) return <span className="details-value">— <StatusBadge status="Not available" /></span>
@@ -67,21 +68,22 @@ function BudgetCheck({ status, overBy }: { status: OwnBudget; overBy: string | n
 
 /** US-13: the member's own costs, the group total, the assumptions and a budget warning. */
 export function CostsSection({ costs }: { costs?: ProposalCosts }) {
+  const detailId = useDetailId()
   const { t, locale } = useLanguage()
   const [rooms, setRooms] = useState<RoomPlan>('single')
-  if (!costs) return <section aria-labelledby="details-costs">
-    <SectionTitle id="details-costs" icon={<CostsTitleIcon />} title={t('Costs and budget')} />
+  if (!costs) return <section aria-labelledby={detailId('details-costs')}>
+    <SectionTitle id={detailId('details-costs')} icon={<CostsTitleIcon />} title={t('Costs and budget')} />
     <p className="details-card details-hint">{t('The cost breakdown is not available right now. Try again later.')}</p>
   </section>
   const plan = costs.scenarios.find((item) => item.rooms === rooms) ?? costs.scenarios[0]
-  return <section aria-labelledby="details-costs">
-    <SectionTitle id="details-costs" icon={<CostsTitleIcon />} title={t('Costs and budget')} hint={<Hint text={t('Estimated costs for this proposal. Prices come from the sections above, and every estimate is labelled.')} />} />
+  return <section aria-labelledby={detailId('details-costs')}>
+    <SectionTitle id={detailId('details-costs')} icon={<CostsTitleIcon />} title={t('Costs and budget')} hint={<Hint text={t('Estimated costs for this proposal. Prices come from the sections above, and every estimate is labelled.')} />} />
     <div className="details-card details-costs">
       <BudgetCheck status={plan.own_budget} overBy={plan.over_by_sar} />
       {costs.scenarios.length > 1 && <fieldset className="details-rooms">
         <legend>{t('Rooms')}</legend>
         {costs.scenarios.map((item) => <label key={item.rooms}>
-          <input type="radio" name="details-rooms" value={item.rooms} checked={plan.rooms === item.rooms} onChange={() => setRooms(item.rooms)} />
+          <input type="radio" name={detailId('details-rooms')} value={item.rooms} checked={plan.rooms === item.rooms} onChange={() => setRooms(item.rooms)} />
           {t(roomLabels[item.rooms])}
         </label>)}
       </fieldset>}

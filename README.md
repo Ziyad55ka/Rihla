@@ -222,6 +222,8 @@ Commit both npm lockfiles and `backend/uv.lock` with dependency changes. Use `np
 
 ## Connect and verify the development Supabase project
 
+For proposal-ready and revision emails, see [trip notification email setup](docs/trip-email-notifications.md).
+
 1. Create or select the team's development project in the Supabase dashboard and arrange individual team access.
 2. Put its project URL and publishable key in both local environment files and configure email confirmation/redirects.
 3. Review and locally test the profile migration before applying it to the development project.

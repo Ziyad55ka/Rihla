@@ -11,6 +11,7 @@ from app.api.routes.login import router as login_router
 from app.api.routes.proposals import router as proposals_router
 from app.api.routes.trips import router as trips_router
 from app.core.config import Settings
+from app.services.trip_emails import email_lifespan
 
 
 def configure_logging() -> None:
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="Rihla API",
         description="Foundation for the SWE 444 group travel planning project.",
         version="0.1.0",
+        lifespan=email_lifespan,
     )
     application.state.settings = settings
 

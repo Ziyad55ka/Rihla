@@ -338,3 +338,9 @@ html[dir='rtl'] .proposal-details :is(h1,h2,h3), html[dir='rtl'] .proposals-pane
 .details-photo-credit a { color:#fff; text-decoration:underline; text-underline-offset:3px; }
 .details-photo-info::before { content:""; position:absolute; inset:-8px; }
 .details-activity-question { font-size:20px; font-weight:500; margin:0 0 8px; }
+.proposal-feedback { display:grid; gap:14px; }
+.proposal-feedback .feedback-toggle { width:100%; min-height:60px; display:flex; align-items:center; justify-content:center; gap:12px; font-size:1.1rem; }
+.proposal-feedback .feedback-form { display:grid; gap:12px; }
+.proposal-feedback label { font-weight:600; }
+.proposal-feedback textarea { width:100%; box-sizing:border-box; border:1px solid var(--rihla-line); border-radius:8px; padding:12px; resize:vertical; font:inherit; }
+.proposal-feedback .feedback-form button { justify-self:start; }

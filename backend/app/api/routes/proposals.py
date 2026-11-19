@@ -27,7 +27,9 @@ from app.services.generation_inputs import (
     fetch_cost_context,
     fetch_flight_context,
     fetch_generation_inputs,
+    revision_context,
     save_flight_refresh,
+    save_revision,
 )
 from app.services.generation_precheck import generate_checked
 from app.services.generation_progress import (
@@ -37,7 +39,11 @@ from app.services.generation_progress import (
 )
 from app.services.place_images import with_place_images
 from app.services.proposal_costs import CostContext, proposal_costs
-from app.services.proposal_generation import GenerationBlocked
+from app.services.proposal_generation import (
+    GenerationBlocked,
+    OptionRejected,
+    revise_proposal,
+)
 from app.services.proposal_store import SupabaseProposalStore
 from app.services.source_policy import apply_source_policy
 from app.services.supabase import SupabaseHTTP
@@ -483,6 +489,82 @@ async def flight_not_offered(
         ) from error
     await _save_check(result, trip_id, proposal_id, identity, settings, required=True)
     return _check_response(result, settings)
+
+
+class RevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    feedback: str = Field(min_length=1, max_length=1500)
+    revision: int = Field(ge=1)
+
+
+@router.get("/{trip_id}/proposals/{proposal_id}/history", response_model=list[Proposal])
+async def proposal_history(
+    trip_id: UUID, proposal_id: UUID, identity: CurrentIdentity, client: SupabaseHTTP
+):
+    return await trip_rpc(
+        client,
+        identity,
+        "rihla_revision_history",
+        {"p_trip_id": str(trip_id), "p_proposal_id": str(proposal_id)},
+        list[Proposal],
+    )
+
+
+@router.post("/{trip_id}/proposals/{proposal_id}/revise")
+async def revise_trip_proposal(
+    trip_id: UUID,
+    proposal_id: UUID,
+    body: RevisionRequest,
+    request: Request,
+    identity: CurrentIdentity,
+):
+    settings = request.app.state.settings
+    args = {
+        "p_trip_id": str(trip_id),
+        "p_proposal_id": str(proposal_id),
+        "p_admin_id": str(identity.account.id),
+    }
+    try:
+        context = await revision_context(args, settings)
+        if context.proposal.revision != body.revision:
+            raise GenerationInputsError("revision_stale")
+        if settings.proposals_demo_mode:
+            raise HTTPException(409, "AI revisions are unavailable in demo mode.")
+        generation = await fetch_generation_inputs(
+            trip_id, identity.account.id, settings
+        )
+        revised = await revise_proposal(
+            context.proposal, body.feedback, generation, settings
+        )
+        await save_revision(
+            {
+                **args,
+                "p_token": context.token,
+                "p_feedback": body.feedback,
+                "p_data": revised.model_dump(mode="json"),
+            },
+            settings,
+        )
+    except GenerationInputsError as exc:
+        if exc.code == "revision_stale":
+            raise HTTPException(
+                409, "The trip changed. Reload before requesting a revision."
+            ) from exc
+        status, message = INPUT_FAILURES.get(
+            exc.code, (503, "Revision storage is unavailable.")
+        )
+        raise HTTPException(status, message) from exc
+    except (OptionRejected, GenerationBlocked) as exc:
+        raise HTTPException(
+            422,
+            "No change could be verified within the group’s dates, budget and "
+            "requirements. Try different feedback.",
+        ) from exc
+    except ResearchError as exc:
+        raise HTTPException(
+            503, "AI research is unavailable. Your proposal is unchanged."
+        ) from exc
+    return {"revision": revised.revision}
 
 
 @router.post("/{trip_id}/proposals", response_model=GeneratedProposals)

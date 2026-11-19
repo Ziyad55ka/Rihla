@@ -114,6 +114,19 @@ def post(client: TestClient, body=None):
     return client.post(f"/api/trips/{TRIP}/proposals", json=body)
 
 
+def test_revision_checks_verified_identity_before_ai(api, pipeline, monkeypatch):
+    async def denied(args, settings):
+        assert args["p_admin_id"] == USER
+        raise GenerationInputsError("access_denied")
+
+    monkeypatch.setattr(routes, "revision_context", denied)
+    response = api().post(
+        f"/api/trips/{TRIP}/proposals/{TRIP}/revise",
+        json={"revision": 1, "feedback": "Use a shorter route"},
+    )
+    assert response.status_code == 403 and not pipeline["fetch"]
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [

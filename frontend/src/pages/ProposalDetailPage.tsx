@@ -7,6 +7,7 @@ import { FlightsSection } from '../components/proposal-details/FlightsSection'
 import { BackIcon } from '../components/proposal-details/icons'
 import { ProposalHeader } from '../components/proposal-details/ProposalHeader'
 import { SmartSummary } from '../components/proposal-details/SmartSummary'
+import { ProposalFeedback } from '../components/proposal-details/ProposalFeedback'
 import { FlightPriceReview } from '../components/FlightPriceReview'
 import { TransfersSection } from '../components/proposal-details/TransfersSection'
 import { openingMessages } from '../lib/aiStatus'
@@ -36,11 +37,12 @@ export function ProposalDetailView({ stored, proposalId, isAdmin, onBack, onChan
     <SmartSummary proposal={proposal} stale={stored.needs_regeneration} />
     <FlightPriceReview routes={proposal.flights} minutes={stored.price_review_minutes ?? 15} />
     {stored.needs_regeneration && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
-    <FlightsSection proposal={proposal} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 2} onChanged={onChanged} />
+    <FlightsSection key={proposal.revision} proposal={proposal} isAdmin={isAdmin} limits={limits} cooldownMinutes={stored.refresh_cooldown_minutes ?? 2} onChanged={onChanged} />
     <CityStaysSection proposal={proposal} limits={limits} />
     <TransfersSection proposal={proposal} />
-    <ActivitiesSection proposal={proposal} onChanged={onChanged} />
+    <ActivitiesSection key={`${proposal.id}:${proposal.revision ?? 1}`} proposal={proposal} onChanged={onChanged} />
     <CostsAndCompatibility proposal={proposal} costs={stored.costs?.find((item) => item.proposal_id === proposal.id)} stale={stored.needs_regeneration} />
+    <ProposalFeedback key={proposal.id} proposal={proposal} isAdmin={isAdmin} stale={stored.needs_regeneration || stored.generating} onChanged={onChanged} />
   </article>
 }
 

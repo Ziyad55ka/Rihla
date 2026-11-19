@@ -1,3 +1,4 @@
+import { useDetailId } from './proposal-details/detailScope'
 import { useEffect, useRef, useState } from 'react'
 import { useLanguage } from '../lib/language'
 import { buildActivitySchedule, suggestDailyPlan } from '../lib/activitySchedule'
@@ -91,6 +92,7 @@ function writeConfirmed(proposal: Proposal, ids: string[] | null) {
 }
 
 export function ActivitiesPanel({ proposal, store = activityApi, onSaved, showEstimate = true }: { proposal: Proposal; store?: SelectionStore; onSaved?: () => void; showEstimate?: boolean }) {
+  const detailId = useDetailId()
   const { t, locale, language } = useLanguage()
   const [ids, setIds] = useState<string[]>([])
   const [saved, setSaved] = useState<string[]>([])
@@ -139,7 +141,7 @@ export function ActivitiesPanel({ proposal, store = activityApi, onSaved, showEs
   const listing = mode === 'choose'
   function confirm() { writeConfirmed(proposal, saved); setNotice(''); setMode('confirmed') }
   function edit() { writeConfirmed(proposal, null); setNotice(''); setStep(0); setMode('choose') }
-  return <section id="activities-options" tabIndex={-1} className="activities-panel" aria-label={t('Activities')}>
+  return <section id={detailId('activities-options')} tabIndex={-1} className="activities-panel" aria-label={t('Activities')}>
     <div className="activity-wizard-heading">
       <div><p className="trip-eyebrow">{t('Make each day yours')}</p><h4 ref={heading} tabIndex={-1}>{t(listing ? steps[step] : 'Your daily plan')}</h4></div>
       <p>{t('Each activity is one visit, counted once.')}</p>

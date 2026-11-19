@@ -465,6 +465,7 @@ class Proposal(StrictModel):
     trip_id: UUID
     # The generation round. It goes up each time proposals are regenerated. Example: 1.
     version: int = Field(ge=1)
+    revision: int = Field(default=1, ge=1)
     # Allowed: 1, 2, 3.
     option_number: int = Field(ge=1, le=3)
     # A general title with no private details. Example: "Nile Heritage Experience".

@@ -31,10 +31,17 @@ class Settings(ProposalSettings):
     supabase_url: str | None = None
     supabase_publishable_key: str | None = None
     login_limit_db: Path = BACKEND_DIR / ".local" / "login-limits.sqlite3"
+    trip_emails_enabled: bool = False
+    trip_email_provider: Literal["resend", "gmail"] = "resend"
+    gmail_address: str | None = None
+    gmail_app_password: str | None = Field(default=None, repr=False)
+    resend_api_key: str | None = Field(default=None, repr=False)
+    trip_email_from: str | None = None
+    trip_app_url: str | None = None
 
-    @field_validator("supabase_url")
+    @field_validator("supabase_url", "trip_app_url")
     @classmethod
-    def validate_supabase_url(cls, value: str | None) -> str | None:
+    def validate_service_origin(cls, value: str | None) -> str | None:
         if value is None:
             return None
         parsed = urlsplit(value)
@@ -48,7 +55,7 @@ class Settings(ProposalSettings):
             or parsed.fragment
             or parsed.path not in {"", "/"}
         ):
-            raise ValueError("Use an https Supabase project URL (http for localhost).")
+            raise ValueError("Use an https origin (http for localhost).")
         return value
 
     @field_validator("cors_origins")

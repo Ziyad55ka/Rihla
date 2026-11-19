@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { BedDouble, CalendarCheck2, CircleCheck, Coins, MapPinned, Plane, SlidersHorizontal } from 'lucide-react'
+import { BedDouble, CalendarCheck2, Check, CircleCheck, Coins, Columns3, MapPinned, Plane, SlidersHorizontal } from 'lucide-react'
 import { GENERATE_STEP_MS, generateMessages } from '../lib/aiStatus'
 import { useLanguage } from '../lib/language'
 import { navigate } from '../lib/navigation'
@@ -11,6 +11,7 @@ import { budgetStatusLabels, canPressGenerate, conflictMessages, generateProposa
 import type { GenerationIssue, GenerationProgress, GroupConflicts, Proposal, StoredProposals, SuggestionAction } from '../types/proposal'
 import { TakeoffIcon } from './FlightIcons'
 import { AiStatus } from './AiStatus'
+import { ProposalComparison } from './ProposalComparison'
 import { GenerationIssueCard } from './GenerationIssueCard'
 import { GenerationProgressView } from './GenerationProgress'
 import { FlightPriceReview } from './FlightPriceReview'
@@ -43,9 +44,10 @@ type ViewProps = {
   issue?: GenerationIssue | null
   onIssueAction?: (action: SuggestionAction) => void
   preferencesHref?: string
+  onChanged?: () => void
 }
 
-export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate, progress = null, elapsedSeconds = 0, issue = null, onIssueAction = () => undefined, preferencesHref, sharedDays = null }: ViewProps) {
+export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice, onGenerate, progress = null, elapsedSeconds = 0, issue = null, onIssueAction = () => undefined, preferencesHref, sharedDays = null, onChanged = () => undefined }: ViewProps) {
   const { t, locale, language } = useLanguage()
   // 0 lets the AI choose the length inside the shared dates.
   const [tripDays, setTripDays] = useState(0)
@@ -54,14 +56,24 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
   const { retryPending } = useGenerationRetry(issue)
   const enabled = canPressGenerate(conflicts, generating) && !retryPending
   const proposals = stored?.proposals ?? []
+  const [mode, setMode] = useState<'browse' | 'choose' | 'compare'>('browse')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const choosing = mode !== 'browse' && !generating && proposals.length >= 2
+  const selected = proposals.filter(proposal => selectedIds.includes(proposal.id))
   return <section className="proposals-panel" aria-labelledby="proposals-title">
     <div className="proposals-heading">
       <div className="proposals-heading-copy"><span className="proposals-kicker"><MapPinned size={16} aria-hidden="true" />{t('TRIP PROPOSALS')}</span><h2 id="proposals-title">{t(proposals.length ? 'Your trip options' : 'Find a trip that fits everyone')}</h2><p>{t('Your group’s dates. Your lowest budget. One plan together.')}</p></div>
       <div className="proposals-actions">
+        <div className="proposal-action-row">
         {isAdmin && <button type="button" className="trip-primary" disabled={!enabled} aria-describedby={retryPending ? 'generation-issue-title' : undefined} onClick={() => { if (enabled) onGenerate(proposals.length > 0, tripDays || null) }}>
           {generating ? <AiStatus messages={progress ? ['Generating proposals…'] : generateMessages} stepMs={GENERATE_STEP_MS} /> : proposals.length > 0 ? t('Generate again') : t('Generate proposals')}
           {!generating && <TakeoffIcon />}
         </button>}
+        {proposals.length >= 2 && !generating && (choosing ? <>
+          <button type="button" className="trip-primary" disabled={selected.length < 2} onClick={() => setMode('compare')}>{t('Compare selected ({count})', { count: selected.length.toLocaleString(locale) })}</button>
+          <button type="button" className="trip-secondary" onClick={() => setMode('browse')}>{t('Cancel')}</button>
+        </> : <button type="button" className="trip-secondary compare-trigger" onClick={() => { setSelectedIds([]); setMode('choose') }}><Columns3 size={18} />{t('Compare proposals')}</button>)}
+        </div>
         {preferencesHref && <a className="proposals-preferences" href={preferencesHref} onClick={event => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); navigate(preferencesHref) }}><SlidersHorizontal size={15} aria-hidden="true" />{t('Edit preferences')}</a>}
       </div>
     </div>
@@ -83,12 +95,17 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
     {notice && <p className="trip-feedback trip-feedback--success" role="status">{t(notice)}</p>}
     {stored?.needs_regeneration && !generating && <p className="proposals-review" role="status">{t(isAdmin ? 'The trip’s details changed after these proposals were generated. Generate them again to include the changes.' : 'The trip’s details changed after these proposals were generated. The administrator needs to generate them again.')}</p>}
     {stored && stored.version !== null && !stored.complete && <p className="proposals-note">{t('Some proposals could not pass the checks, so fewer than three are shown.')}</p>}
+    {choosing && <p className="comparison-instruction">{t('Select at least two options to compare side by side.')}</p>}
+    {mode === 'compare' && choosing && selected.length >= 2 && stored && <ProposalComparison proposals={selected} stored={stored} isAdmin={isAdmin} onChanged={onChanged} onBack={() => setMode('choose')} />}
     {proposals.length > 0 ? <ol className="proposals-list">
       {proposals.map((proposal) => {
         const cost = stored?.costs?.find((item) => item.proposal_id === proposal.id)?.scenarios.find((scenario) => scenario.rooms === 'single')
         const total = cost?.per_person_total
         const activitiesPending = cost?.lines.some((line) => line.category === 'activities' && !line.counted)
-        return <li className="proposals-card" key={proposal.id}>
+        const checked = selectedIds.includes(proposal.id)
+        return <li className={`proposals-card${choosing ? ' compare-pickable' : ''}${choosing && checked ? ' compare-picked' : ''}`} key={proposal.id}>
+        {choosing && <button type="button" className="compare-card-toggle" aria-label={proposalTitle(proposal, language)} aria-pressed={checked} onClick={() => setSelectedIds(current => current.includes(proposal.id) ? current.filter(id => id !== proposal.id) : [...current, proposal.id])}><span aria-hidden="true">{checked && <Check size={20} />}</span></button>}
+        <div inert={choosing} className="compare-card-content">
         <PlacePhoto image={proposal.image} place={placeName(proposal.destination, language, proposal.destination_ar)} />
         <div className="proposals-card-body">
         <p className="trip-eyebrow">{t('Option {number}', { number: proposal.option_number.toLocaleString(locale) })}</p>
@@ -104,7 +121,8 @@ export function ProposalsView({ isAdmin, conflicts, stored, busy, error, notice,
           {activitiesPending && <small>{t('Activities are added after selection. Their prices may change the total.')}</small>}
         </div>}
         {!stored?.needs_regeneration && proposal.fit && <p className="proposals-fit">{t('Fits everyone: at least {percent}', { percent: (proposal.fit.least_satisfied_percent / 100).toLocaleString(locale, { style: 'percent' }) })}</p>}
-        <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>
+        {!choosing && <a className="trip-secondary proposals-open" href={proposalPath(proposal)} onClick={(event) => openProposal(event, proposal)}>{t('View details')}</a>}
+        </div>
         </div>
       </li>})}
     </ol> : !generating && !issue && <div className="proposals-empty">
@@ -179,6 +197,6 @@ export function ProposalsPanel({ tripId, isAdmin, revision, sharedDays = null }:
     navigate(`/trips/${tripId}/preferences`)
   }
   const elapsedSeconds = startedAt ? Math.max(0, (now - startedAt) / 1000) : 0
-  return <ProposalsView isAdmin={isAdmin} conflicts={conflicts} stored={stored} busy={busy} error={error} notice={notice}
+  return <ProposalsView key={JSON.stringify(stored?.proposals.map(item => [item.id, item.version]))} isAdmin={isAdmin} conflicts={conflicts} stored={stored} busy={busy} error={error} notice={notice} onChanged={() => setGeneration(value => value + 1)}
     onGenerate={(regenerate, tripDays) => { void generate(regenerate, tripDays) }} sharedDays={sharedDays} progress={progress} elapsedSeconds={elapsedSeconds} issue={issue} onIssueAction={act} preferencesHref={`/trips/${tripId}/preferences`} />
 }

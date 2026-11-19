@@ -1,11 +1,4 @@
-"""The only place that uses the Supabase secret key.
-
-The key bypasses Row Level Security, so it is used for these calls and nothing
-else: reading generation inputs, saving generated proposals so that nobody can
-store invented ones, and the light flight update's read and save. The caller must
-first verify the signed-in account, then pass its id. The inputs hold private member
-data: never return them to a browser or log them.
-"""
+"""Server-only Supabase RPCs for proposals and their notification queue."""
 
 from decimal import Decimal
 from uuid import UUID
@@ -27,13 +20,17 @@ class GenerationInputsError(Exception):
         self.code = code
 
 
+def private_rpc_configured(settings: Settings) -> bool:
+    return bool(settings.supabase_url and settings.supabase_secret_key)
+
+
 async def _secret_rpc(
     name: str,
     args: dict,
     settings: Settings,
     transport: httpx.AsyncBaseTransport | None,
 ) -> httpx.Response:
-    if not settings.supabase_url or not settings.supabase_secret_key:
+    if not private_rpc_configured(settings):
         raise GenerationInputsError("not_configured")
     key = settings.supabase_secret_key
     headers = {"apikey": key}
@@ -54,6 +51,8 @@ async def _secret_rpc(
         raise GenerationInputsError("unavailable") from error
     if response.status_code != 200:
         body = response.text
+        if "revision_stale" in body:
+            raise GenerationInputsError("revision_stale")
         if "generation_not_ready" in body:
             raise GenerationInputsError("not_ready")
         if "proposal_not_found" in body:
@@ -62,6 +61,43 @@ async def _secret_rpc(
             raise GenerationInputsError("access_denied")
         raise GenerationInputsError("unavailable")
     return response
+
+
+class TripEmail(BaseModel):
+    id: UUID
+    lease: UUID
+    email: str
+    trip_id: UUID
+    proposal_id: UUID | None
+
+
+async def claim_trip_email(settings: Settings) -> TripEmail | None:
+    response = await _secret_rpc("rihla_claim_trip_email", {}, settings, None)
+    job = response.json()
+    return TripEmail.model_validate(job) if job else None
+
+
+async def finish_trip_email(job: TripEmail, outcome: str, settings: Settings) -> None:
+    await _secret_rpc(
+        "rihla_finish_trip_email",
+        {"p_id": str(job.id), "p_lease": str(job.lease), "p_outcome": outcome},
+        settings,
+        None,
+    )
+
+
+class RevisionContext(BaseModel):
+    token: str
+    proposal: Proposal
+
+
+async def revision_context(args: dict, settings: Settings) -> RevisionContext:
+    response = await _secret_rpc("rihla_revision_context", args, settings, None)
+    return RevisionContext.model_validate_json(response.content)
+
+
+async def save_revision(args: dict, settings: Settings) -> None:
+    await _secret_rpc("rihla_save_revision", args, settings, None)
 
 
 class FlightContext(BaseModel):

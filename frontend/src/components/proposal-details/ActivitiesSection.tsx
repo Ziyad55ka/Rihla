@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import type { Proposal } from '../../types/proposal'
 import { ActivitiesPanel } from '../ActivitiesPanel'
 import { useState } from 'react'
@@ -12,6 +13,7 @@ import { SectionTitle } from './SectionTitle'
  * CityStay.activities. Show nothing until there is data. See docs/developer-2-handoff.md.
  */
 export function ActivitiesSection({ proposal, onChanged = () => undefined }: { proposal: Proposal; onChanged?: () => void }) {
+  const detailId = useDetailId()
   const { t } = useLanguage()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -30,8 +32,8 @@ export function ActivitiesSection({ proposal, onChanged = () => undefined }: { p
     {notes.includes('event_source_unavailable') && <p className="trip-feedback" role="status">{t('The event source could not be reached. These suggestions may not include dated events.')}</p>}
     <ActivitiesPanel key={`${proposal.id}:${proposal.version}`} proposal={proposal} showEstimate={false} onSaved={onChanged} />
   </>
-  return <section aria-labelledby="details-activities">
-    <SectionTitle icon={<RouteTitleIcon />} id="details-activities" title={t('Activities and places')} />
+  return <section aria-labelledby={detailId('details-activities')}>
+    <SectionTitle icon={<RouteTitleIcon />} id={detailId('details-activities')} title={t('Activities and places')} />
     <div className="details-card">
       {proposal.activity_research_status === 'ready' ? <p>{t('No checkable suggestions were found for these cities and dates.')}</p> : <>
         <h4 className="details-activity-question">{t('Want us to suggest activities for your trip?')}</h4>

@@ -56,6 +56,13 @@ const agoIso = (minutes: number) => new Date(Date.now() - minutes * 60000).toISO
 const pure = (node: ReactNode) => renderToStaticMarkup(<LanguageProvider>{node}</LanguageProvider>)
 
 describe('ProposalDetailView', () => {
+  it('offers revision feedback after compatibility to the administrator in both languages', () => {
+    const html = page()
+    expect(html.indexOf('What do you want to change')).toBeGreaterThan(html.indexOf('How it matches the group'))
+    expect(page(proposal(), false)).not.toContain('What do you want to change')
+    saved.set('rihla-language', 'ar')
+    expect(page()).toContain('وش تحتاج من تعديل')
+  })
   it('reads the proposal route', () => {
     const id = '00000000-0000-4000-8000-0000000000aa'
     expect(readRoute(`/trips/${id}/proposals/${id}`)).toEqual({ page: 'proposal', tripId: id, proposalId: id })

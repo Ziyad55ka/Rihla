@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import { useLanguage } from '../../lib/language'
 import { calendarDate } from '../../lib/planning'
 import { placeName } from '../../lib/places'
@@ -62,12 +63,13 @@ function earlyHomeTime(proposal: Proposal): string | null {
 }
 
 export function CityStaysSection({ proposal, limits }: { proposal: Proposal; limits: PriceAgeLimits }) {
+  const detailId = useDetailId()
   const { t, locale, language } = useLanguage()
   const dates = stayDates(proposal)
   const early = earlyHomeTime(proposal)
   const last = proposal.cities.length - 1
-  return <section aria-labelledby="details-cities">
-    <SectionTitle id="details-cities" icon={<StaysTitleIcon />} title={t('Hotels and stays')} />
+  return <section aria-labelledby={detailId('details-cities')}>
+    <SectionTitle id={detailId('details-cities')} icon={<StaysTitleIcon />} title={t('Hotels and stays')} />
     <StayNotice />
     <ol className="details-cities">
       {proposal.cities.map((stay, index) => {

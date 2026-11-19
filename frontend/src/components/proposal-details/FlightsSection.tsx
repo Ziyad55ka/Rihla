@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import { useLanguage } from '../../lib/language'
 import { placeName } from '../../lib/places'
 import { type PriceAgeLimits, sourceLabel } from '../../lib/proposals'
@@ -73,9 +74,10 @@ function Route({ route, proposal, limits, cooldownMinutes, onChanged }: { route:
 }
 
 export function FlightsSection({ proposal, isAdmin, limits, cooldownMinutes, onChanged }: { proposal: Proposal; isAdmin: boolean; limits: PriceAgeLimits; cooldownMinutes: number; onChanged: () => void }) {
+  const detailId = useDetailId()
   const { t } = useLanguage()
-  return <section aria-labelledby="details-flights">
-    <SectionTitle id="details-flights" icon={<FlightsTitleIcon />} title={t('Flights from your city')} hint={<Hint text={t('You only see flights from your departure city')} />} />
+  return <section aria-labelledby={detailId('details-flights')}>
+    <SectionTitle id={detailId('details-flights')} icon={<FlightsTitleIcon />} title={t('Flights from your city')} hint={<Hint text={t('You only see flights from your departure city')} />} />
     <PriceNotice />
     {proposal.flights.length > 0
       ? proposal.flights.map((route) => <Route key={route.origin} route={route} proposal={proposal} limits={limits} cooldownMinutes={cooldownMinutes} onChanged={onChanged} />)

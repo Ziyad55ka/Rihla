@@ -162,6 +162,41 @@ def run(generation: GenerationInput, tmp_path: Path):
 THREE = [option("Istanbul"), option("Baku"), option("Tbilisi")]
 
 
+@pytest.mark.parametrize("applied", [True, False])
+def test_revision_uses_feedback_and_verifies_researched_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, applied: bool
+) -> None:
+    fake_planner(monkeypatch, THREE)
+    monkeypatch.setattr(trip_research, "research", fake_research())
+    current = run(group(), tmp_path).proposals[1]
+    feedback = "استبدل باكو بالقاهرة"
+
+    async def model(contents, prompt, schema, config, cost):
+        data = json.loads(contents)
+        if schema is TripPlan:
+            assert data["count"] == 1
+            assert data["revision_request"]["feedback"] == feedback
+            assert data["revision_request"]["original"]["destination"] == "Baku"
+            return TripPlan(
+                feasible=True, blocking_categories=[], options=[option("Cairo")]
+            )
+        assert data["updated"]["destination"] == "Cairo"
+        return schema(applied=applied)
+
+    monkeypatch.setattr(proposal_generation, "call_gemini", model)
+    operation = proposal_generation.revise_proposal(
+        current, feedback, group(), settings(tmp_path)
+    )
+    if applied:
+        changed = asyncio.run(operation)
+        assert changed.destination == "Cairo"
+        assert (changed.id, changed.option_number) == (current.id, 2)
+        assert changed.revision == 2 and current.revision == 1
+    else:
+        with pytest.raises(proposal_generation.OptionRejected):
+            asyncio.run(operation)
+
+
 def test_three_distinct_proposals_are_built(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,3 +1,4 @@
+import { useDetailId } from './detailScope'
 import { type ComponentType, useState } from 'react'
 import { useLanguage } from '../../lib/language'
 import { calendarDate } from '../../lib/planning'
@@ -31,14 +32,15 @@ function Link({ transfer, sources, from, to }: { transfer: IntercityTransfer; so
 
 /** The route as a line of stops. Stations show only when the data has them. */
 export function TransfersSection({ proposal }: { proposal: Proposal }) {
+  const detailId = useDetailId()
   const { t, language, locale } = useLanguage()
   const [open, setOpen] = useState<number | null>(null)
   if (proposal.intercity_transport.length === 0) return null
   const dates = stayDates(proposal)
   const name = (index: number) => placeName(proposal.cities[index].city, language, proposal.cities[index].city_ar)
   const station = (index: number) => proposal.intercity_transport[index - 1]?.to_station ?? proposal.intercity_transport[index]?.from_station ?? null
-  return <section aria-labelledby="details-transfers">
-    <SectionTitle id="details-transfers" icon={<RouteTitleIcon />} title={t('Travel between cities')} />
+  return <section aria-labelledby={detailId('details-transfers')}>
+    <SectionTitle id={detailId('details-transfers')} icon={<RouteTitleIcon />} title={t('Travel between cities')} />
     <ol className="details-metro details-card">
       {proposal.cities.flatMap((stay, index) => {
         const here = station(index)

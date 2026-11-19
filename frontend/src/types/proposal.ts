@@ -287,6 +287,7 @@ export interface FlexibleAdjustment {
 
 /** One complete trip option. */
 export interface Proposal {
+  revision?: number
   activity_allowance_per_person?: SarPrice | null
   activity_research_status?: 'not_requested' | 'ready' | 'unavailable'
   /** This proposal's own id, a UUID. */

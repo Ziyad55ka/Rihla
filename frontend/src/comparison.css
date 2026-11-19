@@ -1,0 +1,27 @@
+.proposal-action-row { display:flex; flex-wrap:wrap; align-items:stretch; gap:.55rem; }
+.compare-trigger { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; }
+.compare-card-content { display:contents; }
+.compare-pickable { position:relative; }
+.proposals-panel .compare-picked { outline:3px solid var(--rihla-green); outline-offset:2px; }
+.comparison-instruction { color:var(--rihla-green); font-weight:600; }
+.compare-card-toggle { position:absolute; z-index:3; inset:0; width:100%; border:0; border-radius:inherit; background:transparent; cursor:pointer; }
+.compare-card-toggle:focus-visible { outline:3px solid var(--rihla-ink); outline-offset:5px; }
+.compare-card-toggle > span { position:absolute; inset-block-start:1.65rem; inset-inline-start:1.65rem; width:1.8rem; height:1.8rem; display:grid; place-items:center; background:white; border:2px solid var(--rihla-green); border-radius:.5rem; box-shadow:0 1px 5px #142d3740; }
+.compare-picked .compare-card-toggle > span { background:var(--rihla-green); color:white; }
+.comparison-screen { inset:0; width:100%; max-width:none; height:100dvh; max-height:none; margin:0; padding:0; border:0; background:var(--rihla-cream) url('/images/flight-paths.svg') repeat; background-size:560px; color:var(--rihla-ink); font:inherit; }
+.comparison-screen[open] { display:flex; flex-direction:column; }
+.comparison-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.7rem clamp(.8rem,2vw,2rem); background:var(--rihla-paper); border-bottom:1px solid var(--rihla-line); }
+.comparison-toolbar h2 { margin:0; font-size:clamp(1.1rem,2vw,1.6rem); }
+.comparison-scroll { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.comparison-panes { display:grid; gap:1rem clamp(.7rem,1.5vw,1.6rem); padding:1rem; box-sizing:border-box; }
+.comparison-screen .comparison-pane { min-width:0; max-width:none; width:auto; margin:0; grid-row:span 9; display:grid; grid-template-rows:subgrid; align-items:start; overflow-wrap:anywhere; }
+.comparison-pane > * { min-width:0; }
+.comparison-screen .comparison-pane section { margin-block-start:0; }
+.comparison-pane .details-hero { align-self:stretch; padding:1.4rem; }
+.comparison-screen .details-hero h1 { font-size:clamp(1.45rem,2.4vw,2.4rem); }
+.comparison-pane .details-cities { grid-template-columns:minmax(0,1fr); }
+.comparison-pane .details-card { padding:1rem; }
+.comparison-pane .details-metro { overflow-x:auto; }
+.comparison-pane .details-metro-link { min-width:6rem; }
+.comparison-pane .activity-stepper ol { grid-template-columns:repeat(2,minmax(0,1fr)); }
+body:has(.comparison-screen[open]) { overflow:hidden; }
